@@ -59,5 +59,5 @@ public class User : BaseEntity
     // Computed Properties
 
     /// <summary>Full display name composed of <see cref="FirstName"/> and <see cref="LastName"/>.</summary>
-    public string FullName => $"{FirstName} {LastName}";
+    public string FullName => $"{FirstName} {LastName}".Trim();
 }

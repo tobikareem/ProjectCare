@@ -1,4 +1,4 @@
-namespace WebApi
+namespace CarePath.WebApi
 {
     public class WeatherForecast
     {

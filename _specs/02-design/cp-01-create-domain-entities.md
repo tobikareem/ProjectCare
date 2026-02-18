@@ -95,14 +95,15 @@ src/CarePath.Domain/
 │       ├── Invoice.cs                 # Client invoices
 │       ├── InvoiceLineItem.cs         # Invoice line items (per shift)
 │       └── Payment.cs                 # Payment records
-├── Enums/
+├── Enumerations/
 │   ├── UserRole.cs                    # Admin, Coordinator, Caregiver, Client, FacilityManager
 │   ├── EmploymentType.cs              # W2Employee, Contractor1099
 │   ├── ServiceType.cs                 # InHomeCare, FacilityStaffing
 │   ├── ShiftStatus.cs                 # Scheduled, InProgress, Completed, Cancelled, NoShow
-│   ├── CertificationType.cs           # CNA, LPN, RN, HHA, CPR, FirstAid, Dementia, Alzheimers
-│   ├── InvoiceStatus.cs               # Draft, Sent, Paid, Overdue, Cancelled
-│   └── PaymentMethod.cs               # Cash, Check, CreditCard, BankTransfer, Insurance
+│   ├── CertificationType.cs           # CNA, LPN, RN, HHA, CPR, FirstAid, Dementia, Alzheimers, GNA, CRMA
+│   ├── InvoiceStatus.cs               # Draft, Sent, Paid, PartiallyPaid, Overdue, Cancelled
+│   ├── PaymentMethod.cs               # Cash, Check, CreditCard, BankTransfer, Insurance, Medicaid
+│   └── PaymentStatus.cs               # Pending, Settled, Failed, Refunded
 └── Interfaces/
     └── Repositories/
         ├── IRepository.cs             # Generic repository interface
@@ -773,29 +774,61 @@ public enum PaymentMethod
 
 ### 4.1 IRepository<T> & IUnitOfWork
 
-**File**: `src/CarePath.Domain/Interfaces/Repositories/IRepository.cs`
+**Files**:
+- `src/CarePath.Domain/Interfaces/Repositories/IRepository.cs`
+- `src/CarePath.Domain/Interfaces/Repositories/IUnitOfWork.cs`
+
+> **Implementation note**: The shipped code improves on the original design in three ways:
+> 1. `where T : BaseEntity` (not `where T : class`) — gives implementors direct access to `Id`, `IsDeleted`, and audit fields without casting.
+> 2. `IReadOnlyList<T>` return type on `GetAllAsync`/`FindAsync` (not `IEnumerable<T>`) — signals fully materialized results; prevents callers from expecting deferred execution.
+> 3. `IUnitOfWork : IDisposable, IAsyncDisposable` — required for correct async disposal of EF Core `DbContext`.
 
 ```csharp
 using System.Linq.Expressions;
+using CarePath.Domain.Entities.Common;
 
 namespace CarePath.Domain.Interfaces.Repositories;
 
-/// <summary>Generic repository for CRUD operations.</summary>
-public interface IRepository<T> where T : class
+/// <summary>Generic repository for CRUD operations on domain entities.</summary>
+/// <typeparam name="T">Entity type constrained to <see cref="BaseEntity"/>.</typeparam>
+public interface IRepository<T> where T : BaseEntity
 {
     Task<T?> GetByIdAsync(Guid id, CancellationToken cancellationToken = default);
-    Task<IEnumerable<T>> GetAllAsync(CancellationToken cancellationToken = default);
-    Task<IEnumerable<T>> FindAsync(Expression<Func<T, bool>> predicate, CancellationToken cancellationToken = default);
+    Task<IReadOnlyList<T>> GetAllAsync(CancellationToken cancellationToken = default);
+    Task<IReadOnlyList<T>> FindAsync(Expression<Func<T, bool>> predicate, CancellationToken cancellationToken = default);
     Task<T> AddAsync(T entity, CancellationToken cancellationToken = default);
     Task UpdateAsync(T entity, CancellationToken cancellationToken = default);
-    Task DeleteAsync(T entity, CancellationToken cancellationToken = default);
+    Task DeleteAsync(T entity, CancellationToken cancellationToken = default);  // soft-delete only
     Task<bool> ExistsAsync(Expression<Func<T, bool>> predicate, CancellationToken cancellationToken = default);
     Task<int> CountAsync(Expression<Func<T, bool>>? predicate = null, CancellationToken cancellationToken = default);
+    // TODO (Infrastructure phase TASK-019a): add GetPagedAsync(int pageNumber, int pageSize, CancellationToken)
 }
 
-/// <summary>Unit of work for transactional operations.</summary>
-public interface IUnitOfWork : IDisposable
+/// <summary>
+/// Unit of work for transactional operations. Groups all entity repositories under one
+/// transactional boundary. Only one transaction may be active per instance at a time.
+/// </summary>
+public interface IUnitOfWork : IDisposable, IAsyncDisposable
 {
+    // Identity
+    IRepository<User> Users { get; }
+    IRepository<Caregiver> Caregivers { get; }
+    IRepository<CaregiverCertification> CaregiverCertifications { get; }
+    IRepository<Client> Clients { get; }
+
+    // Clinical
+    IRepository<CarePlan> CarePlans { get; }
+
+    // Scheduling
+    IRepository<Shift> Shifts { get; }
+    IRepository<VisitNote> VisitNotes { get; }
+    IRepository<VisitPhoto> VisitPhotos { get; }
+
+    // Billing
+    IRepository<Invoice> Invoices { get; }
+    IRepository<InvoiceLineItem> InvoiceLineItems { get; }
+    IRepository<Payment> Payments { get; }
+
     Task<int> SaveChangesAsync(CancellationToken cancellationToken = default);
     Task BeginTransactionAsync(CancellationToken cancellationToken = default);
     Task CommitTransactionAsync(CancellationToken cancellationToken = default);
@@ -891,6 +924,9 @@ public class InvoiceTests
 - [ ] **Value Objects**: Should GPS coordinates be a `record GpsCoordinates(double Lat, double Lon)` value object? **Recommendation**: Phase 2 (keep simple for MVP).
 - [ ] **Domain Events**: Implement events like "ShiftCompleted", "CertificationExpiring"? **Recommendation**: Phase 3 (not needed for MVP).
 - [ ] **Invoice Number Generation**: Domain layer or Application layer? **Recommendation**: Application layer (requires database sequence).
+- [x] **DateTime vs DateTimeOffset**: **Decision: retain `DateTime` with UTC convention.** All timestamp properties use `DateTime.UtcNow`. EF Core round-trips through SQL Server `datetime2` lose `DateTimeKind.Utc` — the Infrastructure layer **must** add a UTC `ValueConverter` on every `DateTime` property in every entity configuration (e.g., `builder.Property(e => e.CreatedAt).HasConversion(v => v, v => DateTime.SpecifyKind(v, DateTimeKind.Utc))`). This requirement must be captured in the Infrastructure tasks spec.
+- [x] **`using` strategy for entity files**: **Decision: explicit `using` per file.** Each entity file declares `using CarePath.Domain.Entities.Common;` and `using CarePath.Domain.Enumerations;` explicitly. Keeps dependencies visible to readers without requiring knowledge of global using directives. No global using added to `Domain.csproj`.
+- [x] **`InvoiceStatus.Void` vs `Cancelled`**: **Decision: single `Cancelled` member for MVP.** The distinction between voided-before-sending and cancelled-after-sending is not required for initial reporting. Can be split in a future migration if reporting requirements demand it.
 
 ---
 

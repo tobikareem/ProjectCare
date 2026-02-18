@@ -774,29 +774,61 @@ public enum PaymentMethod
 
 ### 4.1 IRepository<T> & IUnitOfWork
 
-**File**: `src/CarePath.Domain/Interfaces/Repositories/IRepository.cs`
+**Files**:
+- `src/CarePath.Domain/Interfaces/Repositories/IRepository.cs`
+- `src/CarePath.Domain/Interfaces/Repositories/IUnitOfWork.cs`
+
+> **Implementation note**: The shipped code improves on the original design in three ways:
+> 1. `where T : BaseEntity` (not `where T : class`) — gives implementors direct access to `Id`, `IsDeleted`, and audit fields without casting.
+> 2. `IReadOnlyList<T>` return type on `GetAllAsync`/`FindAsync` (not `IEnumerable<T>`) — signals fully materialized results; prevents callers from expecting deferred execution.
+> 3. `IUnitOfWork : IDisposable, IAsyncDisposable` — required for correct async disposal of EF Core `DbContext`.
 
 ```csharp
 using System.Linq.Expressions;
+using CarePath.Domain.Entities.Common;
 
 namespace CarePath.Domain.Interfaces.Repositories;
 
-/// <summary>Generic repository for CRUD operations.</summary>
-public interface IRepository<T> where T : class
+/// <summary>Generic repository for CRUD operations on domain entities.</summary>
+/// <typeparam name="T">Entity type constrained to <see cref="BaseEntity"/>.</typeparam>
+public interface IRepository<T> where T : BaseEntity
 {
     Task<T?> GetByIdAsync(Guid id, CancellationToken cancellationToken = default);
-    Task<IEnumerable<T>> GetAllAsync(CancellationToken cancellationToken = default);
-    Task<IEnumerable<T>> FindAsync(Expression<Func<T, bool>> predicate, CancellationToken cancellationToken = default);
+    Task<IReadOnlyList<T>> GetAllAsync(CancellationToken cancellationToken = default);
+    Task<IReadOnlyList<T>> FindAsync(Expression<Func<T, bool>> predicate, CancellationToken cancellationToken = default);
     Task<T> AddAsync(T entity, CancellationToken cancellationToken = default);
     Task UpdateAsync(T entity, CancellationToken cancellationToken = default);
-    Task DeleteAsync(T entity, CancellationToken cancellationToken = default);
+    Task DeleteAsync(T entity, CancellationToken cancellationToken = default);  // soft-delete only
     Task<bool> ExistsAsync(Expression<Func<T, bool>> predicate, CancellationToken cancellationToken = default);
     Task<int> CountAsync(Expression<Func<T, bool>>? predicate = null, CancellationToken cancellationToken = default);
+    // TODO (Infrastructure phase TASK-019a): add GetPagedAsync(int pageNumber, int pageSize, CancellationToken)
 }
 
-/// <summary>Unit of work for transactional operations.</summary>
-public interface IUnitOfWork : IDisposable
+/// <summary>
+/// Unit of work for transactional operations. Groups all entity repositories under one
+/// transactional boundary. Only one transaction may be active per instance at a time.
+/// </summary>
+public interface IUnitOfWork : IDisposable, IAsyncDisposable
 {
+    // Identity
+    IRepository<User> Users { get; }
+    IRepository<Caregiver> Caregivers { get; }
+    IRepository<CaregiverCertification> CaregiverCertifications { get; }
+    IRepository<Client> Clients { get; }
+
+    // Clinical
+    IRepository<CarePlan> CarePlans { get; }
+
+    // Scheduling
+    IRepository<Shift> Shifts { get; }
+    IRepository<VisitNote> VisitNotes { get; }
+    IRepository<VisitPhoto> VisitPhotos { get; }
+
+    // Billing
+    IRepository<Invoice> Invoices { get; }
+    IRepository<InvoiceLineItem> InvoiceLineItems { get; }
+    IRepository<Payment> Payments { get; }
+
     Task<int> SaveChangesAsync(CancellationToken cancellationToken = default);
     Task BeginTransactionAsync(CancellationToken cancellationToken = default);
     Task CommitTransactionAsync(CancellationToken cancellationToken = default);

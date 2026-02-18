@@ -252,14 +252,20 @@ This tasks spec breaks down the domain layer implementation into 39 atomic tasks
 ### TASK-019: Create IRepository<T> Generic Interface
 - **Dependencies**: TASK-004
 - **Estimate**: 1.5 hours
-- **Files**: CREATE `Domain/Interfaces/IRepository.cs`
+- **Files**: CREATE `Domain/Interfaces/Repositories/IRepository.cs`
 - **Implementation**: See design spec Section 4.1
 - **Methods**: GetByIdAsync, GetAllAsync, FindAsync, AddAsync, UpdateAsync, DeleteAsync (soft delete)
+- **Implementation Notes**:
+  - Use `where T : BaseEntity` constraint (not `where T : class`) for access to audit fields without casting
+  - Return `IReadOnlyList<T>` from `GetAllAsync` and `FindAsync` (not `IEnumerable<T>`) to signal fully materialized results
+  - Infrastructure implementation must apply an EF Core global query filter (`IsDeleted == false`) so navigation-property queries are also filtered automatically
+
+- **Follow-up (Infrastructure phase)**: Add a `GetPagedAsync(int pageNumber, int pageSize, CancellationToken)` overload to `IRepository<T>` before Application layer services are written. Without it, high-volume tables (`Shift`, `VisitNote`) risk full in-memory loads via `GetAllAsync`. Track as TASK-019a in the Infrastructure spec.
 
 ### TASK-020: Create IUnitOfWork Interface
 - **Dependencies**: TASK-019
 - **Estimate**: 1.5 hours
-- **Files**: CREATE `Domain/Interfaces/IUnitOfWork.cs`
+- **Files**: CREATE `Domain/Interfaces/Repositories/IUnitOfWork.cs`
 - **Implementation**: See design spec Section 4.2
 - **Properties**: Repository for each entity (IRepository<User>, IRepository<Caregiver>, etc.)
 - **Methods**: SaveChangesAsync, BeginTransactionAsync, CommitTransactionAsync, RollbackTransactionAsync

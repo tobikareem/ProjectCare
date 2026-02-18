@@ -1,0 +1,939 @@
+# Design Specification: CP-01 Create Domain Entities
+
+**Date**: 2026-02-16
+**Author**: Tobi Kareem
+**Project**: CarePath Health
+**Status**: Draft
+**Related Specs**:
+- [Requirements Spec](../01-requirements/cp-01-create-domain-entities.md) - Business requirements and user stories
+- [Tasks Spec](../03-tasks/cp-01-create-domain-entities.md) - Implementation tasks (to be created after this is approved)
+
+---
+
+## Executive Summary
+
+> Design and implement the foundational domain layer for CarePath Health using Clean Architecture principles, creating 12 core entities with full XML documentation, computed properties for business logic (margin calculations, age, billable hours), and repository interfaces, ensuring zero external dependencies and 100% testability in isolation.
+
+---
+
+## 1. Architecture Overview
+
+### 1.1 High-Level Design
+```
+[Visual diagram or ASCII art showing component interactions]
+
+Example:
+┌─────────────────┐         ┌─────────────────┐
+│  .NET MAUI App  │ ────────▶│  ASP.NET Core   │
+│  (Mobile)       │  HTTPS   │  Web API        │
+│                 │◀──────── │                 │
+│  - CheckInPage  │ SignalR  │  - ShiftHub     │
+│  - GpsService   │          │  - Controllers  │
+└─────────────────┘          └────────┬────────┘
+                                      │
+                                      ▼
+                             ┌────────────────┐
+                             │ EF Core + SQL  │
+                             │ - Shift table  │
+                             └────────────────┘
+```
+
+### 1.2 Affected Layers
+Check all layers that will be modified:
+- [ ] **CarePath.Domain** - Domain entities, value objects, interfaces
+- [ ] **CarePath.Application** - Services, DTOs, validators, AutoMapper
+- [ ] **CarePath.Infrastructure** - EF Core, repositories, external services
+- [ ] **CarePath.Api** - Controllers, SignalR hubs, middleware
+- [ ] **CarePath.MauiApp** - Mobile UI, platform-specific services
+- [ ] **CarePath.Web** - Blazor WebAssembly admin dashboard
+- [ ] **CarePath.Shared** - Shared DTOs, constants
+
+---
+
+## 2. Domain Layer Design
+
+### 2.1 Entities & Value Objects
+
+**New Entities** (if creating new):
+```csharp
+// CarePath.Domain/Entities/[Category]/[EntityName].cs
+
+public class CheckInRecord : BaseEntity
+{
+    public Guid ShiftId { get; set; }
+    public Guid CaregiverId { get; set; }
+    public DateTime CheckInTime { get; set; }
+    public GpsCoordinates Location { get; set; }  // Value object
+    public bool IsWithinGeofence { get; set; }
+    public CheckInStatus Status { get; set; }
+
+    // Navigation properties
+    public Shift Shift { get; set; }
+    public Caregiver Caregiver { get; set; }
+}
+```
+
+**Modified Entities** (if updating existing):
+```csharp
+// CarePath.Domain/Entities/Scheduling/Shift.cs
+
+public class Shift : BaseEntity
+{
+    // Existing properties...
+
+    // NEW PROPERTIES
+    public DateTime? ActualCheckInTime { get; set; }
+    public DateTime? ActualCheckOutTime { get; set; }
+    public GpsCoordinates? CheckInLocation { get; set; }
+    public GpsCoordinates? CheckOutLocation { get; set; }
+}
+```
+
+**Value Objects**:
+```csharp
+// CarePath.Domain/ValueObjects/GpsCoordinates.cs
+
+public record GpsCoordinates(double Latitude, double Longitude)
+{
+    public double DistanceFrom(GpsCoordinates other)
+    {
+        // Haversine formula implementation
+    }
+
+    public bool IsWithinRadius(GpsCoordinates center, double radiusInMeters)
+    {
+        return DistanceFrom(center) <= radiusInMeters;
+    }
+}
+```
+
+**Enums**:
+```csharp
+// CarePath.Domain/Enums/CheckInStatus.cs
+
+public enum CheckInStatus
+{
+    Pending = 0,
+    Verified = 1,
+    RequiresApproval = 2,
+    Rejected = 3
+}
+```
+
+### 2.2 Domain Interfaces
+```csharp
+// CarePath.Domain/Interfaces/Services/IGpsValidator.cs
+
+public interface IGpsValidator
+{
+    Task<bool> ValidateLocationAsync(
+        GpsCoordinates actual,
+        GpsCoordinates expected,
+        double toleranceMeters);
+
+    Task<GpsValidationResult> ValidateCheckInAsync(
+        Guid shiftId,
+        GpsCoordinates location);
+}
+```
+
+### 2.3 Domain Events (if using event-driven architecture)
+```csharp
+// CarePath.Domain/Events/ShiftCheckedInEvent.cs
+
+public class ShiftCheckedInEvent : DomainEvent
+{
+    public Guid ShiftId { get; set; }
+    public Guid CaregiverId { get; set; }
+    public DateTime CheckInTime { get; set; }
+    public bool IsAutoVerified { get; set; }
+}
+```
+
+---
+
+## 3. Application Layer Design
+
+### 3.1 DTOs
+
+**Request DTOs**:
+```csharp
+// CarePath.Application/DTOs/Shifts/CheckInDto.cs
+
+public record CheckInDto
+{
+    public Guid ShiftId { get; init; }
+    public double Latitude { get; init; }
+    public double Longitude { get; init; }
+    public DateTime Timestamp { get; init; }
+}
+```
+
+**Response DTOs**:
+```csharp
+// CarePath.Application/DTOs/Shifts/CheckInResultDto.cs
+
+public record CheckInResultDto
+{
+    public bool Success { get; init; }
+    public string Message { get; init; }
+    public CheckInStatus Status { get; init; }
+    public ShiftDto UpdatedShift { get; init; }
+}
+```
+
+### 3.2 Services
+
+**Service Interface**:
+```csharp
+// CarePath.Application/Services/Scheduling/IShiftService.cs
+
+public interface IShiftService
+{
+    Task<CheckInResultDto> CheckInAsync(CheckInDto dto, Guid caregiverId);
+    Task<CheckOutResultDto> CheckOutAsync(CheckOutDto dto, Guid caregiverId);
+    Task<ShiftDto> GetActiveShiftAsync(Guid caregiverId);
+}
+```
+
+**Service Implementation** (high-level):
+```csharp
+// CarePath.Application/Services/Scheduling/ShiftService.cs
+
+public class ShiftService : IShiftService
+{
+    private readonly IShiftRepository _shiftRepository;
+    private readonly IGpsValidator _gpsValidator;
+    private readonly INotificationService _notificationService;
+    private readonly IMapper _mapper;
+
+    public async Task<CheckInResultDto> CheckInAsync(CheckInDto dto, Guid caregiverId)
+    {
+        // 1. Validate shift exists and belongs to caregiver
+        // 2. Validate shift is in correct status
+        // 3. Validate GPS location
+        // 4. Update shift entity
+        // 5. Save to database
+        // 6. Send real-time notification via SignalR
+        // 7. Return result
+    }
+}
+```
+
+### 3.3 Validation (FluentValidation)
+```csharp
+// CarePath.Application/Validators/CheckInValidator.cs
+
+public class CheckInValidator : AbstractValidator<CheckInDto>
+{
+    public CheckInValidator()
+    {
+        RuleFor(x => x.ShiftId)
+            .NotEmpty().WithMessage("Shift ID is required");
+
+        RuleFor(x => x.Latitude)
+            .InclusiveBetween(-90, 90)
+            .WithMessage("Invalid latitude");
+
+        RuleFor(x => x.Longitude)
+            .InclusiveBetween(-180, 180)
+            .WithMessage("Invalid longitude");
+
+        RuleFor(x => x.Timestamp)
+            .LessThanOrEqualTo(DateTime.UtcNow)
+            .WithMessage("Check-in time cannot be in the future");
+    }
+}
+```
+
+### 3.4 AutoMapper Profiles
+```csharp
+// CarePath.Application/Mappings/ShiftMappingProfile.cs
+
+public class ShiftMappingProfile : Profile
+{
+    public ShiftMappingProfile()
+    {
+        CreateMap<CheckInDto, CheckInRecord>()
+            .ForMember(dest => dest.Location,
+                opt => opt.MapFrom(src => new GpsCoordinates(src.Latitude, src.Longitude)));
+
+        CreateMap<Shift, ShiftDto>();
+    }
+}
+```
+
+---
+
+## 4. Infrastructure Layer Design
+
+### 4.1 Entity Framework Core
+
+**DbContext Changes**:
+```csharp
+// CarePath.Infrastructure/Persistence/CarePathDbContext.cs
+
+public class CarePathDbContext : DbContext
+{
+    // Existing DbSets...
+
+    // NEW DbSets
+    public DbSet<CheckInRecord> CheckInRecords { get; set; }
+}
+```
+
+**Entity Configuration**:
+```csharp
+// CarePath.Infrastructure/Persistence/Configurations/CheckInRecordConfiguration.cs
+
+public class CheckInRecordConfiguration : IEntityTypeConfiguration<CheckInRecord>
+{
+    public void Configure(EntityTypeBuilder<CheckInRecord> builder)
+    {
+        builder.ToTable("CheckInRecords");
+
+        builder.HasKey(x => x.Id);
+
+        builder.Property(x => x.CheckInTime)
+            .IsRequired();
+
+        builder.OwnsOne(x => x.Location, location =>
+        {
+            location.Property(l => l.Latitude)
+                .HasColumnName("Latitude")
+                .HasPrecision(10, 7);
+
+            location.Property(l => l.Longitude)
+                .HasColumnName("Longitude")
+                .HasPrecision(10, 7);
+        });
+
+        builder.HasOne(x => x.Shift)
+            .WithMany()
+            .HasForeignKey(x => x.ShiftId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        builder.HasIndex(x => x.ShiftId);
+        builder.HasIndex(x => x.CheckInTime);
+    }
+}
+```
+
+**Migration Strategy**:
+```bash
+# Migration name: AddGpsCheckInTracking
+dotnet ef migrations add AddGpsCheckInTracking --project src/CarePath.Infrastructure --startup-project src/CarePath.Api
+```
+
+**Expected Schema Changes**:
+- New table: `CheckInRecords`
+- Modified table: `Shifts` (add `ActualCheckInTime`, `ActualCheckOutTime`, `CheckInLatitude`, `CheckInLongitude`, etc.)
+- Indexes: On `ShiftId`, `CheckInTime` for performance
+
+### 4.2 Repository Implementation
+```csharp
+// CarePath.Infrastructure/Persistence/Repositories/ShiftRepository.cs
+
+public class ShiftRepository : Repository<Shift>, IShiftRepository
+{
+    public ShiftRepository(CarePathDbContext context) : base(context) { }
+
+    public async Task<Shift?> GetActiveShiftByCaregiverAsync(Guid caregiverId)
+    {
+        return await _context.Shifts
+            .Include(s => s.Client)
+            .Where(s => s.CaregiverId == caregiverId)
+            .Where(s => s.Status == ShiftStatus.InProgress)
+            .FirstOrDefaultAsync();
+    }
+
+    public async Task<List<Shift>> GetShiftsRequiringApprovalAsync()
+    {
+        return await _context.Shifts
+            .Include(s => s.CheckInRecords)
+            .Where(s => s.CheckInRecords.Any(c => c.Status == CheckInStatus.RequiresApproval))
+            .ToListAsync();
+    }
+}
+```
+
+### 4.3 External Service Integration
+
+**GPS Service** (.NET MAUI):
+```csharp
+// CarePath.Infrastructure/Services/Geolocation/GpsService.cs
+
+public class GpsService : IGpsService
+{
+    public async Task<GpsCoordinates?> GetCurrentLocationAsync()
+    {
+        var location = await Geolocation.GetLocationAsync(new GeolocationRequest
+        {
+            DesiredAccuracy = GeolocationAccuracy.Best,
+            Timeout = TimeSpan.FromSeconds(10)
+        });
+
+        if (location == null) return null;
+
+        return new GpsCoordinates(location.Latitude, location.Longitude);
+    }
+
+    public async Task<bool> IsLocationServicesEnabledAsync()
+    {
+        return await Permissions.CheckStatusAsync<Permissions.LocationWhenInUse>()
+            == PermissionStatus.Granted;
+    }
+}
+```
+
+---
+
+## 5. API Layer Design
+
+### 5.1 Controllers/Endpoints
+
+**Controller**:
+```csharp
+// CarePath.Api/Controllers/ShiftsController.cs
+
+[ApiController]
+[Route("api/[controller]")]
+[Authorize]
+public class ShiftsController : ControllerBase
+{
+    private readonly IShiftService _shiftService;
+
+    [HttpPost("check-in")]
+    [ProducesResponseType(typeof(CheckInResultDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<ActionResult<CheckInResultDto>> CheckIn(CheckInDto dto)
+    {
+        var caregiverId = GetCurrentUserId(); // From JWT claims
+        var result = await _shiftService.CheckInAsync(dto, caregiverId);
+
+        if (!result.Success)
+            return BadRequest(result);
+
+        return Ok(result);
+    }
+
+    [HttpGet("active")]
+    public async Task<ActionResult<ShiftDto>> GetActiveShift()
+    {
+        var caregiverId = GetCurrentUserId();
+        var shift = await _shiftService.GetActiveShiftAsync(caregiverId);
+
+        if (shift == null)
+            return NotFound();
+
+        return Ok(shift);
+    }
+}
+```
+
+**Minimal API Alternative** (if using Minimal APIs):
+```csharp
+// CarePath.Api/Endpoints/ShiftEndpoints.cs
+
+public static class ShiftEndpoints
+{
+    public static void MapShiftEndpoints(this IEndpointRouteBuilder app)
+    {
+        var group = app.MapGroup("/api/shifts")
+            .RequireAuthorization();
+
+        group.MapPost("/check-in", async (
+            CheckInDto dto,
+            IShiftService shiftService,
+            ClaimsPrincipal user) =>
+        {
+            var caregiverId = Guid.Parse(user.FindFirst(ClaimTypes.NameIdentifier)!.Value);
+            var result = await shiftService.CheckInAsync(dto, caregiverId);
+
+            return result.Success
+                ? Results.Ok(result)
+                : Results.BadRequest(result);
+        })
+        .WithName("CheckIn")
+        .Produces<CheckInResultDto>(StatusCodes.Status200OK)
+        .ProducesProblem(StatusCodes.Status400BadRequest);
+    }
+}
+```
+
+### 5.2 SignalR Hubs (Real-Time)
+```csharp
+// CarePath.Api/Hubs/ShiftHub.cs
+
+[Authorize]
+public class ShiftHub : Hub
+{
+    public async Task NotifyShiftCheckIn(Guid shiftId, CheckInResultDto result)
+    {
+        // Notify admin dashboard group
+        await Clients.Group("Administrators")
+            .SendAsync("ShiftCheckedIn", shiftId, result);
+
+        // Notify specific client if applicable
+        var clientId = GetClientIdForShift(shiftId);
+        await Clients.Group($"Client_{clientId}")
+            .SendAsync("CaregiverCheckedIn", result);
+    }
+}
+```
+
+**Calling SignalR from Service**:
+```csharp
+// In ShiftService.CheckInAsync()
+await _hubContext.Clients.Group("Administrators")
+    .SendAsync("ShiftCheckedIn", shift.Id, result);
+```
+
+### 5.3 Middleware
+```csharp
+// CarePath.Api/Middleware/GpsValidationMiddleware.cs (if needed)
+
+public class GpsValidationMiddleware
+{
+    public async Task InvokeAsync(HttpContext context, RequestDelegate next)
+    {
+        // Custom GPS validation logic if needed
+        await next(context);
+    }
+}
+```
+
+---
+
+## 6. Presentation Layer Design
+
+### 6.1 .NET MAUI Mobile App
+
+**Page**:
+```razor
+@* CarePath.MauiApp/Pages/Shifts/CheckInOut.razor *@
+
+@page "/shifts/check-in"
+@inject IShiftService ShiftService
+@inject IGpsService GpsService
+@inject IDialogService DialogService
+
+<MudCard>
+    <MudCardContent>
+        <MudText Typo="Typo.h5">Check In to Shift</MudText>
+
+        @if (activeShift != null)
+        {
+            <MudText>Client: @activeShift.ClientName</MudText>
+            <MudText>Address: @activeShift.Address</MudText>
+            <MudText>Scheduled: @activeShift.StartTime.ToString("h:mm tt")</MudText>
+
+            <MudButton OnClick="CheckInAsync"
+                       Color="Color.Primary"
+                       Disabled="@isCheckingIn"
+                       FullWidth="true">
+                @if (isCheckingIn)
+                {
+                    <MudProgressCircular Size="Size.Small" Indeterminate="true" />
+                    <span>Checking In...</span>
+                }
+                else
+                {
+                    <span>Check In</span>
+                }
+            </MudButton>
+        }
+        else
+        {
+            <MudText>No active shift found</MudText>
+        }
+    </MudCardContent>
+</MudCard>
+
+@code {
+    private ShiftDto? activeShift;
+    private bool isCheckingIn;
+
+    protected override async Task OnInitializedAsync()
+    {
+        activeShift = await ShiftService.GetActiveShiftAsync();
+    }
+
+    private async Task CheckInAsync()
+    {
+        isCheckingIn = true;
+
+        try
+        {
+            // Get GPS location
+            var location = await GpsService.GetCurrentLocationAsync();
+
+            if (location == null)
+            {
+                await DialogService.ShowError("Unable to get GPS location");
+                return;
+            }
+
+            // Call API
+            var dto = new CheckInDto
+            {
+                ShiftId = activeShift!.Id,
+                Latitude = location.Latitude,
+                Longitude = location.Longitude,
+                Timestamp = DateTime.UtcNow
+            };
+
+            var result = await ShiftService.CheckInAsync(dto);
+
+            if (result.Success)
+            {
+                await DialogService.ShowSuccess("Checked in successfully!");
+                NavigationManager.NavigateTo("/shifts/current");
+            }
+            else
+            {
+                await DialogService.ShowError(result.Message);
+            }
+        }
+        finally
+        {
+            isCheckingIn = false;
+        }
+    }
+}
+```
+
+**Platform-Specific Configuration** (Android):
+```xml
+<!-- CarePath.MauiApp/Platforms/Android/AndroidManifest.xml -->
+<uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+<uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+```
+
+### 6.2 Blazor WebAssembly Admin Dashboard
+
+**Page**:
+```razor
+@* CarePath.Web/Pages/Scheduling/ShiftMonitor.razor *@
+
+@page "/shifts/monitor"
+@inject IShiftService ShiftService
+@inject NavigationManager Navigation
+@implements IAsyncDisposable
+
+<MudTable Items="@shifts" Dense="true" Hover="true">
+    <HeaderContent>
+        <MudTh>Caregiver</MudTh>
+        <MudTh>Client</MudTh>
+        <MudTh>Scheduled</MudTh>
+        <MudTh>Actual Check-In</MudTh>
+        <MudTh>Status</MudTh>
+        <MudTh>GPS</MudTh>
+    </HeaderContent>
+    <RowTemplate>
+        <MudTd>@context.CaregiverName</MudTd>
+        <MudTd>@context.ClientName</MudTd>
+        <MudTd>@context.StartTime.ToString("MMM dd, h:mm tt")</MudTd>
+        <MudTd>
+            @if (context.ActualCheckInTime.HasValue)
+            {
+                @context.ActualCheckInTime.Value.ToString("h:mm tt")
+            }
+            else
+            {
+                <MudChip Size="Size.Small" Color="Color.Warning">Not Checked In</MudChip>
+            }
+        </MudTd>
+        <MudTd>
+            <MudChip Size="Size.Small" Color="@GetStatusColor(context.Status)">
+                @context.Status
+            </MudChip>
+        </MudTd>
+        <MudTd>
+            @if (context.CheckInLocation != null)
+            {
+                <MudIconButton Icon="@Icons.Material.Filled.LocationOn"
+                               OnClick="@(() => ShowLocationOnMap(context))" />
+            }
+        </MudTd>
+    </RowTemplate>
+</MudTable>
+
+@code {
+    private List<ShiftDto> shifts = new();
+    private HubConnection? hubConnection;
+
+    protected override async Task OnInitializedAsync()
+    {
+        shifts = await ShiftService.GetTodayShiftsAsync();
+
+        // Set up SignalR connection
+        hubConnection = new HubConnectionBuilder()
+            .WithUrl(Navigation.ToAbsoluteUri("/hubs/shifts"))
+            .Build();
+
+        hubConnection.On<Guid, CheckInResultDto>("ShiftCheckedIn", (shiftId, result) =>
+        {
+            // Update shift in list
+            var shift = shifts.FirstOrDefault(s => s.Id == shiftId);
+            if (shift != null)
+            {
+                shift.ActualCheckInTime = DateTime.Now;
+                shift.Status = result.Status;
+            }
+
+            InvokeAsync(StateHasChanged);
+        });
+
+        await hubConnection.StartAsync();
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        if (hubConnection is not null)
+        {
+            await hubConnection.DisposeAsync();
+        }
+    }
+}
+```
+
+---
+
+## 7. Testing Strategy
+
+### 7.1 Unit Tests
+```csharp
+// CarePath.Application.Tests/Services/ShiftServiceTests.cs
+
+public class ShiftServiceTests
+{
+    [Fact]
+    public async Task CheckInAsync_WithValidGps_ShouldSucceed()
+    {
+        // Arrange
+        var mockShiftRepo = new Mock<IShiftRepository>();
+        var mockGpsValidator = new Mock<IGpsValidator>();
+        // ... setup mocks
+
+        var service = new ShiftService(mockShiftRepo.Object, mockGpsValidator.Object, ...);
+
+        // Act
+        var result = await service.CheckInAsync(checkInDto, caregiverId);
+
+        // Assert
+        Assert.True(result.Success);
+        Assert.Equal(CheckInStatus.Verified, result.Status);
+        mockShiftRepo.Verify(x => x.UpdateAsync(It.IsAny<Shift>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task CheckInAsync_OutsideGeofence_ShouldRequireApproval()
+    {
+        // Arrange
+        mockGpsValidator.Setup(x => x.ValidateLocationAsync(It.IsAny<GpsCoordinates>(), ...))
+            .ReturnsAsync(false);
+
+        // Act
+        var result = await service.CheckInAsync(checkInDto, caregiverId);
+
+        // Assert
+        Assert.False(result.Success);
+        Assert.Equal(CheckInStatus.RequiresApproval, result.Status);
+    }
+}
+```
+
+### 7.2 Integration Tests
+```csharp
+// CarePath.Api.Tests/Controllers/ShiftsControllerTests.cs
+
+public class ShiftsControllerTests : IClassFixture<WebApplicationFactory<Program>>
+{
+    [Fact]
+    public async Task CheckIn_WithValidToken_ReturnsOk()
+    {
+        // Arrange
+        var client = _factory.CreateClient();
+        client.DefaultRequestHeaders.Authorization =
+            new AuthenticationHeaderValue("Bearer", _testToken);
+
+        var dto = new CheckInDto { /* ... */ };
+
+        // Act
+        var response = await client.PostAsJsonAsync("/api/shifts/check-in", dto);
+
+        // Assert
+        response.EnsureSuccessStatusCode();
+        var result = await response.Content.ReadFromJsonAsync<CheckInResultDto>();
+        Assert.NotNull(result);
+        Assert.True(result.Success);
+    }
+}
+```
+
+### 7.3 E2E Tests (.NET MAUI)
+```csharp
+// CarePath.MauiApp.UITests/CheckInTests.cs (using Appium)
+
+[Test]
+public void CheckIn_WithGpsEnabled_ShouldSucceed()
+{
+    // Arrange
+    _driver.Navigate().GoToUrl("shell:///shifts/check-in");
+
+    // Act
+    var checkInButton = _driver.FindElement(By.Id("CheckInButton"));
+    checkInButton.Click();
+
+    // Wait for check-in to complete
+    Thread.Sleep(3000);
+
+    // Assert
+    var successMessage = _driver.FindElement(By.Id("SuccessMessage"));
+    Assert.That(successMessage.Text, Does.Contain("Checked in successfully"));
+}
+```
+
+---
+
+## 8. Performance Considerations
+
+### 8.1 Database Optimization
+- **Indexes**: Create indexes on `ShiftId`, `CaregiverId`, `CheckInTime` in `CheckInRecords` table
+- **Query Optimization**: Use `.Include()` strategically to avoid N+1 queries
+- **Pagination**: Implement pagination for shift lists (page size: 50)
+- **Caching**: Cache active shifts in Redis (TTL: 5 minutes)
+
+### 8.2 API Optimization
+- **Response Compression**: Enable gzip compression for API responses
+- **Rate Limiting**: 100 requests per minute per caregiver
+- **Async/Await**: Ensure all I/O operations are async
+- **Connection Pooling**: SQL Server connection pool size: 100
+
+### 8.3 Mobile App Optimization
+- **GPS Polling**: Poll GPS every 30 seconds (not continuous) to save battery
+- **Offline Support**: Queue check-ins locally in SQLite if offline, sync when online
+- **Image Compression**: Compress visit note photos to < 500KB before upload
+- **Background Services**: Use .NET MAUI background services for location tracking
+
+---
+
+## 9. Security Considerations
+
+### 9.1 Authentication & Authorization
+- **JWT Tokens**: 1-hour expiration, refresh token valid for 7 days
+- **Role-Based**: Only caregivers can check in/out, admins can view all
+- **Claims**: Include `UserId`, `Role`, `ServiceLine` in JWT claims
+
+### 9.2 Data Protection
+- **GPS Data**: Store coordinates with precision limited to 6 decimal places (111m accuracy)
+- **HIPAA Compliance**: Encrypt GPS data at rest using SQL Server TDE
+- **Audit Logging**: Log all check-in/out attempts with timestamp, GPS, and result
+- **PII Protection**: Never log sensitive data in application logs
+
+### 9.3 Input Validation
+- **Server-Side**: Always validate DTOs on server (FluentValidation)
+- **GPS Spoofing**: Implement anti-spoofing checks (velocity validation, historical patterns)
+- **SQL Injection**: Use parameterized queries (EF Core handles this)
+- **XSS Protection**: Blazor automatically escapes output
+
+---
+
+## 10. Deployment Plan
+
+### 10.1 Database Deployment
+```bash
+# Apply migration
+dotnet ef database update --project src/CarePath.Infrastructure --startup-project src/CarePath.Api
+
+# Verify migration
+dotnet ef migrations list --project src/CarePath.Infrastructure
+```
+
+### 10.2 API Deployment
+- **Environment**: Azure App Service (Standard tier)
+- **Configuration**: Update `appsettings.Production.json` with production connection strings
+- **Health Checks**: Implement `/health` endpoint
+- **Monitoring**: Application Insights instrumentation
+
+### 10.3 Mobile App Deployment
+- **iOS**: Submit to App Store (requires Apple Developer account)
+- **Android**: Submit to Google Play Store
+- **Version**: Increment to 1.1.0 (semantic versioning)
+- **Release Notes**: Include GPS check-in feature description
+
+### 10.4 Rollback Plan
+- **Database**: Keep migration rollback script ready
+- **API**: Blue-green deployment, can rollback to previous version
+- **Mobile**: Users on old version can continue to work (backwards compatibility)
+
+---
+
+## 11. Monitoring & Observability
+
+### 11.1 Metrics to Track
+- Check-in success rate (target: 95%)
+- Average check-in time (target: < 5 seconds)
+- GPS accuracy (target: 99% within 100 meters)
+- API response time (target: < 500ms at p95)
+- SignalR connection success rate
+
+### 11.2 Logging Strategy
+```csharp
+_logger.LogInformation(
+    "Caregiver {CaregiverId} checked in to shift {ShiftId} at {CheckInTime}. GPS: ({Lat}, {Lon}). Status: {Status}",
+    caregiverId, shiftId, checkInTime, latitude, longitude, status);
+```
+
+### 11.3 Alerts
+- Alert if check-in failure rate > 5%
+- Alert if API response time > 2 seconds
+- Alert if GPS validation failure rate > 10%
+
+---
+
+## 12. Dependencies
+
+### 12.1 NuGet Packages
+```xml
+<!-- CarePath.Infrastructure -->
+<PackageReference Include="Microsoft.EntityFrameworkCore.SqlServer" Version="9.0.0" />
+<PackageReference Include="Microsoft.EntityFrameworkCore.Tools" Version="9.0.0" />
+
+<!-- CarePath.MauiApp -->
+<PackageReference Include="Microsoft.Maui.Essentials" Version="9.0.0" />
+
+<!-- CarePath.Api -->
+<PackageReference Include="Microsoft.AspNetCore.SignalR" Version="9.0.0" />
+```
+
+### 12.2 External Services
+- None (GPS is built-in to .NET MAUI)
+
+---
+
+## 13. Open Questions & Decisions Needed
+
+- [ ] **GPS Accuracy Tolerance**: Should we allow 100m, 500m, or custom per-client?
+- [ ] **Offline Check-Ins**: Should we allow check-ins to queue offline and sync later?
+- [ ] **Manual Override**: Can admins manually approve check-ins outside geofence?
+- [ ] **Battery Optimization**: Polling frequency - 30 seconds or 1 minute?
+- [ ] **Notification Strategy**: Push notification on successful check-in?
+
+---
+
+## 14. Related Documents
+
+- [Requirements Spec](../01-requirements/cp-01-create-domain-entities.md)
+- [Tasks Spec](../03-tasks/cp-01-create-domain-entities.md)
+- [Architecture.md](../../Documentation/Architecture.md)
+
+---
+
+## Revision History
+
+| Version | Date | Author | Changes |
+|---------|------|--------|---------|
+| 1.0 | 2026-02-16 | [Name] | Initial draft |

@@ -156,7 +156,7 @@ This tasks spec breaks down the domain layer implementation into 39 atomic tasks
 - **Priority**: High
 - **Success Criteria**:
   - `UserRole.cs` created in Enumerations folder
-  - Roles: SuperAdmin, Admin, CareCoordinator, Caregiver, Client
+  - Roles: Admin, Coordinator, Caregiver, Client, FacilityManager (matches design spec Section 3 — tasks spec was stale)
   - Includes XML comments explaining each role's purpose
 - **Files**:
   - CREATE: `Domain/Enumerations/UserRole.cs`
@@ -169,8 +169,13 @@ This tasks spec breaks down the domain layer implementation into 39 atomic tasks
 ### TASK-007: Create User Entity
 - **Dependencies**: TASK-004, TASK-006
 - **Estimate**: 1.5 hours
-- **Files**: CREATE `Domain/Entities/User.cs`
-- **Implementation**: See design spec Section 2.1
+- **Files**: CREATE `Domain/Entities/Identity/User.cs`
+- **Implementation**: See design spec Section 2.2
+- **Implementation Notes**:
+  - Add `using CarePath.Domain.Entities.Common;` explicitly at the top of every entity file
+    (chosen over a global using to keep each file's dependencies self-evident to the reader)
+  - Add `using CarePath.Domain.Enumerations;` on entity files that reference enums
+  - This strategy applies to all Phase 3 entity files (TASK-007 through TASK-017)
 
 ### TASK-008: Create Caregiver Entity
 - **Dependencies**: TASK-004, TASK-005, TASK-007

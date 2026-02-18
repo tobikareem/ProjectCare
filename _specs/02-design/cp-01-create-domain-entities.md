@@ -95,14 +95,15 @@ src/CarePath.Domain/
 │       ├── Invoice.cs                 # Client invoices
 │       ├── InvoiceLineItem.cs         # Invoice line items (per shift)
 │       └── Payment.cs                 # Payment records
-├── Enums/
+├── Enumerations/
 │   ├── UserRole.cs                    # Admin, Coordinator, Caregiver, Client, FacilityManager
 │   ├── EmploymentType.cs              # W2Employee, Contractor1099
 │   ├── ServiceType.cs                 # InHomeCare, FacilityStaffing
 │   ├── ShiftStatus.cs                 # Scheduled, InProgress, Completed, Cancelled, NoShow
-│   ├── CertificationType.cs           # CNA, LPN, RN, HHA, CPR, FirstAid, Dementia, Alzheimers
-│   ├── InvoiceStatus.cs               # Draft, Sent, Paid, Overdue, Cancelled
-│   └── PaymentMethod.cs               # Cash, Check, CreditCard, BankTransfer, Insurance
+│   ├── CertificationType.cs           # CNA, LPN, RN, HHA, CPR, FirstAid, Dementia, Alzheimers, GNA, CRMA
+│   ├── InvoiceStatus.cs               # Draft, Sent, Paid, PartiallyPaid, Overdue, Cancelled
+│   ├── PaymentMethod.cs               # Cash, Check, CreditCard, BankTransfer, Insurance, Medicaid
+│   └── PaymentStatus.cs               # Pending, Settled, Failed, Refunded
 └── Interfaces/
     └── Repositories/
         ├── IRepository.cs             # Generic repository interface
@@ -891,6 +892,9 @@ public class InvoiceTests
 - [ ] **Value Objects**: Should GPS coordinates be a `record GpsCoordinates(double Lat, double Lon)` value object? **Recommendation**: Phase 2 (keep simple for MVP).
 - [ ] **Domain Events**: Implement events like "ShiftCompleted", "CertificationExpiring"? **Recommendation**: Phase 3 (not needed for MVP).
 - [ ] **Invoice Number Generation**: Domain layer or Application layer? **Recommendation**: Application layer (requires database sequence).
+- [x] **DateTime vs DateTimeOffset**: **Decision: retain `DateTime` with UTC convention.** All timestamp properties use `DateTime.UtcNow`. EF Core round-trips through SQL Server `datetime2` lose `DateTimeKind.Utc` — the Infrastructure layer **must** add a UTC `ValueConverter` on every `DateTime` property in every entity configuration (e.g., `builder.Property(e => e.CreatedAt).HasConversion(v => v, v => DateTime.SpecifyKind(v, DateTimeKind.Utc))`). This requirement must be captured in the Infrastructure tasks spec.
+- [x] **`using` strategy for entity files**: **Decision: explicit `using` per file.** Each entity file declares `using CarePath.Domain.Entities.Common;` and `using CarePath.Domain.Enumerations;` explicitly. Keeps dependencies visible to readers without requiring knowledge of global using directives. No global using added to `Domain.csproj`.
+- [x] **`InvoiceStatus.Void` vs `Cancelled`**: **Decision: single `Cancelled` member for MVP.** The distinction between voided-before-sending and cancelled-after-sending is not required for initial reporting. Can be split in a future migration if reporting requirements demand it.
 
 ---
 

@@ -1,42 +1,30 @@
 ---
-description: Create a commit message by analyzing git diffs
-allowed-tools: Bash(git status:*), Bash(git diff --staged), Bash(git commit:*)
+description: "Create a conventional commit message from staged git changes. Use when the user wants to commit, needs help writing a commit message, or asks to prepare staged changes."
+allowed-tools: Bash(git status *), Bash(git diff *), Bash(git log *), Bash(git commit *)
 ---
 
-## Run these commands:
+Inspect staged changes with `git status` and `git diff --staged`. Also check `git log --oneline -5` to match the repository's existing commit style.
 
-```bash
-git status
-git diff --staged
-```
-
-## Your task:
-
-Analyze above staged git changes and create a commit message. Use present tense and explain "why" something has changed, not just "what" has changed.
-
-## Commit types with emojis:
-Only use the following emojis: 
-
-- ✨ `feat:` - New feature
-- 🐛 `fix:` - Bug fix
-- 🔨 `refactor:` - Refactoring code
-- 📝 `docs:` - Documentation
-- 🎨 `style:` - Styling/formatting
-- ✅ `test:` - Tests
-- ⚡ `perf:` - Performance
-
-## Format:
-Use the following format for making the commit message:
+Propose a commit message in present tense, explaining "why" not just "what". Use this format:
 
 ```
-<emoji> <type>: <concise_description>
-<optional_body_explaining_why>
+<emoji> <type>: <concise description>
+
+<optional body explaining why>
 ```
 
-## Output:
+Allowed types:
 
-1. Show summary of changes currently staged
-2. Propose commit message with appropriate emoji
-3. Ask for confirmation before committing
+- ✨ `feat:` — New feature
+- 🐛 `fix:` — Bug fix
+- 🔨 `refactor:` — Refactoring
+- 📝 `docs:` — Documentation
+- 🎨 `style:` — Formatting
+- ✅ `test:` — Tests
+- ⚡ `perf:` — Performance
 
-DO NOT auto-commit - wait for user approval, and only commit if the user says so.
+## Workflow
+
+1. Show a brief summary of what is staged.
+2. Propose the commit message with the appropriate emoji and type.
+3. Ask for user confirmation before committing. Do NOT auto-commit.

@@ -156,7 +156,7 @@ This tasks spec breaks down the domain layer implementation into 39 atomic tasks
 - **Priority**: High
 - **Success Criteria**:
   - `UserRole.cs` created in Enumerations folder
-  - Roles: SuperAdmin, Admin, CareCoordinator, Caregiver, Client
+  - Roles: Admin, Coordinator, Caregiver, Client, FacilityManager (matches design spec Section 3 — tasks spec was stale)
   - Includes XML comments explaining each role's purpose
 - **Files**:
   - CREATE: `Domain/Enumerations/UserRole.cs`
@@ -169,8 +169,13 @@ This tasks spec breaks down the domain layer implementation into 39 atomic tasks
 ### TASK-007: Create User Entity
 - **Dependencies**: TASK-004, TASK-006
 - **Estimate**: 1.5 hours
-- **Files**: CREATE `Domain/Entities/User.cs`
-- **Implementation**: See design spec Section 2.1
+- **Files**: CREATE `Domain/Entities/Identity/User.cs`
+- **Implementation**: See design spec Section 2.2
+- **Implementation Notes**:
+  - Add `using CarePath.Domain.Entities.Common;` explicitly at the top of every entity file
+    (chosen over a global using to keep each file's dependencies self-evident to the reader)
+  - Add `using CarePath.Domain.Enumerations;` on entity files that reference enums
+  - This strategy applies to all Phase 3 entity files (TASK-007 through TASK-017)
 
 ### TASK-008: Create Caregiver Entity
 - **Dependencies**: TASK-004, TASK-005, TASK-007
@@ -247,14 +252,20 @@ This tasks spec breaks down the domain layer implementation into 39 atomic tasks
 ### TASK-019: Create IRepository<T> Generic Interface
 - **Dependencies**: TASK-004
 - **Estimate**: 1.5 hours
-- **Files**: CREATE `Domain/Interfaces/IRepository.cs`
+- **Files**: CREATE `Domain/Interfaces/Repositories/IRepository.cs`
 - **Implementation**: See design spec Section 4.1
 - **Methods**: GetByIdAsync, GetAllAsync, FindAsync, AddAsync, UpdateAsync, DeleteAsync (soft delete)
+- **Implementation Notes**:
+  - Use `where T : BaseEntity` constraint (not `where T : class`) for access to audit fields without casting
+  - Return `IReadOnlyList<T>` from `GetAllAsync` and `FindAsync` (not `IEnumerable<T>`) to signal fully materialized results
+  - Infrastructure implementation must apply an EF Core global query filter (`IsDeleted == false`) so navigation-property queries are also filtered automatically
+
+- **Follow-up (Infrastructure phase)**: Add a `GetPagedAsync(int pageNumber, int pageSize, CancellationToken)` overload to `IRepository<T>` before Application layer services are written. Without it, high-volume tables (`Shift`, `VisitNote`) risk full in-memory loads via `GetAllAsync`. Track as TASK-019a in the Infrastructure spec.
 
 ### TASK-020: Create IUnitOfWork Interface
 - **Dependencies**: TASK-019
 - **Estimate**: 1.5 hours
-- **Files**: CREATE `Domain/Interfaces/IUnitOfWork.cs`
+- **Files**: CREATE `Domain/Interfaces/Repositories/IUnitOfWork.cs`
 - **Implementation**: See design spec Section 4.2
 - **Properties**: Repository for each entity (IRepository<User>, IRepository<Caregiver>, etc.)
 - **Methods**: SaveChangesAsync, BeginTransactionAsync, CommitTransactionAsync, RollbackTransactionAsync

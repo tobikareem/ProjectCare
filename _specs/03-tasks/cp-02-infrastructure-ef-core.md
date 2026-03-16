@@ -16,7 +16,7 @@
 
 > **Implement the Infrastructure & EF Core layer for CarePath Health, adding database persistence via Entity Framework Core 9, SQL Server integration, ASP.NET Identity, repository pattern, Unit of Work, migrations, seed data, and comprehensive infrastructure tests.**
 
-This tasks spec breaks down the Infrastructure layer implementation into 39 atomic tasks across 10 phases: Project Setup, Core Infrastructure (ValueConverters, Interceptors), EF Core DbContext, Entity Configurations (12 entities), Repository Implementation, Dependency Injection, Migrations, Seed Data, Testing, and Final Verification.
+This task spec breaks down the Infrastructure layer implementation into 39 atomic tasks across 10 phases: Project Setup, Core Infrastructure (ValueConverters, Interceptors), EF Core DbContext, Entity Configurations (12 entities), Repository Implementation, Dependency Injection, Migrations, Seed Data, Testing, and Final Verification.
 
 All tasks build on CP-01 (Domain Entities) which must be completed and merged before CP-02 begins.
 

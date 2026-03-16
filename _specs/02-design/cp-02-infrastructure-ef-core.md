@@ -1600,7 +1600,7 @@ public static class DependencyInjection
             options.UseSqlServer(connectionString, sqlOptions =>
             {
                 sqlOptions.MigrationsAssembly(typeof(CarePathDbContext).Assembly.GetName().Name);
-                sqlOptions.EnableRetryOnFailure(maxRetryCount: 3, maxRetryDelaySeconds: 5, errorNumbersToAdd: null);
+                sqlOptions.EnableRetryOnFailure(maxRetryCount: 3, maxRetryDelay: TimeSpan.FromSeconds(5), errorNumbersToAdd: null);
             });
         });
 
@@ -1783,7 +1783,7 @@ public class RepositoryIntegrationTests : IAsyncLifetime
     }
 
     [Fact]
-    public async Task DeleteUser_UsessSoftDelete_SetsIsDeletedTrue()
+    public async Task DeleteUser_UsesSoftDelete_SetsIsDeletedTrue()
     {
         // Arrange
         var user = new User

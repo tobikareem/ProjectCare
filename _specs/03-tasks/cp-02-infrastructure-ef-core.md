@@ -16,7 +16,7 @@
 
 > **Implement the Infrastructure & EF Core layer for CarePath Health, adding database persistence via Entity Framework Core 9, SQL Server integration, ASP.NET Identity, repository pattern, Unit of Work, migrations, seed data, and comprehensive infrastructure tests.**
 
-This tasks spec breaks down the Infrastructure layer implementation into 40 atomic tasks across 9 phases: Project Setup, Core Infrastructure (ValueConverters, Interceptors), EF Core DbContext, Entity Configurations (12 entities), Repository Implementation, Dependency Injection, Migrations, Seed Data, Testing, and Final Verification.
+This task spec breaks down the Infrastructure layer implementation into 39 atomic tasks across 10 phases: Project Setup, Core Infrastructure (ValueConverters, Interceptors), EF Core DbContext, Entity Configurations (12 entities), Repository Implementation, Dependency Injection, Migrations, Seed Data, Testing, and Final Verification.
 
 All tasks build on CP-01 (Domain Entities) which must be completed and merged before CP-02 begins.
 
@@ -40,7 +40,7 @@ All tasks build on CP-01 (Domain Entities) which must be completed and merged be
 | Phase 10: Final Verification | 1 task | 1.5 hours | Phase 9 |
 
 **Total Phases**: 10  
-**Total Tasks**: 40 (TASK-040 through TASK-079)
+**Total Tasks**: 39 (TASK-040 through TASK-078)
 
 ---
 
@@ -499,7 +499,7 @@ Each entity configuration task creates a Fluent API configuration class that:
 - **Key Points**:
   - Table name: `"Payments"`
   - PK: `Id` (Guid)
-  - FK: `InvoiceId` → `Invoices.Id` (required, no cascade delete — HIPAA: preserve payment history)
+  - FK: `InvoiceId` → `Invoices.Id` (required, `DeleteBehavior.Cascade` — LineItems and Payments cascade with their parent Invoice; soft delete enforced in code)
   - String properties: `ReferenceNumber` (max 50), `Notes` (max 500)
   - Decimal properties with precision: `Amount` (18,2)
   - Add indexes: `InvoiceId`, `PaymentDate`, `IsDeleted`

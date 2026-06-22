@@ -141,7 +141,7 @@ This tasks spec breaks down the domain layer implementation into 39 atomic tasks
 - **Success Criteria**:
   - All 7 enumerations created in `Enumerations.cs`
   - Each enum has XML documentation explaining business context
-  - Enums: EmploymentType, CertificationType, ServiceType, ShiftStatus, InvoiceStatus, PaymentMethod, PaymentStatus
+  - Enumerations: EmploymentType, CertificationType, ServiceType, ShiftStatus, InvoiceStatus, PaymentMethod, PaymentStatus
 - **Files**:
   - CREATE: `Domain/Enumerations/Enumerations.cs`
 - **Implementation**: See design spec Section 3 for complete code
@@ -438,7 +438,7 @@ TASK-001 (Domain Project)
    └─> TASK-002 (Tests Project)
    └─> TASK-004 (BaseEntity) ──┬─> TASK-007 (User) ──┬─> TASK-008 (Caregiver) ──> TASK-011 (Shift)
                                 │                      └─> TASK-009 (Client) ─────> TASK-011 (Shift)
-                                └─> TASK-005 (Enums) ──┴─> TASK-011 (Shift) ──┬─> TASK-012 (VisitNote)
+                                └─> TASK-005 (Enumerations) ──┴─> TASK-011 (Shift) ──┬─> TASK-012 (VisitNote)
                                                                                 └─> TASK-014 (Invoice)
 TASK-011 (Shift) ──> TASK-012 (VisitNote) ──> TASK-013 (VisitPhoto)
 TASK-014 (Invoice) ──┬─> TASK-015 (InvoiceLineItem)

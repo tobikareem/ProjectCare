@@ -194,7 +194,7 @@ public abstract class BaseEntity
 - Email is unique identifier for authentication
 
 ```csharp
-using CarePath.Domain.Enums;
+using CarePath.Domain.Enumerations;
 
 namespace CarePath.Domain.Entities.Identity;
 
@@ -259,7 +259,7 @@ public class User : BaseEntity
 - Tracks certifications, skills, availability, performance metrics
 
 ```csharp
-using CarePath.Domain.Enums;
+using CarePath.Domain.Enumerations;
 
 namespace CarePath.Domain.Entities.Identity;
 
@@ -346,7 +346,7 @@ public class CaregiverCertification : BaseEntity
 - Supports insurance/Medicaid billing
 
 ```csharp
-using CarePath.Domain.Enums;
+using CarePath.Domain.Enumerations;
 
 namespace CarePath.Domain.Entities.Identity;
 
@@ -445,7 +445,7 @@ public class CarePlan : BaseEntity
 - Status lifecycle: Scheduled → InProgress → Completed (or Cancelled/NoShow)
 
 ```csharp
-using CarePath.Domain.Enums;
+using CarePath.Domain.Enumerations;
 
 namespace CarePath.Domain.Entities.Scheduling;
 
@@ -611,7 +611,7 @@ public class VisitPhoto : BaseEntity
 **Purpose**: Invoicing with computed totals and payment tracking.
 
 ```csharp
-using CarePath.Domain.Enums;
+using CarePath.Domain.Enumerations;
 
 namespace CarePath.Domain.Entities.Billing;
 
@@ -695,10 +695,10 @@ public class Payment : BaseEntity
 
 ### 3.1 All Enumerations
 
-**File**: `src/CarePath.Domain/Enums/[EnumName].cs`
+**File**: `src/CarePath.Domain/Enumerations/[EnumName].cs`
 
 ```csharp
-namespace CarePath.Domain.Enums;
+namespace CarePath.Domain.Enumerations;
 
 /// <summary>User roles determining access permissions.</summary>
 public enum UserRole

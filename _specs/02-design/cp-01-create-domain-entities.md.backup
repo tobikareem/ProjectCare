@@ -107,9 +107,9 @@ public record GpsCoordinates(double Latitude, double Longitude)
 }
 ```
 
-**Enums**:
+**Enumerations**:
 ```csharp
-// CarePath.Domain/Enums/CheckInStatus.cs
+// CarePath.Domain/Enumerations/CheckInStatus.cs
 
 public enum CheckInStatus
 {

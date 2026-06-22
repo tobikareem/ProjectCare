@@ -1,7 +1,7 @@
 # Requirements Specification: CP-02 Infrastructure / EF Core
 
 **Date**: 2026-02-25
-**Author**: Claude Code Agent
+**Author**: Tobi Kareem
 **Project**: CarePath Health
 **Status**: Draft
 **Related Specs**:
@@ -618,7 +618,7 @@ A requirement is complete when:
 
 | Version | Date | Author | Status | Changes |
 |---------|------|--------|--------|---------|
-| 1.0 | 2026-02-25 | Claude Code Agent | **Draft** | Initial comprehensive requirements spec for Infrastructure/EF Core layer |
+| 1.0 | 2026-02-25 | Tobi Kareem | **Draft** | Initial comprehensive requirements spec for Infrastructure/EF Core layer |
 
 ---
 

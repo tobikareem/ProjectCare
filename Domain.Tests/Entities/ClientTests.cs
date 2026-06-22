@@ -29,13 +29,17 @@ public class ClientTests
     [Fact]
     public void Age_IsLeapYearSafe_ForFeb29Birthday()
     {
-        // 2000-02-29: leap day birthday; as of Feb 16, 2026 the birthday hasn't occurred yet → age = 25
-        // Expected value hardcoded for 2026-02-16; update if test suite runs in a future year.
+        // 2000-02-29: leap day birthday. The primary goal is that Age never throws.
+        // Expected age is computed dynamically so the test remains valid in any year.
         var dob = new DateTime(2000, 2, 29, 0, 0, 0, DateTimeKind.Utc);
         var client = new Client { DateOfBirth = dob };
+        var today = DateTime.UtcNow;
+        var expectedAge = today.Year - dob.Year;
+        if (dob.Date > today.AddYears(-expectedAge)) expectedAge--;
+
         var act = () => client.Age;
         act.Should().NotThrow();
-        client.Age.Should().Be(25);
+        client.Age.Should().Be(expectedAge);
     }
 
     [Fact]

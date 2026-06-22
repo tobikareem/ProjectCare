@@ -60,6 +60,18 @@ CarePath.Domain/
 ├── Enumerations/                         # UserRole, EmploymentType, ShiftStatus, etc.
 └── Interfaces/Repositories/              # IRepository<T>, IUnitOfWork
 
+CarePath.Infrastructure/                  # (CP-02 — EF Core, Repositories, Identity)
+├── Persistence/
+│   ├── CarePathDbContext.cs              # EF Core DbContext (IdentityDbContext<ApplicationUser>)
+│   ├── Configurations/                   # Fluent API entity configurations (Identity/, Scheduling/, Billing/)
+│   ├── Interceptors/                     # AuditableEntityInterceptor (auto-set audit fields)
+│   ├── Converters/                       # UtcDateTimeConverter (preserve UTC on SQL Server round-trip)
+│   ├── Repositories/Repository.cs        # Generic Repository<T> : IRepository<T>
+│   ├── UnitOfWork.cs                     # UnitOfWork : IUnitOfWork
+│   └── Migrations/                       # EF Core auto-generated migrations
+├── Identity/ApplicationUser.cs           # IdentityUser<Guid> linked to domain User via DomainUserId
+└── DependencyInjection.cs                # AddInfrastructure() service registration
+
 _specs/
 ├── 01-requirements/                      # Problem statement, Gherkin user stories
 ├── 02-design/                            # Architecture decisions, entity design, API endpoints
@@ -95,9 +107,22 @@ _specs/
 ### Repository Pattern
 
 - Interfaces defined in `Domain/Interfaces/Repositories/`
-- Implementations in `Infrastructure/Repositories/`
+- Implementations in `Infrastructure/Persistence/Repositories/`
 - Use `where T : BaseEntity` constraint on `IRepository<T>` — not `where T : class`
 - Apply a global EF Core query filter (`IsDeleted == false`) in Infrastructure so soft-deleted records are automatically excluded
+- Use `GetPagedAsync` (not `GetAllAsync`) for high-volume tables (`Shift`, `VisitNote`)
+
+### Infrastructure / EF Core Conventions
+
+- **Entity configurations**: Fluent API only — never data annotations on entities
+- **UTC DateTime converter**: Apply on every `DateTime` and `DateTime?` property to preserve `DateTimeKind.Utc` through SQL Server round-trips
+- **Decimal precision**: `(18, 2)` for all monetary values (BillRate, PayRate, Amount, etc.)
+- **String lengths**: Email=256, Names=100, PhoneNumber=20, ZipCode=10, CertificationNumber=50, InvoiceNumber=20, Address=500
+- **Cascade deletes**: `DeleteBehavior.Restrict` on PHI entities (Client, CarePlan, VisitNote, VisitPhoto, Shift, CaregiverCertification) — never cascade delete clinical data
+- **Computed properties**: `.Ignore()` in configuration — never persist to database (FullName, Age, BillableHours, GrossMargin, etc.)
+- **Audit interceptor**: `SaveChangesInterceptor` auto-sets `CreatedAt`, `CreatedBy`, `UpdatedAt`, `UpdatedBy` — never set these manually in service code
+- **ASP.NET Core Identity**: Pattern A (Separate Tables) — `ApplicationUser : IdentityUser<Guid>` with `DomainUserId` FK to domain `User`
+- **Connection strings**: Must include `Encrypt=True` for HIPAA compliance
 
 ---
 
@@ -207,7 +232,7 @@ Follow this sequence for every implementation task:
 - `Invoice.Subtotal` = sum of `LineItems.Amount`
 - `Invoice.Balance` = `TotalAmount - AmountPaid`
 
-**Enumerations**: `UserRole` (Admin, Coordinator, Caregiver, Client, FacilityManager), `EmploymentType`, `CertificationType`, `ServiceType`, `ShiftStatus`, `InvoiceStatus`, `PaymentMethod`, `PaymentStatus`
+**Enumerations**: `UserRole` (Admin, Coordinator, Caregiver, Client, FacilityManager), `EmploymentType` (W2Employee, Contractor1099), `CertificationType`, `ServiceType` (InHomeCare, FacilityStaffing), `ShiftStatus` (Scheduled, InProgress, Completed, Cancelled, NoShow), `InvoiceStatus`, `PaymentMethod`
 
 ---
 

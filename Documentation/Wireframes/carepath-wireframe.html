@@ -1,0 +1,1656 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Accessible CarePath Health web and mobile product wireframe">
+  <title>CarePath Health — Product Wireframe</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --ink: #172525;
+      --muted: #60706e;
+      --line: #cbd6d3;
+      --surface: #ffffff;
+      --surface-alt: #f3f7f6;
+      --teal-900: #073f43;
+      --teal-700: #08737b;
+      --teal-100: #d9eff0;
+      --orange: #c65323;
+      --orange-soft: #fff0e8;
+      --green: #24734f;
+      --green-soft: #e2f3e9;
+      --amber: #8a6100;
+      --amber-soft: #fff4cf;
+      --red: #a33131;
+      --red-soft: #fde8e8;
+      --shadow: 0 18px 48px rgb(7 63 67 / 12%);
+      --radius: 14px;
+      --focus: #ff8a3d;
+    }
+
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+
+    body {
+      margin: 0;
+      color: var(--ink);
+      background: #e9efed;
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      line-height: 1.5;
+    }
+
+    button, input, select, textarea { font: inherit; }
+    button, a { -webkit-tap-highlight-color: transparent; }
+
+    button:focus-visible,
+    a:focus-visible,
+    input:focus-visible,
+    select:focus-visible,
+    textarea:focus-visible {
+      outline: 3px solid var(--focus);
+      outline-offset: 3px;
+    }
+
+    .skip-link {
+      position: fixed; z-index: 100; top: 12px; left: 12px;
+      padding: 10px 14px; color: #fff; background: var(--teal-900);
+      border-radius: 8px; transform: translateY(-160%);
+    }
+    .skip-link:focus { transform: translateY(0); }
+
+    /* ── Prototype bar ── */
+    .prototype-bar {
+      display: flex; align-items: center; justify-content: space-between;
+      gap: 20px; padding: 14px clamp(16px,3vw,36px);
+      color: #fff; background: var(--teal-900);
+    }
+    .prototype-bar strong { letter-spacing: .02em; }
+    .prototype-bar p { margin: 2px 0 0; color: #cce3e3; font-size: .86rem; }
+
+    .view-switcher {
+      display: flex; gap: 4px; padding: 4px;
+      border: 1px solid rgb(255 255 255 / 35%); border-radius: 11px;
+    }
+    .view-switcher button {
+      min-height: 38px; padding: 7px 13px; color: #fff;
+      background: transparent; border: 0; border-radius: 8px; cursor: pointer;
+    }
+    .view-switcher button[aria-selected="true"] {
+      color: var(--teal-900); background: #fff; font-weight: 750;
+    }
+
+    .prototype-shell { min-height: calc(100vh - 70px); }
+    .view-panel[hidden] { display: none; }
+
+    /* ── Desktop shell ── */
+    .web-app {
+      display: grid;
+      grid-template-columns: 250px minmax(0,1fr);
+      min-height: calc(100vh - 70px);
+      background: var(--surface-alt);
+    }
+
+    .sidebar {
+      position: sticky; top: 0;
+      height: calc(100vh - 70px);
+      padding: 24px 18px;
+      color: #fff; background: #0a4b4f;
+      overflow-y: auto;
+    }
+
+    .brand { display: flex; align-items: center; gap: 10px; margin: 0 8px 30px; }
+    .brand-mark {
+      display: grid; width: 38px; height: 38px; place-items: center;
+      color: var(--teal-900); background: #fff; border-radius: 12px; font-weight: 900;
+    }
+    .brand span { display: block; font-size: .75rem; color: #b8d5d4; }
+
+    .nav-label {
+      margin: 26px 10px 8px; color: #a7cecc;
+      font-size: .72rem; font-weight: 800; letter-spacing: .12em; text-transform: uppercase;
+    }
+
+    .side-nav { display: grid; gap: 5px; }
+    .side-nav button {
+      display: grid; grid-template-columns: 24px 1fr auto;
+      align-items: center; gap: 9px;
+      width: 100%; min-height: 44px; padding: 9px 11px;
+      color: #e9f5f4; text-align: left;
+      background: transparent; border: 0; border-radius: 9px; cursor: pointer;
+    }
+    .side-nav button:hover,
+    .side-nav button[aria-current="page"] { background: rgb(255 255 255 / 14%); }
+
+    .nav-count {
+      min-width: 24px; padding: 2px 7px;
+      color: #542408; text-align: center;
+      background: #ffcfad; border-radius: 999px;
+      font-size: .75rem; font-weight: 800;
+    }
+
+    .desktop-main { min-width: 0; }
+
+    .topbar {
+      display: flex; align-items: center; justify-content: space-between;
+      gap: 18px; min-height: 76px;
+      padding: 14px clamp(20px,3vw,42px);
+      background: var(--surface); border-bottom: 1px solid var(--line);
+    }
+
+    .search { position: relative; flex: 1; max-width: 520px; }
+    .search label { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+    .search input {
+      width: 100%; min-height: 44px; padding: 9px 14px 9px 42px;
+      color: var(--ink); background: var(--surface-alt);
+      border: 1px solid transparent; border-radius: 10px;
+    }
+    .search::before {
+      position: absolute; z-index: 1; top: 11px; left: 14px;
+      content: "⌕"; color: var(--muted); font-size: 1.25rem;
+    }
+
+    .user-menu { display: flex; align-items: center; gap: 10px; white-space: nowrap; }
+    .avatar {
+      display: grid; width: 38px; height: 38px; place-items: center;
+      color: #fff; background: var(--teal-700); border-radius: 50%; font-weight: 800;
+    }
+
+    /* ── Pages ── */
+    .web-page { display: none; padding: clamp(24px,3vw,42px); }
+    .web-page.active { display: block; }
+
+    .page-heading {
+      display: flex; align-items: end; justify-content: space-between;
+      gap: 20px; margin-bottom: 26px;
+    }
+    .eyebrow {
+      margin: 0 0 5px; color: var(--teal-700);
+      font-size: .75rem; font-weight: 850; letter-spacing: .11em; text-transform: uppercase;
+    }
+
+    h1, h2, h3, p { margin-top: 0; }
+    h1 { margin-bottom: 5px; font-size: clamp(1.7rem,3vw,2.35rem); line-height: 1.16; }
+    h2 { font-size: 1.16rem; }
+    h3 { font-size: 1rem; }
+    .subtle { color: var(--muted); }
+
+    .button {
+      display: inline-flex; align-items: center; justify-content: center;
+      gap: 8px; min-height: 44px; padding: 10px 16px;
+      border: 1px solid var(--teal-700); border-radius: 10px;
+      cursor: pointer; font-weight: 750; text-decoration: none;
+    }
+    .button-primary { color: #fff; background: var(--teal-700); }
+    .button-secondary { color: var(--teal-700); background: #fff; }
+    .button-sm { min-height: 36px; padding: 7px 13px; font-size: .85rem; }
+
+    .metric-grid {
+      display: grid;
+      grid-template-columns: repeat(4,minmax(0,1fr));
+      gap: 15px; margin-bottom: 22px;
+    }
+
+    .card {
+      padding: 20px; background: var(--surface);
+      border: 1px solid var(--line); border-radius: var(--radius);
+      box-shadow: 0 4px 14px rgb(7 63 67 / 4%);
+    }
+
+    .metric-card { position: relative; min-height: 137px; overflow: hidden; }
+    .metric-card::after {
+      position: absolute; right: -22px; bottom: -28px;
+      width: 88px; height: 88px; content: "";
+      background: var(--teal-100); border-radius: 50%;
+    }
+    .metric-label { color: var(--muted); font-size: .82rem; font-weight: 700; }
+    .metric-value { margin: 10px 0 2px; font-size: 1.9rem; font-weight: 850; line-height: 1; }
+    .trend { color: var(--green); font-size: .8rem; font-weight: 750; }
+
+    .dashboard-grid {
+      display: grid;
+      grid-template-columns: minmax(0,1.65fr) minmax(280px,.75fr);
+      gap: 20px;
+    }
+
+    .section-header {
+      display: flex; align-items: center; justify-content: space-between;
+      gap: 12px; margin-bottom: 16px;
+    }
+    .section-header h2 { margin: 0; }
+
+    .text-link {
+      color: var(--teal-700); background: none; border: 0;
+      cursor: pointer; font-weight: 750;
+      text-decoration: underline; text-underline-offset: 3px;
+    }
+
+    .schedule-list, .alert-list, .task-list {
+      display: grid; gap: 10px; margin: 0; padding: 0; list-style: none;
+    }
+
+    .schedule-row {
+      display: grid;
+      grid-template-columns: 76px minmax(150px,1.2fr) minmax(145px,1fr) 120px 90px;
+      align-items: center; gap: 12px; min-height: 62px;
+      padding: 10px 12px; border: 1px solid var(--line); border-radius: 10px;
+    }
+    .schedule-row strong, .schedule-row span { min-width: 0; }
+
+    .time { color: var(--teal-900); font-weight: 850; }
+    .meta { display: block; margin-top: 2px; color: var(--muted); font-size: .78rem; }
+
+    .status {
+      display: inline-flex; width: fit-content; align-items: center;
+      gap: 5px; padding: 4px 8px; border-radius: 999px;
+      font-size: .74rem; font-weight: 800;
+    }
+    .status::before { width: 7px; height: 7px; content: ""; background: currentColor; border-radius: 50%; }
+    .status-green  { color: var(--green);    background: var(--green-soft); }
+    .status-amber  { color: var(--amber);    background: var(--amber-soft); }
+    .status-red    { color: var(--red);      background: var(--red-soft); }
+    .status-blue   { color: var(--teal-700); background: var(--teal-100); }
+
+    .alert-item {
+      padding: 13px 14px; border-left: 4px solid var(--orange);
+      background: var(--orange-soft); border-radius: 8px;
+    }
+    .alert-item p { margin: 4px 0 0; font-size: .84rem; color: #69402e; }
+
+    .margin-bars { display: grid; gap: 20px; }
+    .bar-row header { display: flex; justify-content: space-between; gap: 12px; margin-bottom: 7px; }
+    .bar-track { height: 12px; background: #e3ebe9; border-radius: 999px; overflow: hidden; }
+    .bar-fill { display: block; height: 100%; background: var(--teal-700); border-radius: inherit; }
+    .bar-fill.staffing { background: var(--orange); }
+
+    .quick-actions {
+      display: grid; grid-template-columns: repeat(2,minmax(0,1fr));
+      gap: 10px; margin-top: 20px;
+    }
+    .quick-actions button {
+      min-height: 72px; padding: 12px; color: var(--ink);
+      text-align: left; background: var(--surface-alt);
+      border: 1px solid var(--line); border-radius: 10px;
+      cursor: pointer; font-weight: 750;
+    }
+
+    /* ── Data table ── */
+    .data-table-wrap { overflow-x: auto; }
+    .data-table {
+      width: 100%; border-collapse: collapse; font-size: .88rem;
+    }
+    .data-table th {
+      padding: 10px 14px; text-align: left; font-size: .72rem;
+      font-weight: 800; letter-spacing: .08em; text-transform: uppercase;
+      color: var(--muted); border-bottom: 2px solid var(--line);
+      white-space: nowrap;
+    }
+    .data-table td {
+      padding: 13px 14px; border-bottom: 1px solid var(--line);
+      vertical-align: middle;
+    }
+    .data-table tr:last-child td { border-bottom: 0; }
+    .data-table tr:hover td { background: var(--surface-alt); }
+    .avatar-sm {
+      display: inline-grid; width: 30px; height: 30px; place-items: center;
+      color: #fff; background: var(--teal-700); border-radius: 50%;
+      font-size: .72rem; font-weight: 800; margin-right: 8px;
+      vertical-align: middle;
+    }
+
+    /* ── Filter bar ── */
+    .filter-bar {
+      display: flex; align-items: center; gap: 10px;
+      margin-bottom: 18px; flex-wrap: wrap;
+    }
+    .filter-bar input, .filter-bar select {
+      min-height: 40px; padding: 8px 12px;
+      border: 1px solid var(--line); border-radius: 9px;
+      background: var(--surface); color: var(--ink);
+    }
+    .filter-bar input { width: 240px; }
+
+    /* ── Calendar / schedule grid ── */
+    .cal-header {
+      display: grid; grid-template-columns: 70px repeat(7,1fr);
+      gap: 1px; margin-bottom: 2px;
+    }
+    .cal-header span {
+      padding: 8px 4px; text-align: center;
+      font-size: .74rem; font-weight: 800; color: var(--muted);
+    }
+    .cal-grid {
+      display: grid; grid-template-columns: 70px repeat(7,1fr);
+      gap: 1px; background: var(--line); border: 1px solid var(--line);
+      border-radius: 10px; overflow: hidden;
+    }
+    .cal-cell {
+      background: var(--surface); padding: 6px 4px;
+      min-height: 72px; font-size: .72rem; position: relative;
+    }
+    .cal-time {
+      color: var(--muted); font-size: .7rem; font-weight: 700;
+      padding: 6px 8px; background: var(--surface); min-height: 72px;
+      display: flex; align-items: flex-start;
+    }
+    .shift-block {
+      padding: 4px 6px; border-radius: 6px; margin-bottom: 3px;
+      font-weight: 700; font-size: .7rem; line-height: 1.3;
+    }
+    .shift-inhome  { background: var(--teal-100); color: var(--teal-900); }
+    .shift-staffing { background: var(--orange-soft); color: #7a2f0e; }
+    .shift-open    { background: var(--red-soft); color: var(--red); }
+
+    /* ── Analytics ── */
+    .analytics-grid {
+      display: grid; grid-template-columns: repeat(3,minmax(0,1fr));
+      gap: 18px; margin-bottom: 22px;
+    }
+    .kpi-big { font-size: 2.4rem; font-weight: 900; line-height: 1; margin: 8px 0 2px; }
+    .chart-placeholder {
+      height: 180px; background: linear-gradient(135deg,var(--teal-100),var(--surface-alt));
+      border-radius: 10px; display: flex; align-items: center; justify-content: center;
+      color: var(--muted); font-size: .82rem; font-weight: 700;
+      border: 1px dashed var(--line);
+    }
+
+    /* ── Compliance ── */
+    .cert-row {
+      display: grid;
+      grid-template-columns: minmax(180px,1.5fr) 130px 140px 120px 90px;
+      align-items: center; gap: 12px; min-height: 58px;
+      padding: 10px 14px; border: 1px solid var(--line); border-radius: 10px;
+    }
+
+    /* ── Visit notes ── */
+    .note-card {
+      padding: 16px; border: 1px solid var(--line); border-radius: 12px;
+      display: grid; grid-template-columns: 1fr auto; gap: 10px; align-items: start;
+    }
+    .note-card + .note-card { margin-top: 10px; }
+
+    /* ── Billing ── */
+    .invoice-row {
+      display: grid;
+      grid-template-columns: 130px minmax(140px,1fr) 90px 100px 110px 80px;
+      align-items: center; gap: 12px; min-height: 56px;
+      padding: 10px 14px; border: 1px solid var(--line); border-radius: 10px;
+    }
+
+    /* ── Mobile stage ── */
+    .mobile-stage {
+      display: grid;
+      grid-template-columns: minmax(250px,360px) minmax(320px,480px);
+      justify-content: center; align-items: start;
+      gap: clamp(30px,7vw,90px);
+      min-height: calc(100vh - 70px);
+      padding: 46px 24px 70px;
+      background:
+        radial-gradient(circle at 15% 20%, rgb(8 115 123 / 13%), transparent 28%),
+        linear-gradient(135deg, #eef5f3, #dce9e6);
+    }
+
+    .mobile-notes { position: sticky; top: 28px; padding-top: 28px; }
+    .mobile-notes h1 { max-width: 13ch; }
+    .flow-list { display: grid; gap: 10px; margin: 24px 0; padding: 0; list-style: none; }
+    .flow-list li { display: grid; grid-template-columns: 30px 1fr; gap: 10px; align-items: start; }
+    .flow-number {
+      display: grid; width: 30px; height: 30px; place-items: center;
+      color: #fff; background: var(--teal-700); border-radius: 50%; font-weight: 850;
+    }
+
+    .phone {
+      position: relative; width: min(100%,390px); min-height: 780px;
+      margin: auto; padding: 12px; background: #15201f;
+      border-radius: 38px; box-shadow: var(--shadow);
+    }
+    .phone::before {
+      position: absolute; z-index: 3; top: 19px; left: 50%;
+      width: 108px; height: 25px; content: "";
+      background: #15201f; border-radius: 999px; transform: translateX(-50%);
+    }
+
+    .phone-screen {
+      position: relative; min-height: 756px; overflow: hidden;
+      background: var(--surface-alt); border-radius: 28px;
+    }
+
+    /* ── Mobile screens ── */
+    .mobile-screen { display: none; flex-direction: column; min-height: 716px; }
+    .mobile-screen.active { display: flex; }
+
+    .mobile-statusbar {
+      display: flex; justify-content: space-between;
+      height: 42px; padding: 12px 20px 0;
+      color: #fff; background: var(--teal-900);
+      font-size: .72rem; font-weight: 750; flex-shrink: 0;
+    }
+
+    .mobile-header {
+      padding: 22px 20px 66px; color: #fff; background: var(--teal-900); flex-shrink: 0;
+    }
+    .mobile-header p { margin-bottom: 4px; color: #b9d4d3; font-size: .78rem; }
+    .mobile-header h1 { margin: 0; font-size: 1.5rem; }
+    .mobile-header-flat {
+      padding: 16px 20px; color: #fff; background: var(--teal-900);
+      display: flex; align-items: center; gap: 12px; flex-shrink: 0;
+    }
+    .mobile-header-flat h1 { margin: 0; font-size: 1.15rem; }
+
+    .mobile-content {
+      position: relative; z-index: 1; margin-top: -45px;
+      padding: 0 15px 88px; flex: 1; overflow-y: auto;
+    }
+    .mobile-content-flat { padding: 16px 15px 88px; flex: 1; overflow-y: auto; }
+
+    .next-shift {
+      padding: 18px; background: #fff;
+      border: 1px solid var(--line); border-radius: 16px;
+      box-shadow: 0 12px 28px rgb(7 63 67 / 12%);
+    }
+    .next-shift-top {
+      display: flex; align-items: start; justify-content: space-between; gap: 12px;
+    }
+    .next-shift h2 { margin: 5px 0 2px; font-size: 1.15rem; }
+    .mobile-time { color: var(--teal-700); font-size: 1.35rem; font-weight: 900; }
+
+    .address {
+      margin: 14px 0; padding: 10px 0;
+      border-top: 1px solid var(--line); border-bottom: 1px solid var(--line);
+      color: var(--muted); font-size: .86rem;
+    }
+
+    .mobile-primary {
+      width: 100%; min-height: 50px; color: #fff;
+      background: var(--teal-700); border: 0;
+      border-radius: 11px; cursor: pointer; font-weight: 850;
+    }
+
+    .mobile-section { margin-top: 22px; }
+    .mobile-section h2 { margin-bottom: 11px; font-size: 1rem; }
+
+    .mobile-task {
+      display: grid; grid-template-columns: 38px 1fr auto;
+      align-items: center; gap: 10px; padding: 13px;
+      background: #fff; border: 1px solid var(--line); border-radius: 12px;
+    }
+    .mobile-task + .mobile-task { margin-top: 8px; }
+
+    .task-icon {
+      display: grid; width: 38px; height: 38px; place-items: center;
+      color: var(--teal-700); background: var(--teal-100);
+      border-radius: 10px; font-weight: 900;
+    }
+    .mobile-task p { margin: 1px 0 0; color: var(--muted); font-size: .75rem; }
+
+    .shift-item {
+      padding: 14px; background: #fff;
+      border: 1px solid var(--line); border-radius: 12px;
+      display: flex; align-items: center; gap: 12px;
+    }
+    .shift-item + .shift-item { margin-top: 8px; }
+    .shift-dot {
+      width: 10px; height: 10px; border-radius: 50%;
+      flex-shrink: 0; background: var(--teal-700);
+    }
+    .shift-dot.open { background: var(--red); }
+
+    .mobile-input {
+      width: 100%; min-height: 44px; padding: 10px 13px;
+      border: 1px solid var(--line); border-radius: 10px;
+      background: #fff; color: var(--ink); margin-bottom: 10px;
+    }
+    .mobile-textarea {
+      width: 100%; padding: 10px 13px; border: 1px solid var(--line);
+      border-radius: 10px; background: #fff; color: var(--ink);
+      resize: none; height: 90px; margin-bottom: 10px;
+    }
+    .check-row {
+      display: flex; align-items: center; gap: 10px;
+      padding: 11px 13px; background: #fff;
+      border: 1px solid var(--line); border-radius: 10px; margin-bottom: 7px;
+      font-size: .88rem;
+    }
+    .check-row input[type="checkbox"] { width: 18px; height: 18px; accent-color: var(--teal-700); }
+
+    .profile-avatar {
+      display: grid; width: 64px; height: 64px; place-items: center;
+      color: #fff; background: var(--teal-700); border-radius: 50%;
+      font-size: 1.4rem; font-weight: 900; margin: 0 auto 10px;
+    }
+    .profile-row {
+      display: flex; justify-content: space-between; align-items: center;
+      padding: 12px 0; border-bottom: 1px solid var(--line); font-size: .88rem;
+    }
+    .profile-row:last-child { border-bottom: 0; }
+
+    .mobile-nav {
+      position: absolute; z-index: 5; right: 0; bottom: 0; left: 0;
+      display: grid; grid-template-columns: repeat(4,1fr);
+      padding: 9px 8px 13px; background: rgb(255 255 255 / 96%);
+      border-top: 1px solid var(--line); backdrop-filter: blur(12px);
+    }
+    .mobile-nav button {
+      display: grid; gap: 2px; min-height: 48px; place-items: center;
+      color: var(--muted); background: transparent; border: 0;
+      cursor: pointer; font-size: .68rem;
+    }
+    .mobile-nav button span:first-child { font-size: 1.15rem; }
+    .mobile-nav button[aria-current="page"] { color: var(--teal-700); font-weight: 850; }
+
+    .toast {
+      position: fixed; z-index: 200; right: 22px; bottom: 22px;
+      max-width: 360px; padding: 14px 18px; color: #fff;
+      background: #153e3d; border-radius: 10px; box-shadow: var(--shadow);
+    }
+    .toast[hidden] { display: none; }
+
+    /* ── Responsive ── */
+    @media (max-width: 1050px) {
+      .metric-grid { grid-template-columns: repeat(2,minmax(0,1fr)); }
+      .dashboard-grid { grid-template-columns: 1fr; }
+      .analytics-grid { grid-template-columns: repeat(2,minmax(0,1fr)); }
+    }
+
+    @media (max-width: 780px) {
+      .prototype-bar { align-items: flex-start; flex-direction: column; }
+      .view-switcher { width: 100%; }
+      .view-switcher button { flex: 1; }
+      .web-app { grid-template-columns: 1fr; }
+      .sidebar { position: static; height: auto; padding: 14px; }
+      .brand { margin-bottom: 12px; }
+      .nav-label { display: none; }
+      .side-nav { display: flex; overflow-x: auto; }
+      .side-nav button { min-width: 120px; grid-template-columns: 22px 1fr; }
+      .side-nav .nav-count { display: none; }
+      .topbar { padding: 12px 16px; }
+      .user-menu strong, .user-menu .subtle { display: none; }
+      .web-page { padding: 22px 16px; }
+      .page-heading { align-items: flex-start; flex-direction: column; }
+      .schedule-row { grid-template-columns: 64px 1fr auto; }
+      .schedule-row > :nth-child(3),
+      .schedule-row > :nth-child(5) { display: none; }
+      .invoice-row { grid-template-columns: 120px 1fr 100px 80px; }
+      .invoice-row > :nth-child(3),
+      .invoice-row > :nth-child(5) { display: none; }
+      .cert-row { grid-template-columns: 1fr 120px 80px; }
+      .cert-row > :nth-child(2), .cert-row > :nth-child(4) { display: none; }
+      .mobile-stage { grid-template-columns: 1fr; padding-top: 20px; }
+      .mobile-notes { position: static; max-width: 560px; margin: auto; }
+      .analytics-grid { grid-template-columns: 1fr; }
+    }
+
+    @media (max-width: 480px) {
+      .metric-grid { grid-template-columns: 1fr; }
+      .quick-actions { grid-template-columns: 1fr; }
+      .phone { padding: 0; border-radius: 0; }
+      .phone::before { display: none; }
+      .phone-screen { min-height: 100vh; border-radius: 0; }
+      .mobile-stage { padding: 0; }
+      .mobile-notes { display: none; }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after { scroll-behavior: auto !important; transition: none !important; }
+    }
+  </style>
+</head>
+<body>
+  <a class="skip-link" href="#main-content">Skip to main content</a>
+
+  <header class="prototype-bar">
+    <div>
+      <strong>CarePath Health — Product Wireframe</strong>
+      <p>Interactive concept — no real patient data</p>
+    </div>
+    <div class="view-switcher" role="tablist" aria-label="Choose prototype">
+      <button id="web-tab" type="button" role="tab" aria-selected="true" aria-controls="web-view">Web operations</button>
+      <button id="mobile-tab" type="button" role="tab" aria-selected="false" aria-controls="mobile-view">Caregiver mobile</button>
+    </div>
+  </header>
+
+  <main id="main-content" class="prototype-shell">
+
+    <!-- ═══════════════════════════ WEB VIEW ═══════════════════════════ -->
+    <section id="web-view" class="view-panel" role="tabpanel" aria-labelledby="web-tab">
+      <div class="web-app">
+
+        <aside class="sidebar" aria-label="Primary navigation">
+          <div class="brand">
+            <div class="brand-mark" aria-hidden="true">CP</div>
+            <div><strong>CarePath</strong><span>Operations</span></div>
+          </div>
+
+          <p class="nav-label">Workspace</p>
+          <nav class="side-nav" aria-label="Workspace navigation">
+            <button type="button" data-web-page="overview" aria-current="page">
+              <span aria-hidden="true">⌂</span><span>Overview</span>
+            </button>
+            <button type="button" data-web-page="schedule">
+              <span aria-hidden="true">▦</span><span>Schedule</span>
+              <span class="nav-count" aria-label="7 open shifts">7</span>
+            </button>
+            <button type="button" data-web-page="caregivers">
+              <span aria-hidden="true">♙</span><span>Caregivers</span>
+            </button>
+            <button type="button" data-web-page="clients">
+              <span aria-hidden="true">♡</span><span>Clients</span>
+            </button>
+            <button type="button" data-web-page="visit-notes">
+              <span aria-hidden="true">▤</span><span>Visit notes</span>
+              <span class="nav-count" aria-label="3 pending notes">3</span>
+            </button>
+          </nav>
+
+          <p class="nav-label">Business</p>
+          <nav class="side-nav" aria-label="Business navigation">
+            <button type="button" data-web-page="billing">
+              <span aria-hidden="true">$</span><span>Billing</span>
+            </button>
+            <button type="button" data-web-page="analytics">
+              <span aria-hidden="true">↗</span><span>Analytics</span>
+            </button>
+            <button type="button" data-web-page="compliance">
+              <span aria-hidden="true">✓</span><span>Compliance</span>
+              <span class="nav-count" aria-label="4 compliance alerts">4</span>
+            </button>
+          </nav>
+        </aside>
+
+        <div class="desktop-main">
+          <header class="topbar">
+            <form class="search" role="search">
+              <label for="global-search">Search caregivers, clients, shifts, or invoices</label>
+              <input id="global-search" type="search" placeholder="Search caregivers, clients, shifts, invoices…">
+            </form>
+            <div class="user-menu">
+              <div class="avatar" aria-hidden="true">TK</div>
+              <div><strong>Tobi Kareem</strong><span class="meta">Administrator</span></div>
+            </div>
+          </header>
+
+          <!-- ── Overview ── -->
+          <div id="page-overview" class="web-page active">
+            <div class="page-heading">
+              <div>
+                <p class="eyebrow">Monday, June 22</p>
+                <h1>Operations overview</h1>
+                <p class="subtle">Staff today's care, resolve exceptions, and protect service margins.</p>
+              </div>
+              <button class="button button-primary" type="button" data-message="New shift workflow opened">＋ Create shift</button>
+            </div>
+
+            <section class="metric-grid" aria-label="Key performance indicators">
+              <article class="card metric-card">
+                <span class="metric-label">Shifts today</span>
+                <div class="metric-value">28</div>
+                <span class="trend">24 staffed · 4 open</span>
+              </article>
+              <article class="card metric-card">
+                <span class="metric-label">Caregiver utilization</span>
+                <div class="metric-value">84%</div>
+                <span class="trend">↑ 6% from last week</span>
+              </article>
+              <article class="card metric-card">
+                <span class="metric-label">Weekly billable hours</span>
+                <div class="metric-value">812</div>
+                <span class="trend">92% of target</span>
+              </article>
+              <article class="card metric-card">
+                <span class="metric-label">Projected gross margin</span>
+                <div class="metric-value">39.6%</div>
+                <span class="trend">Within blended target</span>
+              </article>
+            </section>
+
+            <div class="dashboard-grid">
+              <div>
+                <section class="card" aria-labelledby="today-heading">
+                  <div class="section-header">
+                    <div>
+                      <h2 id="today-heading">Today's schedule</h2>
+                      <span class="subtle">Priority shifts and exceptions</span>
+                    </div>
+                    <button class="text-link" type="button" data-web-page="schedule">Open schedule →</button>
+                  </div>
+                  <ol class="schedule-list">
+                    <li class="schedule-row">
+                      <span class="time">8:00 AM</span>
+                      <strong>Jordan M.<span class="meta">In-home care · 4 hours</span></strong>
+                      <span>A. Williams<span class="meta">CNA · GPS required</span></span>
+                      <span class="status status-green">In progress</span>
+                      <button class="text-link" type="button" data-message="Shift detail opened">Details</button>
+                    </li>
+                    <li class="schedule-row">
+                      <span class="time">10:00 AM</span>
+                      <strong>Harborview Center<span class="meta">Facility staffing · 8 hours</span></strong>
+                      <span>Unassigned<span class="meta">RN required</span></span>
+                      <span class="status status-red">Open</span>
+                      <button class="text-link" type="button" data-web-page="caregivers">Match</button>
+                    </li>
+                    <li class="schedule-row">
+                      <span class="time">1:30 PM</span>
+                      <strong>Casey R.<span class="meta">In-home care · 3 hours</span></strong>
+                      <span>D. Okafor<span class="meta">HHA · Dementia care</span></span>
+                      <span class="status status-blue">Confirmed</span>
+                      <button class="text-link" type="button" data-message="Shift detail opened">Details</button>
+                    </li>
+                    <li class="schedule-row">
+                      <span class="time">6:00 PM</span>
+                      <strong>Northside Rehab<span class="meta">Facility staffing · 12 hours</span></strong>
+                      <span>M. Johnson<span class="meta">LPN · Night shift</span></span>
+                      <span class="status status-amber">At risk</span>
+                      <button class="text-link" type="button" data-message="Coverage risk opened">Review</button>
+                    </li>
+                  </ol>
+                </section>
+
+                <section class="card" aria-labelledby="margin-heading" style="margin-top:20px">
+                  <div class="section-header">
+                    <div>
+                      <h2 id="margin-heading">Service-line margins</h2>
+                      <span class="subtle">Month-to-date vs target</span>
+                    </div>
+                    <button class="text-link" type="button" data-web-page="analytics">View analysis →</button>
+                  </div>
+                  <div class="margin-bars">
+                    <div class="bar-row">
+                      <header><strong>In-home care</strong><span>42.1% / 40–45% target</span></header>
+                      <div class="bar-track" role="progressbar" aria-label="In-home care margin" aria-valuemin="0" aria-valuemax="50" aria-valuenow="42.1"><span class="bar-fill" style="width:84.2%"></span></div>
+                    </div>
+                    <div class="bar-row">
+                      <header><strong>Healthcare staffing</strong><span>28.4% / 25–30% target</span></header>
+                      <div class="bar-track" role="progressbar" aria-label="Healthcare staffing margin" aria-valuemin="0" aria-valuemax="50" aria-valuenow="28.4"><span class="bar-fill staffing" style="width:56.8%"></span></div>
+                    </div>
+                  </div>
+                </section>
+              </div>
+
+              <aside>
+                <section class="card" aria-labelledby="alerts-heading">
+                  <div class="section-header">
+                    <h2 id="alerts-heading">Needs attention</h2>
+                    <span class="status status-red">7 items</span>
+                  </div>
+                  <ul class="alert-list">
+                    <li class="alert-item"><strong>4 shifts need coverage</strong><p>Two start within the next 6 hours.</p></li>
+                    <li class="alert-item"><strong>3 visit notes overdue</strong><p>Documentation required before billing.</p></li>
+                    <li class="alert-item"><strong>2 credentials expiring</strong><p>CNA and CPR expire within 30 days.</p></li>
+                  </ul>
+                </section>
+
+                <section class="card" aria-labelledby="actions-heading" style="margin-top:20px">
+                  <h2 id="actions-heading">Quick actions</h2>
+                  <div class="quick-actions">
+                    <button type="button" data-web-page="clients">＋ Add client</button>
+                    <button type="button" data-web-page="caregivers">＋ Add caregiver</button>
+                    <button type="button" data-web-page="billing">$ Generate invoices</button>
+                    <button type="button" data-web-page="compliance">✓ Review credentials</button>
+                  </div>
+                </section>
+              </aside>
+            </div>
+          </div>
+
+          <!-- ── Schedule ── -->
+          <div id="page-schedule" class="web-page">
+            <div class="page-heading">
+              <div>
+                <p class="eyebrow">Week of June 22, 2026</p>
+                <h1>Schedule</h1>
+                <p class="subtle">Weekly view · 28 shifts · 4 open</p>
+              </div>
+              <div style="display:flex;gap:10px">
+                <button class="button button-secondary" type="button" data-message="List view selected">List view</button>
+                <button class="button button-primary" type="button" data-message="New shift opened">＋ New shift</button>
+              </div>
+            </div>
+
+            <div class="card" style="padding:0;overflow:hidden">
+              <div class="cal-header" style="padding:0 0 0 0;background:var(--surface);border-bottom:1px solid var(--line)">
+                <span></span>
+                <span>Mon 22</span><span>Tue 23</span><span>Wed 24</span>
+                <span>Thu 25</span><span>Fri 26</span><span>Sat 27</span><span>Sun 28</span>
+              </div>
+              <div class="cal-grid">
+                <div class="cal-time">8 AM</div>
+                <div class="cal-cell"><div class="shift-block shift-inhome">Jordan M. — A. Williams (CNA)</div></div>
+                <div class="cal-cell"><div class="shift-block shift-inhome">B. Thompson — D. Okafor (HHA)</div></div>
+                <div class="cal-cell"></div>
+                <div class="cal-cell"><div class="shift-block shift-inhome">Jordan M. — A. Williams</div></div>
+                <div class="cal-cell"><div class="shift-block shift-inhome">R. Chen — T. Adeyemi</div></div>
+                <div class="cal-cell"></div>
+                <div class="cal-cell"></div>
+
+                <div class="cal-time">10 AM</div>
+                <div class="cal-cell"><div class="shift-block shift-open">⚠ Harborview — RN needed</div></div>
+                <div class="cal-cell"><div class="shift-block shift-staffing">Northside — M. Johnson (LPN)</div></div>
+                <div class="cal-cell"><div class="shift-block shift-staffing">Harborview — S. Park (RN)</div></div>
+                <div class="cal-cell"><div class="shift-block shift-open">⚠ Northside — LPN needed</div></div>
+                <div class="cal-cell"><div class="shift-block shift-staffing">Harborview — S. Park (RN)</div></div>
+                <div class="cal-cell"></div>
+                <div class="cal-cell"></div>
+
+                <div class="cal-time">1 PM</div>
+                <div class="cal-cell"><div class="shift-block shift-inhome">Casey R. — D. Okafor (HHA)</div></div>
+                <div class="cal-cell"></div>
+                <div class="cal-cell"><div class="shift-block shift-inhome">Casey R. — D. Okafor</div></div>
+                <div class="cal-cell"><div class="shift-block shift-inhome">B. Thompson — T. Adeyemi</div></div>
+                <div class="cal-cell"><div class="shift-block shift-inhome">Casey R. — D. Okafor</div></div>
+                <div class="cal-cell"><div class="shift-block shift-inhome">Jordan M. — A. Williams</div></div>
+                <div class="cal-cell"></div>
+
+                <div class="cal-time">6 PM</div>
+                <div class="cal-cell"><div class="shift-block shift-staffing">Northside Rehab — M. Johnson</div></div>
+                <div class="cal-cell"><div class="shift-block shift-open">⚠ Open — CNA needed</div></div>
+                <div class="cal-cell"><div class="shift-block shift-staffing">Northside — M. Johnson</div></div>
+                <div class="cal-cell"></div>
+                <div class="cal-cell"></div>
+                <div class="cal-cell"><div class="shift-block shift-staffing">Harborview — S. Park (RN)</div></div>
+                <div class="cal-cell"><div class="shift-block shift-staffing">Northside — M. Johnson</div></div>
+              </div>
+            </div>
+
+            <div style="display:flex;gap:14px;margin-top:14px;font-size:.8rem;font-weight:700;flex-wrap:wrap">
+              <span style="display:flex;align-items:center;gap:6px"><span style="width:12px;height:12px;border-radius:3px;background:var(--teal-100);display:inline-block"></span>In-home care</span>
+              <span style="display:flex;align-items:center;gap:6px"><span style="width:12px;height:12px;border-radius:3px;background:var(--orange-soft);display:inline-block"></span>Facility staffing</span>
+              <span style="display:flex;align-items:center;gap:6px"><span style="width:12px;height:12px;border-radius:3px;background:var(--red-soft);display:inline-block"></span>Open / unassigned</span>
+            </div>
+          </div>
+
+          <!-- ── Caregivers ── -->
+          <div id="page-caregivers" class="web-page">
+            <div class="page-heading">
+              <div>
+                <p class="eyebrow">People</p>
+                <h1>Caregivers</h1>
+                <p class="subtle">24 active · 3 inactive · 2 certifications expiring</p>
+              </div>
+              <button class="button button-primary" type="button" data-message="Add caregiver opened">＋ Add caregiver</button>
+            </div>
+
+            <div class="filter-bar">
+              <input type="search" placeholder="Search by name or certification…">
+              <select aria-label="Employment type"><option>All types</option><option>W-2 Employee</option><option>1099 Contractor</option></select>
+              <select aria-label="Status"><option>All statuses</option><option>Active</option><option>Inactive</option></select>
+              <select aria-label="Certification"><option>All certifications</option><option>CNA</option><option>LPN</option><option>RN</option><option>HHA</option></select>
+            </div>
+
+            <div class="card" style="padding:0">
+              <div class="data-table-wrap">
+                <table class="data-table">
+                  <thead>
+                    <tr>
+                      <th>Name</th>
+                      <th>Type</th>
+                      <th>Certifications</th>
+                      <th>Pay rate</th>
+                      <th>Shifts (MTD)</th>
+                      <th>Status</th>
+                      <th></th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr>
+                      <td><span class="avatar-sm">AW</span><strong>Amara Williams</strong><span class="meta">CNA · hire date Jan 2025</span></td>
+                      <td>W-2 Employee</td>
+                      <td><span class="status status-green" style="font-size:.7rem">CNA</span> <span class="status status-green" style="font-size:.7rem">CPR</span></td>
+                      <td>$18.50/hr</td>
+                      <td>44 hrs</td>
+                      <td><span class="status status-green">Active</span></td>
+                      <td><button class="text-link" data-message="Caregiver profile opened">View</button></td>
+                    </tr>
+                    <tr>
+                      <td><span class="avatar-sm">DO</span><strong>David Okafor</strong><span class="meta">HHA · hire date Mar 2025</span></td>
+                      <td>W-2 Employee</td>
+                      <td><span class="status status-green" style="font-size:.7rem">HHA</span> <span class="status status-green" style="font-size:.7rem">Dementia</span></td>
+                      <td>$17.00/hr</td>
+                      <td>51 hrs</td>
+                      <td><span class="status status-green">Active</span></td>
+                      <td><button class="text-link" data-message="Caregiver profile opened">View</button></td>
+                    </tr>
+                    <tr>
+                      <td><span class="avatar-sm">MJ</span><strong>Maria Johnson</strong><span class="meta">LPN · hire date Sep 2024</span></td>
+                      <td>1099 Contractor</td>
+                      <td><span class="status status-green" style="font-size:.7rem">LPN</span> <span class="status status-amber" style="font-size:.7rem">CPR expiring</span></td>
+                      <td>$38.00/hr</td>
+                      <td>72 hrs</td>
+                      <td><span class="status status-amber">Cert warning</span></td>
+                      <td><button class="text-link" data-web-page="compliance">Review certs</button></td>
+                    </tr>
+                    <tr>
+                      <td><span class="avatar-sm">SP</span><strong>Soo-Jin Park</strong><span class="meta">RN · hire date Jun 2024</span></td>
+                      <td>1099 Contractor</td>
+                      <td><span class="status status-green" style="font-size:.7rem">RN</span> <span class="status status-green" style="font-size:.7rem">CPR</span></td>
+                      <td>$60.00/hr</td>
+                      <td>88 hrs</td>
+                      <td><span class="status status-green">Active</span></td>
+                      <td><button class="text-link" data-message="Caregiver profile opened">View</button></td>
+                    </tr>
+                    <tr>
+                      <td><span class="avatar-sm">TA</span><strong>Tunde Adeyemi</strong><span class="meta">CNA · hire date Nov 2025</span></td>
+                      <td>W-2 Employee</td>
+                      <td><span class="status status-red" style="font-size:.7rem">CNA expired</span></td>
+                      <td>$16.50/hr</td>
+                      <td>12 hrs</td>
+                      <td><span class="status status-red">Cert lapsed</span></td>
+                      <td><button class="text-link" data-web-page="compliance">Review certs</button></td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+
+          <!-- ── Clients ── -->
+          <div id="page-clients" class="web-page">
+            <div class="page-heading">
+              <div>
+                <p class="eyebrow">People</p>
+                <h1>Clients</h1>
+                <p class="subtle">18 active clients · 4 with open shifts this week</p>
+              </div>
+              <button class="button button-primary" type="button" data-message="Add client opened">＋ Add client</button>
+            </div>
+
+            <div class="filter-bar">
+              <input type="search" placeholder="Search by name or care type…">
+              <select aria-label="Service type"><option>All services</option><option>In-home care</option><option>Facility staffing</option></select>
+              <select aria-label="Status"><option>All statuses</option><option>Active</option><option>On hold</option></select>
+            </div>
+
+            <div class="card" style="padding:0">
+              <div class="data-table-wrap">
+                <table class="data-table">
+                  <thead>
+                    <tr>
+                      <th>Client</th>
+                      <th>Service</th>
+                      <th>Care needs</th>
+                      <th>Bill rate</th>
+                      <th>Hrs/wk</th>
+                      <th>Caregiver</th>
+                      <th></th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr>
+                      <td><span class="avatar-sm">JM</span><strong>Jordan M.</strong><span class="meta">Age 74 · Active care plan</span></td>
+                      <td>In-home care</td>
+                      <td>Personal care, Dementia</td>
+                      <td>$35/hr</td>
+                      <td>20 hrs</td>
+                      <td>A. Williams</td>
+                      <td><button class="text-link" data-message="Client profile opened">View</button></td>
+                    </tr>
+                    <tr>
+                      <td><span class="avatar-sm">CR</span><strong>Casey R.</strong><span class="meta">Age 81 · Active care plan</span></td>
+                      <td>In-home care</td>
+                      <td>Companionship, Mobility</td>
+                      <td>$33/hr</td>
+                      <td>15 hrs</td>
+                      <td>D. Okafor</td>
+                      <td><button class="text-link" data-message="Client profile opened">View</button></td>
+                    </tr>
+                    <tr>
+                      <td><span class="avatar-sm">BT</span><strong>Beverly T.</strong><span class="meta">Age 68 · Active care plan</span></td>
+                      <td>In-home care</td>
+                      <td>Medication, Meal prep</td>
+                      <td>$38/hr</td>
+                      <td>30 hrs</td>
+                      <td>D. Okafor</td>
+                      <td><button class="text-link" data-message="Client profile opened">View</button></td>
+                    </tr>
+                    <tr>
+                      <td><span class="avatar-sm">HV</span><strong>Harborview Center</strong><span class="meta">Facility · RN/LPN coverage</span></td>
+                      <td>Facility staffing</td>
+                      <td>RN, LPN</td>
+                      <td>$80/hr (RN)</td>
+                      <td>48 hrs</td>
+                      <td>S. Park (RN)</td>
+                      <td><button class="text-link" data-message="Client profile opened">View</button></td>
+                    </tr>
+                    <tr>
+                      <td><span class="avatar-sm">NR</span><strong>Northside Rehab</strong><span class="meta">Facility · LPN coverage</span></td>
+                      <td>Facility staffing</td>
+                      <td>LPN</td>
+                      <td>$60/hr (LPN)</td>
+                      <td>36 hrs</td>
+                      <td>M. Johnson</td>
+                      <td><button class="text-link" data-message="Client profile opened">View</button></td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+
+          <!-- ── Visit Notes ── -->
+          <div id="page-visit-notes" class="web-page">
+            <div class="page-heading">
+              <div>
+                <p class="eyebrow">Documentation</p>
+                <h1>Visit notes</h1>
+                <p class="subtle">3 pending · 2 overdue · 42 submitted this month</p>
+              </div>
+              <div style="display:flex;gap:10px;flex-wrap:wrap">
+                <select class="button button-secondary" style="cursor:pointer" aria-label="Filter notes"><option>All notes</option><option>Pending</option><option>Overdue</option><option>Submitted</option></select>
+              </div>
+            </div>
+
+            <div style="display:grid;gap:10px">
+              <div class="note-card" style="border-left:4px solid var(--red)">
+                <div>
+                  <div style="display:flex;align-items:center;gap:10px;margin-bottom:6px">
+                    <span class="status status-red">Overdue</span>
+                    <span class="meta" style="margin:0">June 20 · 8:00 AM shift</span>
+                  </div>
+                  <strong>Jordan M.</strong> — Amara Williams (CNA)
+                  <p class="meta" style="margin-top:4px">Personal care · 4 hours · GPS check-in confirmed</p>
+                  <p class="meta">Activities, vitals, and client signature still required.</p>
+                </div>
+                <button class="button button-primary button-sm" type="button" data-message="Visit note editor opened">Complete note</button>
+              </div>
+
+              <div class="note-card" style="border-left:4px solid var(--red)">
+                <div>
+                  <div style="display:flex;align-items:center;gap:10px;margin-bottom:6px">
+                    <span class="status status-red">Overdue</span>
+                    <span class="meta" style="margin:0">June 21 · 1:30 PM shift</span>
+                  </div>
+                  <strong>Casey R.</strong> — David Okafor (HHA)
+                  <p class="meta" style="margin-top:4px">Companionship · 3 hours</p>
+                  <p class="meta">Draft saved — 2 required fields incomplete.</p>
+                </div>
+                <button class="button button-primary button-sm" type="button" data-message="Visit note draft opened">Finish draft</button>
+              </div>
+
+              <div class="note-card" style="border-left:4px solid var(--amber)">
+                <div>
+                  <div style="display:flex;align-items:center;gap:10px;margin-bottom:6px">
+                    <span class="status status-amber">Pending</span>
+                    <span class="meta" style="margin:0">Today · 8:00 AM shift</span>
+                  </div>
+                  <strong>Jordan M.</strong> — Amara Williams (CNA)
+                  <p class="meta" style="margin-top:4px">Shift in progress — note due at check-out</p>
+                </div>
+                <button class="button button-secondary button-sm" type="button" data-message="Shift detail opened">View shift</button>
+              </div>
+
+              <div class="note-card" style="opacity:.7">
+                <div>
+                  <div style="display:flex;align-items:center;gap:10px;margin-bottom:6px">
+                    <span class="status status-green">Submitted</span>
+                    <span class="meta" style="margin:0">June 21 · 8:00 AM shift</span>
+                  </div>
+                  <strong>Beverly T.</strong> — David Okafor (HHA)
+                  <p class="meta" style="margin-top:4px">Medication, meal prep · 6 hours · All fields complete</p>
+                </div>
+                <button class="button button-secondary button-sm" type="button" data-message="Visit note opened">View note</button>
+              </div>
+            </div>
+          </div>
+
+          <!-- ── Billing ── -->
+          <div id="page-billing" class="web-page">
+            <div class="page-heading">
+              <div>
+                <p class="eyebrow">Business</p>
+                <h1>Billing &amp; Invoices</h1>
+                <p class="subtle">$48,200 outstanding · 3 invoices overdue</p>
+              </div>
+              <button class="button button-primary" type="button" data-message="Invoice generation opened">$ Generate invoices</button>
+            </div>
+
+            <div class="metric-grid" style="grid-template-columns:repeat(3,minmax(0,1fr))">
+              <article class="card metric-card">
+                <span class="metric-label">MTD revenue</span>
+                <div class="metric-value">$112,450</div>
+                <span class="trend">↑ 18% vs last month</span>
+              </article>
+              <article class="card metric-card">
+                <span class="metric-label">Outstanding</span>
+                <div class="metric-value" style="color:var(--amber)">$48,200</div>
+                <span class="trend" style="color:var(--amber)">3 overdue invoices</span>
+              </article>
+              <article class="card metric-card">
+                <span class="metric-label">Avg days to payment</span>
+                <div class="metric-value">18</div>
+                <span class="trend">Net 30 terms</span>
+              </article>
+            </div>
+
+            <div class="filter-bar">
+              <input type="search" placeholder="Search invoices…">
+              <select aria-label="Status"><option>All statuses</option><option>Draft</option><option>Sent</option><option>Paid</option><option>Overdue</option></select>
+              <select aria-label="Client"><option>All clients</option><option>Jordan M.</option><option>Casey R.</option><option>Harborview Center</option><option>Northside Rehab</option></select>
+            </div>
+
+            <div class="card" style="padding:0">
+              <div class="data-table-wrap">
+                <div style="display:grid;gap:8px;padding:16px">
+                  <div class="invoice-row" style="font-size:.72rem;font-weight:800;color:var(--muted);text-transform:uppercase;letter-spacing:.08em;min-height:auto;padding:0 14px 8px;border:0;border-bottom:2px solid var(--line);border-radius:0">
+                    <span>Invoice #</span><span>Client</span><span>Amount</span><span>Due date</span><span>Status</span><span></span>
+                  </div>
+                  <div class="invoice-row">
+                    <span><strong>INV-2026-0048</strong><span class="meta">Jun 15</span></span>
+                    <span>Harborview Center<span class="meta">Facility staffing · RN 48 hrs</span></span>
+                    <span><strong>$3,840</strong></span>
+                    <span>Jun 30</span>
+                    <span class="status status-amber">Sent</span>
+                    <button class="text-link" data-message="Invoice detail opened">View</button>
+                  </div>
+                  <div class="invoice-row">
+                    <span><strong>INV-2026-0047</strong><span class="meta">Jun 14</span></span>
+                    <span>Northside Rehab<span class="meta">Facility staffing · LPN 36 hrs</span></span>
+                    <span><strong>$2,160</strong></span>
+                    <span>Jun 28</span>
+                    <span class="status status-red">Overdue</span>
+                    <button class="text-link" data-message="Follow-up opened">Follow up</button>
+                  </div>
+                  <div class="invoice-row">
+                    <span><strong>INV-2026-0046</strong><span class="meta">Jun 1</span></span>
+                    <span>Jordan M.<span class="meta">In-home care · 80 hrs</span></span>
+                    <span><strong>$2,800</strong></span>
+                    <span>Jun 15</span>
+                    <span class="status status-green">Paid</span>
+                    <button class="text-link" data-message="Invoice detail opened">View</button>
+                  </div>
+                  <div class="invoice-row">
+                    <span><strong>INV-2026-0045</strong><span class="meta">Jun 1</span></span>
+                    <span>Casey R.<span class="meta">In-home care · 60 hrs</span></span>
+                    <span><strong>$1,980</strong></span>
+                    <span>Jun 15</span>
+                    <span class="status status-red">Overdue</span>
+                    <button class="text-link" data-message="Follow-up opened">Follow up</button>
+                  </div>
+                  <div class="invoice-row">
+                    <span><strong>INV-2026-0044</strong><span class="meta">May 31</span></span>
+                    <span>Beverly T.<span class="meta">In-home care · 120 hrs</span></span>
+                    <span><strong>$4,560</strong></span>
+                    <span>Jun 14</span>
+                    <span class="status status-green">Paid</span>
+                    <button class="text-link" data-message="Invoice detail opened">View</button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- ── Analytics ── -->
+          <div id="page-analytics" class="web-page">
+            <div class="page-heading">
+              <div>
+                <p class="eyebrow">Business</p>
+                <h1>Analytics</h1>
+                <p class="subtle">June 2026 · Month-to-date performance</p>
+              </div>
+              <button class="button button-secondary" type="button" data-message="Report export opened">↓ Export report</button>
+            </div>
+
+            <div class="analytics-grid">
+              <article class="card">
+                <span class="metric-label">In-home care margin</span>
+                <div class="kpi-big" style="color:var(--green)">42.1%</div>
+                <span class="trend">Target: 40–45% ✓</span>
+                <div class="bar-track" style="margin-top:12px" role="progressbar" aria-valuenow="42.1" aria-valuemin="0" aria-valuemax="50"><span class="bar-fill" style="width:84.2%"></span></div>
+              </article>
+              <article class="card">
+                <span class="metric-label">Facility staffing margin</span>
+                <div class="kpi-big" style="color:var(--green)">28.4%</div>
+                <span class="trend">Target: 25–30% ✓</span>
+                <div class="bar-track" style="margin-top:12px" role="progressbar" aria-valuenow="28.4" aria-valuemin="0" aria-valuemax="50"><span class="bar-fill staffing" style="width:56.8%"></span></div>
+              </article>
+              <article class="card">
+                <span class="metric-label">Caregiver utilization</span>
+                <div class="kpi-big">84%</div>
+                <span class="trend">↑ 6% from last week</span>
+                <div class="bar-track" style="margin-top:12px" role="progressbar" aria-valuenow="84" aria-valuemin="0" aria-valuemax="100"><span class="bar-fill" style="width:84%"></span></div>
+              </article>
+            </div>
+
+            <div class="dashboard-grid">
+              <div>
+                <section class="card" aria-labelledby="revenue-chart-heading">
+                  <div class="section-header">
+                    <h2 id="revenue-chart-heading">Monthly revenue trend</h2>
+                  </div>
+                  <div class="chart-placeholder">Revenue chart — Jan → Jun 2026</div>
+                </section>
+                <section class="card" style="margin-top:20px" aria-labelledby="margin-chart-heading">
+                  <div class="section-header">
+                    <h2 id="margin-chart-heading">Margin by service line</h2>
+                  </div>
+                  <div class="chart-placeholder">Margin trend chart — In-home vs Staffing</div>
+                </section>
+              </div>
+
+              <aside>
+                <section class="card" aria-labelledby="kpis-heading">
+                  <h2 id="kpis-heading" style="margin-bottom:14px">MTD summary</h2>
+                  <div style="display:grid;gap:14px">
+                    <div class="profile-row"><span class="subtle">Total revenue</span><strong>$112,450</strong></div>
+                    <div class="profile-row"><span class="subtle">Labor cost</span><strong>$67,890</strong></div>
+                    <div class="profile-row"><span class="subtle">Gross profit</span><strong style="color:var(--green)">$44,560</strong></div>
+                    <div class="profile-row"><span class="subtle">Billable hours</span><strong>3,248 hrs</strong></div>
+                    <div class="profile-row"><span class="subtle">Active caregivers</span><strong>24</strong></div>
+                    <div class="profile-row"><span class="subtle">Active clients</span><strong>18</strong></div>
+                    <div class="profile-row"><span class="subtle">No-show rate</span><strong style="color:var(--amber)">2.1%</strong></div>
+                  </div>
+                </section>
+              </aside>
+            </div>
+          </div>
+
+          <!-- ── Compliance ── -->
+          <div id="page-compliance" class="web-page">
+            <div class="page-heading">
+              <div>
+                <p class="eyebrow">Business</p>
+                <h1>Compliance</h1>
+                <p class="subtle">4 items require action · 2 expired · 2 expiring within 30 days</p>
+              </div>
+              <button class="button button-secondary" type="button" data-message="Compliance report exported">↓ Export compliance report</button>
+            </div>
+
+            <div class="card" style="margin-bottom:20px;border-left:4px solid var(--orange);background:var(--orange-soft)">
+              <strong>Action required</strong>
+              <p style="margin:4px 0 0;font-size:.88rem;color:#69402e">Tunde Adeyemi's CNA certification expired June 1. They cannot be scheduled for CNA-required shifts until renewed. Maria Johnson's CPR expires July 5 — 13 days remaining.</p>
+            </div>
+
+            <div style="display:grid;gap:8px">
+              <div class="cert-row" style="font-size:.72rem;font-weight:800;color:var(--muted);text-transform:uppercase;letter-spacing:.08em;min-height:auto;padding:0 14px 8px;border:0;border-bottom:2px solid var(--line);border-radius:0">
+                <span>Caregiver / Certification</span><span>Issued</span><span>Expires</span><span>Status</span><span></span>
+              </div>
+              <div class="cert-row" style="border-left:4px solid var(--red)">
+                <span><strong>Tunde Adeyemi</strong><span class="meta">CNA — Maryland Nursing Board</span></span>
+                <span>Jun 1, 2024</span>
+                <span style="color:var(--red)">Jun 1, 2026</span>
+                <span class="status status-red">Expired</span>
+                <button class="text-link" data-message="Renewal process started">Start renewal</button>
+              </div>
+              <div class="cert-row" style="border-left:4px solid var(--red)">
+                <span><strong>Tunde Adeyemi</strong><span class="meta">CPR — American Heart Assoc.</span></span>
+                <span>Jun 1, 2024</span>
+                <span style="color:var(--red)">Jun 1, 2026</span>
+                <span class="status status-red">Expired</span>
+                <button class="text-link" data-message="Renewal process started">Start renewal</button>
+              </div>
+              <div class="cert-row" style="border-left:4px solid var(--amber)">
+                <span><strong>Maria Johnson</strong><span class="meta">CPR — American Heart Assoc.</span></span>
+                <span>Jul 5, 2024</span>
+                <span style="color:var(--amber)">Jul 5, 2026 · 13 days</span>
+                <span class="status status-amber">Expiring soon</span>
+                <button class="text-link" data-message="Reminder sent">Send reminder</button>
+              </div>
+              <div class="cert-row" style="border-left:4px solid var(--amber)">
+                <span><strong>Amara Williams</strong><span class="meta">CNA — Maryland Nursing Board</span></span>
+                <span>Aug 1, 2024</span>
+                <span style="color:var(--amber)">Aug 1, 2026 · 40 days</span>
+                <span class="status status-amber">Expiring soon</span>
+                <button class="text-link" data-message="Reminder sent">Send reminder</button>
+              </div>
+              <div class="cert-row">
+                <span><strong>Amara Williams</strong><span class="meta">CPR — American Heart Assoc.</span></span>
+                <span>Mar 14, 2025</span>
+                <span>Mar 14, 2027</span>
+                <span class="status status-green">Valid</span>
+                <button class="text-link" data-message="Cert detail opened">View</button>
+              </div>
+              <div class="cert-row">
+                <span><strong>Soo-Jin Park</strong><span class="meta">RN — Maryland Board of Nursing</span></span>
+                <span>Oct 10, 2024</span>
+                <span>Oct 10, 2026</span>
+                <span class="status status-green">Valid</span>
+                <button class="text-link" data-message="Cert detail opened">View</button>
+              </div>
+              <div class="cert-row">
+                <span><strong>Maria Johnson</strong><span class="meta">LPN — Maryland Board of Nursing</span></span>
+                <span>Feb 22, 2025</span>
+                <span>Feb 22, 2027</span>
+                <span class="status status-green">Valid</span>
+                <button class="text-link" data-message="Cert detail opened">View</button>
+              </div>
+              <div class="cert-row">
+                <span><strong>David Okafor</strong><span class="meta">HHA — Maryland OHCQ</span></span>
+                <span>Apr 5, 2025</span>
+                <span>Apr 5, 2027</span>
+                <span class="status status-green">Valid</span>
+                <button class="text-link" data-message="Cert detail opened">View</button>
+              </div>
+            </div>
+          </div>
+
+        </div><!-- /desktop-main -->
+      </div><!-- /web-app -->
+    </section>
+
+    <!-- ═══════════════════════════ MOBILE VIEW ═══════════════════════════ -->
+    <section id="mobile-view" class="view-panel" role="tabpanel" aria-labelledby="mobile-tab" hidden>
+      <div class="mobile-stage">
+        <div class="mobile-notes">
+          <p class="eyebrow">Caregiver mobile experience</p>
+          <h1>Make the next safe action obvious.</h1>
+          <p class="subtle">The mobile app is centered on the caregiver's shift, not administration. Sensitive details appear only when needed for assigned care.</p>
+          <ol class="flow-list">
+            <li><span class="flow-number">1</span><div><strong>See the next assignment</strong><span class="meta">Time, service type, required credentials, and authorized care instructions.</span></div></li>
+            <li><span class="flow-number">2</span><div><strong>Verify location and check in</strong><span class="meta">GPS verification with a clear exception process.</span></div></li>
+            <li><span class="flow-number">3</span><div><strong>Document the visit</strong><span class="meta">Activities, condition, concerns, vitals, photos, and signatures.</span></div></li>
+            <li><span class="flow-number">4</span><div><strong>Check out and submit</strong><span class="meta">Complete documentation before the shift is billable.</span></div></li>
+          </ol>
+          <button class="button button-secondary" type="button" data-message="Mobile workflow map selected">View full mobile flow</button>
+        </div>
+
+        <div class="phone" aria-label="Caregiver mobile application preview">
+          <div class="phone-screen">
+
+            <!-- ── Mobile: Home ── -->
+            <div class="mobile-screen active" id="mobile-home" role="region" aria-label="Home screen">
+              <div class="mobile-statusbar" aria-hidden="true"><span>9:41</span><span>● ● ◒</span></div>
+              <header class="mobile-header">
+                <p>Good morning,</p>
+                <h1>Amara</h1>
+              </header>
+              <div class="mobile-content">
+                <article class="next-shift">
+                  <div class="next-shift-top">
+                    <div>
+                      <span class="status status-blue">Next shift</span>
+                      <h2>Jordan M.</h2>
+                      <span class="meta">Personal care · 4 hours</span>
+                    </div>
+                    <div class="mobile-time">8:00</div>
+                  </div>
+                  <div class="address">
+                    <strong>12 minutes away</strong><br>
+                    Address available for this assigned shift
+                  </div>
+                  <button class="mobile-primary" type="button" id="check-in-button">Start GPS check-in</button>
+                </article>
+
+                <section class="mobile-section" aria-labelledby="mobile-tasks-heading">
+                  <h2 id="mobile-tasks-heading">Today</h2>
+                  <ul class="task-list">
+                    <li class="mobile-task">
+                      <span class="task-icon" aria-hidden="true">✓</span>
+                      <div><strong>7:00 AM shift completed</strong><p>Visit note submitted</p></div>
+                      <span class="status status-green">Done</span>
+                    </li>
+                    <li class="mobile-task">
+                      <span class="task-icon" aria-hidden="true">✎</span>
+                      <div><strong>Visit note draft</strong><p>Casey R. · 2 required fields</p></div>
+                      <button class="text-link" type="button" data-mobile-screen="mobile-notes-screen">Finish</button>
+                    </li>
+                    <li class="mobile-task">
+                      <span class="task-icon" aria-hidden="true">▦</span>
+                      <div><strong>1:30 PM · Casey R.</strong><p>Companionship · 3 hours</p></div>
+                      <button class="text-link" type="button" data-mobile-screen="mobile-schedule">View</button>
+                    </li>
+                  </ul>
+                </section>
+
+                <section class="mobile-section" aria-labelledby="credential-heading">
+                  <h2 id="credential-heading">Credential status</h2>
+                  <div class="mobile-task">
+                    <span class="task-icon" aria-hidden="true">C</span>
+                    <div><strong>CNA active</strong><p>Expires Mar 14, 2027</p></div>
+                    <span class="status status-green">Valid</span>
+                  </div>
+                </section>
+              </div>
+            </div>
+
+            <!-- ── Mobile: Schedule ── -->
+            <div class="mobile-screen" id="mobile-schedule" role="region" aria-label="Schedule screen">
+              <div class="mobile-statusbar" aria-hidden="true"><span>9:41</span><span>● ● ◒</span></div>
+              <header class="mobile-header-flat">
+                <span aria-hidden="true" style="font-size:1.2rem">▦</span>
+                <h1>My Schedule</h1>
+              </header>
+              <div class="mobile-content-flat">
+                <p class="subtle" style="font-size:.8rem;margin-bottom:14px">Mon Jun 22 — Sun Jun 28</p>
+
+                <strong style="font-size:.8rem;color:var(--muted);text-transform:uppercase;letter-spacing:.08em">Today</strong>
+                <div style="margin:10px 0 18px;display:grid;gap:8px">
+                  <div class="shift-item">
+                    <div class="shift-dot"></div>
+                    <div style="flex:1">
+                      <strong style="font-size:.9rem">7:00 AM — Jordan M.</strong>
+                      <p class="meta" style="margin:0">Personal care · 4 hrs · Completed</p>
+                    </div>
+                    <span class="status status-green">Done</span>
+                  </div>
+                  <div class="shift-item" style="border-color:var(--teal-700);border-width:2px">
+                    <div class="shift-dot"></div>
+                    <div style="flex:1">
+                      <strong style="font-size:.9rem">8:00 AM — Jordan M.</strong>
+                      <p class="meta" style="margin:0">Personal care · 4 hrs · GPS required</p>
+                    </div>
+                    <span class="status status-blue">Now</span>
+                  </div>
+                  <div class="shift-item">
+                    <div class="shift-dot" style="background:var(--muted)"></div>
+                    <div style="flex:1">
+                      <strong style="font-size:.9rem">1:30 PM — Casey R.</strong>
+                      <p class="meta" style="margin:0">Companionship · 3 hrs</p>
+                    </div>
+                    <span class="status status-blue">Up next</span>
+                  </div>
+                </div>
+
+                <strong style="font-size:.8rem;color:var(--muted);text-transform:uppercase;letter-spacing:.08em">Tomorrow</strong>
+                <div style="margin:10px 0;display:grid;gap:8px">
+                  <div class="shift-item">
+                    <div class="shift-dot" style="background:var(--muted)"></div>
+                    <div style="flex:1">
+                      <strong style="font-size:.9rem">9:00 AM — Beverly T.</strong>
+                      <p class="meta" style="margin:0">Medication &amp; meal prep · 6 hrs</p>
+                    </div>
+                    <span class="status status-blue">Confirmed</span>
+                  </div>
+                  <div class="shift-item">
+                    <div class="shift-dot open"></div>
+                    <div style="flex:1">
+                      <strong style="font-size:.9rem">3:00 PM — Unassigned</strong>
+                      <p class="meta" style="margin:0">CNA required · 4 hrs</p>
+                    </div>
+                    <span class="status status-red">Open</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- ── Mobile: Visit Notes ── -->
+            <div class="mobile-screen" id="mobile-notes-screen" role="region" aria-label="Visit notes screen">
+              <div class="mobile-statusbar" aria-hidden="true"><span>9:41</span><span>● ● ◒</span></div>
+              <header class="mobile-header-flat">
+                <span aria-hidden="true" style="font-size:1.2rem">✎</span>
+                <h1>Visit Note — Casey R.</h1>
+              </header>
+              <div class="mobile-content-flat">
+                <p class="subtle" style="font-size:.79rem;margin-bottom:14px">Companionship · Jun 21 · 1:30 PM — 4:30 PM</p>
+
+                <strong style="font-size:.82rem;display:block;margin-bottom:8px">Activities performed</strong>
+                <label class="check-row"><input type="checkbox" checked> Companionship</label>
+                <label class="check-row"><input type="checkbox"> Personal care</label>
+                <label class="check-row"><input type="checkbox" checked> Light housekeeping</label>
+                <label class="check-row"><input type="checkbox"> Meal preparation</label>
+                <label class="check-row"><input type="checkbox"> Transportation</label>
+                <label class="check-row"><input type="checkbox"> Medication reminder</label>
+
+                <strong style="font-size:.82rem;display:block;margin:14px 0 8px">Client condition <span style="color:var(--red)">*</span></strong>
+                <textarea class="mobile-textarea" placeholder="Describe client's condition during this visit…" aria-label="Client condition"></textarea>
+
+                <strong style="font-size:.82rem;display:block;margin-bottom:8px">Concerns <span style="color:var(--muted);font-weight:400">(optional)</span></strong>
+                <textarea class="mobile-textarea" placeholder="Any concerns or incidents to flag…" aria-label="Concerns"></textarea>
+
+                <strong style="font-size:.82rem;display:block;margin-bottom:8px">Caregiver signature <span style="color:var(--red)">*</span></strong>
+                <div style="height:70px;border:2px dashed var(--line);border-radius:10px;display:flex;align-items:center;justify-content:center;color:var(--muted);font-size:.8rem;margin-bottom:14px;background:#fff">Tap to sign</div>
+
+                <button class="mobile-primary" type="button" data-message="Visit note submitted">Submit note</button>
+              </div>
+            </div>
+
+            <!-- ── Mobile: Profile ── -->
+            <div class="mobile-screen" id="mobile-profile" role="region" aria-label="Profile screen">
+              <div class="mobile-statusbar" aria-hidden="true"><span>9:41</span><span>● ● ◒</span></div>
+              <header class="mobile-header-flat">
+                <span aria-hidden="true" style="font-size:1.2rem">♙</span>
+                <h1>My Profile</h1>
+              </header>
+              <div class="mobile-content-flat">
+                <div style="text-align:center;padding:20px 0 16px">
+                  <div class="profile-avatar">AW</div>
+                  <strong style="display:block;font-size:1.1rem">Amara Williams</strong>
+                  <span class="meta">CNA · W-2 Employee · Hire date Jan 2025</span>
+                </div>
+
+                <div class="card" style="margin-bottom:14px">
+                  <strong style="font-size:.8rem;color:var(--muted);text-transform:uppercase;letter-spacing:.08em">Employment</strong>
+                  <div style="margin-top:10px">
+                    <div class="profile-row"><span class="subtle">Type</span><span>W-2 Employee</span></div>
+                    <div class="profile-row"><span class="subtle">Pay rate</span><span>$18.50/hr</span></div>
+                    <div class="profile-row"><span class="subtle">Max weekly hours</span><span>40 hrs</span></div>
+                    <div class="profile-row"><span class="subtle">Availability</span><span>Mon–Fri</span></div>
+                  </div>
+                </div>
+
+                <div class="card" style="margin-bottom:14px">
+                  <strong style="font-size:.8rem;color:var(--muted);text-transform:uppercase;letter-spacing:.08em">Certifications</strong>
+                  <div style="margin-top:10px">
+                    <div class="profile-row">
+                      <span>CNA<span class="meta">Maryland Nursing Board</span></span>
+                      <span class="status status-amber">Expires Aug 2026</span>
+                    </div>
+                    <div class="profile-row">
+                      <span>CPR<span class="meta">American Heart Assoc.</span></span>
+                      <span class="status status-green">Valid</span>
+                    </div>
+                  </div>
+                </div>
+
+                <div class="card">
+                  <strong style="font-size:.8rem;color:var(--muted);text-transform:uppercase;letter-spacing:.08em">Performance (MTD)</strong>
+                  <div style="margin-top:10px">
+                    <div class="profile-row"><span class="subtle">Shifts completed</span><span>18</span></div>
+                    <div class="profile-row"><span class="subtle">Billable hours</span><span>72 hrs</span></div>
+                    <div class="profile-row"><span class="subtle">No-shows</span><span style="color:var(--green)">0</span></div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Mobile bottom nav (shared) -->
+            <nav class="mobile-nav" aria-label="Mobile navigation">
+              <button type="button" data-mobile-screen="mobile-home" aria-current="page">
+                <span aria-hidden="true">⌂</span><span>Home</span>
+              </button>
+              <button type="button" data-mobile-screen="mobile-schedule">
+                <span aria-hidden="true">▦</span><span>Schedule</span>
+              </button>
+              <button type="button" data-mobile-screen="mobile-notes-screen">
+                <span aria-hidden="true">✎</span><span>Notes</span>
+              </button>
+              <button type="button" data-mobile-screen="mobile-profile">
+                <span aria-hidden="true">♙</span><span>Profile</span>
+              </button>
+            </nav>
+
+          </div><!-- /phone-screen -->
+        </div><!-- /phone -->
+      </div><!-- /mobile-stage -->
+    </section>
+
+  </main>
+
+  <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
+
+  <script>
+    /* ── Top-level view switcher (Web / Mobile) ── */
+    const viewTabs = [...document.querySelectorAll('[role="tab"]')];
+    const viewPanels = [...document.querySelectorAll('[role="tabpanel"]')];
+    const toast = document.querySelector('#toast');
+    let toastTimer;
+
+    function selectView(selectedTab) {
+      viewTabs.forEach((tab) => {
+        const active = tab === selectedTab;
+        tab.setAttribute('aria-selected', String(active));
+        tab.tabIndex = active ? 0 : -1;
+      });
+      viewPanels.forEach((panel) => {
+        panel.hidden = panel.id !== selectedTab.getAttribute('aria-controls');
+      });
+    }
+
+    viewTabs.forEach((tab, index) => {
+      tab.addEventListener('click', () => selectView(tab));
+      tab.addEventListener('keydown', (e) => {
+        if (!['ArrowLeft', 'ArrowRight'].includes(e.key)) return;
+        e.preventDefault();
+        const next = viewTabs[(index + (e.key === 'ArrowRight' ? 1 : -1) + viewTabs.length) % viewTabs.length];
+        selectView(next);
+        next.focus();
+      });
+    });
+
+    /* ── Toast ── */
+    function announce(msg) {
+      clearTimeout(toastTimer);
+      toast.textContent = msg;
+      toast.hidden = false;
+      toastTimer = setTimeout(() => { toast.hidden = true; }, 2600);
+    }
+
+    /* ── Web page navigation ── */
+    function showWebPage(pageId) {
+      document.querySelectorAll('.web-page').forEach(p => p.classList.remove('active'));
+      const target = document.getElementById('page-' + pageId);
+      if (target) target.classList.add('active');
+
+      document.querySelectorAll('[data-web-page]').forEach(btn => {
+        const isCurrent = btn.dataset.webPage === pageId;
+        if (btn.closest('.side-nav')) {
+          if (isCurrent) btn.setAttribute('aria-current', 'page');
+          else btn.removeAttribute('aria-current');
+        }
+      });
+    }
+
+    document.querySelectorAll('[data-web-page]').forEach(btn => {
+      btn.addEventListener('click', () => showWebPage(btn.dataset.webPage));
+    });
+
+    /* ── Mobile screen navigation ── */
+    function showMobileScreen(screenId) {
+      document.querySelectorAll('.mobile-screen').forEach(s => s.classList.remove('active'));
+      const target = document.getElementById(screenId);
+      if (target) target.classList.add('active');
+
+      document.querySelectorAll('.mobile-nav [data-mobile-screen]').forEach(btn => {
+        if (btn.dataset.mobileScreen === screenId) btn.setAttribute('aria-current', 'page');
+        else btn.removeAttribute('aria-current');
+      });
+    }
+
+    document.querySelectorAll('[data-mobile-screen]').forEach(btn => {
+      btn.addEventListener('click', () => showMobileScreen(btn.dataset.mobileScreen));
+    });
+
+    /* ── GPS check-in button ── */
+    document.querySelector('#check-in-button').addEventListener('click', (e) => {
+      e.currentTarget.textContent = 'Location verified — check in';
+      announce('GPS location verified. No location data was transmitted.');
+    });
+
+    /* ── Generic toast buttons ── */
+    document.querySelectorAll('[data-message]').forEach(btn => {
+      btn.addEventListener('click', () => announce(btn.dataset.message + '. Wireframe only.'));
+    });
+
+    /* ── Initialise ── */
+    showWebPage('overview');
+    showMobileScreen('mobile-home');
+  </script>
+</body>
+</html>

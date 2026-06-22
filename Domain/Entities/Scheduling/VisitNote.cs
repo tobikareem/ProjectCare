@@ -102,6 +102,16 @@ public class VisitNote : BaseEntity
     /// <summary>Heart rate in beats per minute (BPM).</summary>
     public int? HeartRate { get; set; }
 
+    // Transitions Integration
+
+    /// <summary>
+    /// Optional link to an active <see cref="Transitions.TransitionPlan"/>.
+    /// When set, this VisitNote's observations contribute to the patient's 30-day
+    /// post-discharge adherence monitoring. Set by the Application layer when the
+    /// caregiver's client has an active transition plan at the time of the visit.
+    /// </summary>
+    public Guid? TransitionPlanId { get; set; }
+
     // Navigation Collections
 
     /// <summary>Photos attached to this visit note. Stored as URLs to external blob storage.</summary>

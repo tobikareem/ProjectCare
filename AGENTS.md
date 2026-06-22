@@ -1,4 +1,4 @@
-# CLAUDE.md — CarePath Health
+# AGENTS.md — CarePath Health
 
 CarePath Health is a .NET 9 healthcare management platform for in-home care (W-2 employees) and healthcare staffing (1099 contractors). Clean Architecture: Domain → Application → Infrastructure → WebApi, with a MAUI Blazor Hybrid mobile app and Blazor WebAssembly admin dashboard planned.
 
@@ -273,22 +273,25 @@ Follow this sequence for every implementation task:
 | Testing | xUnit + Moq + FluentAssertions |
 | Mobile | .NET MAUI Blazor Hybrid |
 | Admin UI | Blazor WebAssembly |
-| Docs | Context7 MCP (`.claude/mcp.json`) |
+| Docs | Context7 MCP (`.codex/config.toml`) |
 | SMS/Voice | Twilio (planned for CP-02 Transitions reminders) |
 
 ---
 
-## Custom Commands (Claude Code)
+## Project Skills (Codex)
 
-Use these slash commands in Claude Code:
+Invoke these repository skills explicitly with `$skill-name`, or describe the matching task and let Codex select the skill:
 
 | Command | What it does |
 |---|---|
-| `/dotnet-code` | Implement a feature from spec, build, then auto-run the `dotnet-code-reviewer` subagent |
-| `/code-review` | Review all uncommitted changes via the `dotnet-code-reviewer` subagent |
-| `/commit-message` | Generate an emoji-typed commit message from staged changes |
+| `$dotnet-code` | Implement a feature from spec, build, then auto-run the `dotnet-code-reviewer` subagent |
+| `$code-review` | Review all uncommitted changes via the `dotnet-code-reviewer` subagent |
+| `$commit-message` | Generate an emoji-typed commit message from staged changes |
+| `$hipaa-check` | Review PHI-adjacent changes for HIPAA exposure risks |
+| `$migration` | Review, generate, validate, or apply EF Core migrations |
+| `$new-spec` | Create the requirements, design, and task specs for a feature |
 
-The `dotnet-code-reviewer` subagent (`.claude/agents/dotnet-code-reviewer.md`) is an expert .NET reviewer that enforces all rules above, checks specs, and uses Context7 for official docs. It is invoked automatically by both `/dotnet-code` and `/code-review`.
+The `dotnet-code-reviewer` subagent (`.codex/agents/dotnet-code-reviewer.toml`) is a read-only expert .NET reviewer that enforces all rules above, checks specs, and uses available official documentation sources. It is invoked automatically by both `$dotnet-code` and `$code-review`.
 
 ---
 

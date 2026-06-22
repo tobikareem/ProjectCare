@@ -1,0 +1,25 @@
+# Project-scoped Codex configuration. Loaded only when this repository is trusted.
+
+[agents]
+max_threads = 6
+max_depth = 1
+
+# Context7 is represented as a remote MCP server so Node/npm is not required.
+# Set CONTEXT7_API_KEY in the local environment; never commit the key.
+[mcp_servers.context7]
+url = "https://mcp.context7.com/mcp"
+env_http_headers = { "CONTEXT7_API_KEY" = "CONTEXT7_API_KEY" }
+enabled = true
+required = false
+startup_timeout_sec = 20
+tool_timeout_sec = 60
+
+# Preserved from .claude/mcp.json but disabled by default. Enable only for
+# Azure-specific work on a machine with Node.js and npx available.
+[mcp_servers.azure_mcp]
+command = "npx"
+args = ["-y", "@azure/mcp@latest", "server", "start"]
+enabled = false
+required = false
+startup_timeout_sec = 30
+tool_timeout_sec = 120

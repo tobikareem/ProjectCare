@@ -81,13 +81,13 @@ public class TransitionReminderTests
     }
 
     [Fact]
-    public void IsOverdue_ReturnsFalse_WhenScheduledExactlyNow()
+    public void IsOverdue_ReturnsFalse_WhenScheduledSlightlyInTheFuture()
     {
-        // A reminder scheduled at exactly now is not yet overdue (strict less-than)
+        // Using a small future offset avoids flakiness caused by evaluating DateTime.UtcNow inside IsOverdue.
         var reminder = new TransitionReminder
         {
             Status = ReminderStatus.Scheduled,
-            ScheduledAt = DateTime.UtcNow.AddSeconds(5) // slight buffer for test execution
+            ScheduledAt = DateTime.UtcNow.AddSeconds(5)
         };
 
         reminder.IsOverdue.Should().BeFalse();

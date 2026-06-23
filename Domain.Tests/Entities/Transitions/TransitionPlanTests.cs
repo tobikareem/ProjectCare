@@ -81,17 +81,15 @@ public class TransitionPlanTests
     }
 
     [Fact]
-    public void IsActive_ReturnsTrue_WhenWindowEndsExactlyNow()
+    public void IsActive_ReturnsTrue_WhenWindowEndIsInTheImmediateFuture()
     {
-        // Boundary: window ending exactly at UtcNow should still be active (<=)
-        var now = DateTime.UtcNow;
+        // Avoid flakiness: TransitionPlan.IsActive compares against DateTime.UtcNow at evaluation time.
         var plan = new TransitionPlan
         {
             Status = TransitionPlanStatus.Active,
-            TransitionWindowEnd = now
+            TransitionWindowEnd = DateTime.UtcNow.AddSeconds(1)
         };
 
-        // Allow a tiny tolerance for test execution time
         plan.IsActive.Should().BeTrue();
     }
 

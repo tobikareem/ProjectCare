@@ -526,7 +526,7 @@
 
     .mobile-nav {
       position: absolute; z-index: 5; right: 0; bottom: 0; left: 0;
-      display: grid; grid-template-columns: repeat(4,1fr);
+      display: grid; grid-template-columns: repeat(5,1fr);
       padding: 9px 8px 13px; background: rgb(255 255 255 / 96%);
       border-top: 1px solid var(--line); backdrop-filter: blur(12px);
     }
@@ -653,6 +653,24 @@
             <button type="button" data-web-page="compliance">
               <span aria-hidden="true">✓</span><span>Compliance</span>
               <span class="nav-count" aria-label="4 compliance alerts">4</span>
+            </button>
+          </nav>
+
+          <p class="nav-label">Transitions</p>
+          <nav class="side-nav" aria-label="Transitions navigation">
+            <button type="button" data-web-page="transitions">
+              <span aria-hidden="true">⟳</span><span>Dashboard</span>
+              <span class="nav-count" aria-label="2 escalations">2</span>
+            </button>
+            <button type="button" data-web-page="transitions-upload">
+              <span aria-hidden="true">↑</span><span>Upload doc</span>
+            </button>
+            <button type="button" data-web-page="transitions-review">
+              <span aria-hidden="true">◈</span><span>Review queue</span>
+              <span class="nav-count" aria-label="1 awaiting review">1</span>
+            </button>
+            <button type="button" data-web-page="transitions-patient">
+              <span aria-hidden="true">♡</span><span>Patient plan</span>
             </button>
           </nav>
         </aside>
@@ -1321,6 +1339,653 @@
             </div>
           </div>
 
+          <!-- ── Transitions: Dashboard ── -->
+          <div id="page-transitions" class="web-page">
+            <div class="page-heading">
+              <div>
+                <p class="eyebrow">Transitions</p>
+                <h1>30-Day Care Dashboard</h1>
+                <p class="subtle">Post-discharge monitoring · June 2026</p>
+              </div>
+              <button class="button button-primary" type="button" data-web-page="transitions-upload">↑ Upload discharge doc</button>
+            </div>
+
+            <section class="metric-grid" aria-label="Transitions key metrics">
+              <article class="card metric-card">
+                <span class="metric-label">Active plans</span>
+                <div class="metric-value">14</div>
+                <span class="trend">3 activated this week</span>
+              </article>
+              <article class="card metric-card">
+                <span class="metric-label">High-risk patients</span>
+                <div class="metric-value" style="color:var(--red)">4</div>
+                <span class="trend" style="color:var(--red)">Daily check-ins required</span>
+              </article>
+              <article class="card metric-card">
+                <span class="metric-label">Overdue reminders</span>
+                <div class="metric-value" style="color:var(--amber)">7</div>
+                <span class="trend" style="color:var(--amber)">Across 5 patients</span>
+              </article>
+              <article class="card metric-card">
+                <span class="metric-label">Escalations pending</span>
+                <div class="metric-value" style="color:var(--orange)">2</div>
+                <span class="trend" style="color:var(--orange)">Coordinator action needed</span>
+              </article>
+            </section>
+
+            <div class="dashboard-grid">
+              <section class="card" aria-labelledby="active-plans-heading">
+                <div class="section-header">
+                  <div>
+                    <h2 id="active-plans-heading">Active patient plans</h2>
+                    <span class="subtle">Sorted by escalation risk · 14 total</span>
+                  </div>
+                  <button class="button button-secondary button-sm" type="button" data-message="Filter panel opened">Filter</button>
+                </div>
+                <div class="data-table-wrap">
+                  <table class="data-table" aria-label="Active transition plans">
+                    <thead>
+                      <tr>
+                        <th>Patient</th>
+                        <th>Hospital</th>
+                        <th>Discharge</th>
+                        <th>Risk</th>
+                        <th>Days left</th>
+                        <th>Missed</th>
+                        <th>Last check-in</th>
+                        <th>Status</th>
+                        <th></th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <tr>
+                        <td><span class="avatar-sm">BT</span><strong>Beverly T.</strong></td>
+                        <td>Johns Hopkins</td>
+                        <td>Jun 5</td>
+                        <td><span class="status status-red">High</span></td>
+                        <td><strong style="color:var(--orange)">13</strong></td>
+                        <td style="color:var(--red)">3</td>
+                        <td><span class="status status-red">Escalated</span></td>
+                        <td><span class="status status-red">Escalated</span></td>
+                        <td><button class="text-link" type="button" data-web-page="transitions-patient">View →</button></td>
+                      </tr>
+                      <tr>
+                        <td><span class="avatar-sm">DO</span><strong>David O.</strong></td>
+                        <td>Mercy Medical</td>
+                        <td>Jun 10</td>
+                        <td><span class="status status-red">High</span></td>
+                        <td><strong style="color:var(--amber)">18</strong></td>
+                        <td style="color:var(--amber)">1</td>
+                        <td><span class="status status-amber">2 days ago</span></td>
+                        <td><span class="status status-amber">At risk</span></td>
+                        <td><button class="text-link" type="button" data-web-page="transitions-patient">View →</button></td>
+                      </tr>
+                      <tr>
+                        <td><span class="avatar-sm">MJ</span><strong>Maria J.</strong></td>
+                        <td>UMMC</td>
+                        <td>Jun 15</td>
+                        <td><span class="status status-amber">Medium</span></td>
+                        <td><strong>23</strong></td>
+                        <td>0</td>
+                        <td><span class="status status-green">Today</span></td>
+                        <td><span class="status status-green">On track</span></td>
+                        <td><button class="text-link" type="button" data-web-page="transitions-patient">View →</button></td>
+                      </tr>
+                      <tr>
+                        <td><span class="avatar-sm">JM</span><strong>Jordan M.</strong></td>
+                        <td>Sinai Hospital</td>
+                        <td>Jun 18</td>
+                        <td><span class="status status-blue">Low</span></td>
+                        <td><strong>26</strong></td>
+                        <td>0</td>
+                        <td><span class="status status-green">Today</span></td>
+                        <td><span class="status status-green">On track</span></td>
+                        <td><button class="text-link" type="button" data-web-page="transitions-patient">View →</button></td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+              </section>
+
+              <aside>
+                <section class="card" aria-labelledby="escalations-heading" style="margin-bottom:16px;border-left:4px solid var(--red)">
+                  <div class="section-header">
+                    <h2 id="escalations-heading" style="color:var(--red)">⚠ Open escalations</h2>
+                  </div>
+                  <div class="alert-item" style="margin-bottom:10px">
+                    <strong>Beverly T. — Missed critical task</strong>
+                    <p>3 medication reminders missed. No response via app or SMS. Coordinator notified.</p>
+                    <button class="button button-sm button-primary" type="button" style="margin-top:10px" data-message="Escalation acknowledged">Acknowledge</button>
+                  </div>
+                  <div class="alert-item">
+                    <strong>David O. — Warning symptoms</strong>
+                    <p>Patient reported shortness of breath in yesterday's check-in. Flagged for urgent review.</p>
+                    <button class="button button-sm button-primary" type="button" style="margin-top:10px" data-message="Escalation acknowledged">Acknowledge</button>
+                  </div>
+                </section>
+
+                <section class="card" aria-labelledby="review-queue-heading">
+                  <div class="section-header">
+                    <h2 id="review-queue-heading">Review queue</h2>
+                  </div>
+                  <div style="padding:12px;background:var(--amber-soft);border-radius:8px;border-left:4px solid var(--amber)">
+                    <strong>1 plan awaiting clinician sign-off</strong>
+                    <p class="meta" style="margin-top:4px">Margaret K. · Uploaded 3 hours ago · AI extraction complete</p>
+                    <button class="text-link" type="button" data-web-page="transitions-review" style="margin-top:8px;display:inline-block">Review now →</button>
+                  </div>
+                </section>
+              </aside>
+            </div>
+          </div>
+
+          <!-- ── Transitions: Upload ── -->
+          <div id="page-transitions-upload" class="web-page">
+            <div class="page-heading">
+              <div>
+                <p class="eyebrow">Transitions</p>
+                <h1>Upload Discharge Document</h1>
+                <p class="subtle">AI extracts care instructions and builds a draft plan for clinician review.</p>
+              </div>
+              <button class="button button-secondary" type="button" data-web-page="transitions">← Back to dashboard</button>
+            </div>
+
+            <div style="display:grid;grid-template-columns:minmax(0,1.4fr) minmax(280px,.8fr);gap:20px">
+              <div>
+                <section class="card" style="margin-bottom:20px" aria-labelledby="upload-heading">
+                  <h2 id="upload-heading" style="margin-bottom:18px">1. Select patient &amp; document</h2>
+
+                  <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:18px">
+                    <div>
+                      <label for="upload-client" style="display:block;font-size:.82rem;font-weight:750;margin-bottom:6px;color:var(--muted)">Patient</label>
+                      <select id="upload-client" style="width:100%;min-height:44px;padding:9px 12px;border:1px solid var(--line);border-radius:10px;background:var(--surface)">
+                        <option>Select patient…</option>
+                        <option>Beverly Thomas</option>
+                        <option>David Okafor</option>
+                        <option>Maria Johnson</option>
+                        <option selected>Margaret Kim (new)</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label for="upload-type" style="display:block;font-size:.82rem;font-weight:750;margin-bottom:6px;color:var(--muted)">Document type</label>
+                      <select id="upload-type" style="width:100%;min-height:44px;padding:9px 12px;border:1px solid var(--line);border-radius:10px;background:var(--surface)">
+                        <option selected>PDF discharge summary</option>
+                        <option>Photo of printed summary</option>
+                        <option>FHIR import</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  <div style="border:2px dashed var(--line);border-radius:12px;padding:42px 24px;text-align:center;background:var(--surface-alt);cursor:pointer" role="button" aria-label="Upload file drop zone" tabindex="0">
+                    <div style="font-size:2rem;margin-bottom:10px">📄</div>
+                    <strong>Drop discharge summary here or click to browse</strong>
+                    <p class="subtle" style="margin-top:6px">PDF or image · Max 20 MB · PHI handled under HIPAA BAA</p>
+                    <button class="button button-secondary button-sm" type="button" style="margin-top:14px" data-message="File picker opened">Browse files</button>
+                  </div>
+
+                  <div style="margin-top:18px;padding:16px;background:var(--green-soft);border-radius:10px;border-left:4px solid var(--green)">
+                    <strong>Margaret_Kim_discharge_jun22.pdf</strong>
+                    <p class="meta" style="margin-top:4px">Johns Hopkins · 2.1 MB · Ready to submit</p>
+                  </div>
+                </section>
+
+                <section class="card" aria-labelledby="extraction-heading">
+                  <h2 id="extraction-heading" style="margin-bottom:18px">2. AI extraction status</h2>
+                  <ol style="list-style:none;margin:0;padding:0;display:grid;gap:12px">
+                    <li style="display:flex;align-items:center;gap:12px">
+                      <span style="width:28px;height:28px;border-radius:50%;background:var(--green);color:#fff;display:grid;place-items:center;font-size:.8rem;flex-shrink:0">✓</span>
+                      <div><strong>Document received</strong><span class="meta">Jun 22 · 2:41 PM — File uploaded and validated</span></div>
+                    </li>
+                    <li style="display:flex;align-items:center;gap:12px">
+                      <span style="width:28px;height:28px;border-radius:50%;background:var(--green);color:#fff;display:grid;place-items:center;font-size:.8rem;flex-shrink:0">✓</span>
+                      <div><strong>AI extraction complete</strong><span class="meta">Jun 22 · 2:43 PM — 11 instructions extracted from 4 pages</span></div>
+                    </li>
+                    <li style="display:flex;align-items:center;gap:12px">
+                      <span style="width:28px;height:28px;border-radius:50%;background:var(--amber);color:#fff;display:grid;place-items:center;font-size:.8rem;flex-shrink:0">!</span>
+                      <div><strong>Awaiting clinician review</strong><span class="meta">2 instructions flagged as low-confidence — human review required</span></div>
+                    </li>
+                    <li style="display:flex;align-items:center;gap:12px">
+                      <span style="width:28px;height:28px;border-radius:50%;background:var(--line);color:var(--muted);display:grid;place-items:center;font-size:.8rem;flex-shrink:0">○</span>
+                      <div style="opacity:.55"><strong>Plan activation</strong><span class="meta">Clinician signs off and activates the 30-day window</span></div>
+                    </li>
+                  </ol>
+                  <div style="margin-top:20px;display:flex;gap:10px">
+                    <button class="button button-primary" type="button" data-web-page="transitions-review">Review extracted plan →</button>
+                    <button class="button button-secondary" type="button" data-message="New upload started">Upload another</button>
+                  </div>
+                </section>
+              </div>
+
+              <aside>
+                <section class="card" style="margin-bottom:16px" aria-labelledby="doc-history-heading">
+                  <h2 id="doc-history-heading" style="margin-bottom:14px">Recent uploads</h2>
+                  <div style="display:grid;gap:10px">
+                    <div style="padding:12px;border:1px solid var(--line);border-radius:8px">
+                      <div style="display:flex;justify-content:space-between;align-items:center;gap:8px">
+                        <strong style="font-size:.88rem">Beverly T.</strong>
+                        <span class="status status-green">Approved</span>
+                      </div>
+                      <p class="meta" style="margin-top:4px">Johns Hopkins · Jun 5</p>
+                    </div>
+                    <div style="padding:12px;border:1px solid var(--line);border-radius:8px">
+                      <div style="display:flex;justify-content:space-between;align-items:center;gap:8px">
+                        <strong style="font-size:.88rem">David O.</strong>
+                        <span class="status status-green">Approved</span>
+                      </div>
+                      <p class="meta" style="margin-top:4px">Mercy Medical · Jun 10</p>
+                    </div>
+                    <div style="padding:12px;border:1px solid var(--line);border-radius:8px">
+                      <div style="display:flex;justify-content:space-between;align-items:center;gap:8px">
+                        <strong style="font-size:.88rem">Maria J.</strong>
+                        <span class="status status-green">Approved</span>
+                      </div>
+                      <p class="meta" style="margin-top:4px">UMMC · Jun 15</p>
+                    </div>
+                    <div style="padding:12px;border:1px solid var(--amber-soft);border-left:4px solid var(--amber);border-radius:8px">
+                      <div style="display:flex;justify-content:space-between;align-items:center;gap:8px">
+                        <strong style="font-size:.88rem">Margaret K.</strong>
+                        <span class="status status-amber">Awaiting review</span>
+                      </div>
+                      <p class="meta" style="margin-top:4px">Johns Hopkins · Jun 22 · Today</p>
+                    </div>
+                  </div>
+                </section>
+
+                <section class="card" aria-labelledby="hipaa-note-heading">
+                  <h2 id="hipaa-note-heading" style="font-size:.9rem;margin-bottom:10px">🔒 HIPAA compliance</h2>
+                  <p class="subtle" style="font-size:.82rem">Uploaded documents are encrypted at rest (AES-256) and in transit (TLS 1.3). Raw content is never logged. AI processing occurs within our HIPAA BAA boundary. All uploads are audit-logged with your user ID and timestamp.</p>
+                </section>
+              </aside>
+            </div>
+          </div>
+
+          <!-- ── Transitions: Review ── -->
+          <div id="page-transitions-review" class="web-page">
+            <div class="page-heading">
+              <div>
+                <p class="eyebrow">Transitions · Review queue</p>
+                <h1>Clinician Review — Margaret Kim</h1>
+                <p class="subtle">Johns Hopkins discharge · Jun 22 · 11 instructions extracted · 2 flagged low-confidence</p>
+              </div>
+              <button class="button button-secondary" type="button" data-web-page="transitions">← Dashboard</button>
+            </div>
+
+            <div style="display:grid;grid-template-columns:minmax(0,1.4fr) minmax(280px,.8fr);gap:20px">
+              <div>
+                <section class="card" style="margin-bottom:16px;background:var(--amber-soft);border-left:4px solid var(--amber)" aria-label="Review instructions">
+                  <strong>⚠ 2 low-confidence instructions require your attention before activation.</strong>
+                  <p class="subtle" style="margin-top:4px;font-size:.84rem">Confidence below 75% means the AI was uncertain. Review the source text and edit or reject as needed.</p>
+                </section>
+
+                <!-- Category: Medication -->
+                <section class="card" style="margin-bottom:14px" aria-labelledby="cat-meds">
+                  <div class="section-header">
+                    <h2 id="cat-meds" style="font-size:1rem;margin:0">💊 Medications <span class="subtle" style="font-weight:400;font-size:.82rem">(4 instructions)</span></h2>
+                  </div>
+                  <div style="display:grid;gap:10px">
+                    <div style="padding:14px;border:1px solid var(--line);border-radius:10px">
+                      <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px;flex-wrap:wrap">
+                        <div>
+                          <strong>Metoprolol 25mg — once daily with morning meal</strong>
+                          <p class="meta" style="margin-top:4px">Source: "patient to continue Metoprolol 25mg QD with breakfast"</p>
+                        </div>
+                        <span style="display:inline-flex;align-items:center;gap:5px;padding:3px 8px;background:var(--green-soft);color:var(--green);border-radius:999px;font-size:.74rem;font-weight:800;white-space:nowrap">● 94%</span>
+                      </div>
+                      <div style="display:flex;gap:8px;margin-top:12px">
+                        <button class="button button-sm button-primary" type="button" data-message="Instruction approved">✓ Approve</button>
+                        <button class="button button-sm button-secondary" type="button" data-message="Edit panel opened">Edit</button>
+                        <button class="button button-sm" type="button" style="color:var(--red);border-color:var(--red)" data-message="Instruction rejected">✗ Reject</button>
+                      </div>
+                    </div>
+
+                    <div style="padding:14px;border:1px solid var(--line);border-radius:10px">
+                      <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px;flex-wrap:wrap">
+                        <div>
+                          <strong>Lisinopril 10mg — once daily</strong>
+                          <p class="meta" style="margin-top:4px">Source: "Lisinopril 10mg daily for blood pressure management"</p>
+                        </div>
+                        <span style="display:inline-flex;align-items:center;gap:5px;padding:3px 8px;background:var(--green-soft);color:var(--green);border-radius:999px;font-size:.74rem;font-weight:800;white-space:nowrap">● 91%</span>
+                      </div>
+                      <div style="display:flex;gap:8px;margin-top:12px">
+                        <button class="button button-sm button-primary" type="button" data-message="Instruction approved">✓ Approve</button>
+                        <button class="button button-sm button-secondary" type="button" data-message="Edit panel opened">Edit</button>
+                        <button class="button button-sm" type="button" style="color:var(--red);border-color:var(--red)" data-message="Instruction rejected">✗ Reject</button>
+                      </div>
+                    </div>
+
+                    <div style="padding:14px;border:2px solid var(--amber);border-radius:10px;background:var(--amber-soft)" aria-label="Low confidence instruction">
+                      <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px;flex-wrap:wrap">
+                        <div>
+                          <strong>Furosemide — dose unclear from document</strong>
+                          <p class="meta" style="margin-top:4px">Source: "pt on Lasix as needed" — dosage and frequency not specified in text</p>
+                        </div>
+                        <span style="display:inline-flex;align-items:center;gap:5px;padding:3px 8px;background:var(--amber-soft);color:var(--amber);border-radius:999px;font-size:.74rem;font-weight:800;border:1px solid var(--amber);white-space:nowrap">⚠ 58%</span>
+                      </div>
+                      <p style="margin:10px 0 0;font-size:.82rem;color:var(--amber)"><strong>Action required:</strong> Confirm dose and frequency before approving. Contact discharging physician if needed.</p>
+                      <div style="display:flex;gap:8px;margin-top:12px">
+                        <button class="button button-sm button-primary" type="button" data-message="Edit panel opened">Edit &amp; approve</button>
+                        <button class="button button-sm" type="button" style="color:var(--red);border-color:var(--red)" data-message="Instruction rejected">✗ Reject</button>
+                      </div>
+                    </div>
+                  </div>
+                </section>
+
+                <!-- Category: Appointment -->
+                <section class="card" style="margin-bottom:14px" aria-labelledby="cat-appt">
+                  <div class="section-header">
+                    <h2 id="cat-appt" style="font-size:1rem;margin:0">📅 Appointments <span class="subtle" style="font-weight:400;font-size:.82rem">(2 instructions)</span></h2>
+                  </div>
+                  <div style="display:grid;gap:10px">
+                    <div style="padding:14px;border:1px solid var(--line);border-radius:10px">
+                      <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px;flex-wrap:wrap">
+                        <div>
+                          <strong>Primary care follow-up within 7 days</strong>
+                          <p class="meta" style="margin-top:4px">Source: "schedule PCP follow-up within one week of discharge"</p>
+                        </div>
+                        <span style="display:inline-flex;align-items:center;gap:5px;padding:3px 8px;background:var(--green-soft);color:var(--green);border-radius:999px;font-size:.74rem;font-weight:800;white-space:nowrap">● 88%</span>
+                      </div>
+                      <div style="display:flex;gap:8px;margin-top:12px">
+                        <button class="button button-sm button-primary" type="button" data-message="Instruction approved">✓ Approve</button>
+                        <button class="button button-sm button-secondary" type="button" data-message="Edit panel opened">Edit</button>
+                        <button class="button button-sm" type="button" style="color:var(--red);border-color:var(--red)" data-message="Instruction rejected">✗ Reject</button>
+                      </div>
+                    </div>
+                    <div style="padding:14px;border:2px solid var(--amber);border-radius:10px;background:var(--amber-soft)" aria-label="Low confidence instruction">
+                      <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px;flex-wrap:wrap">
+                        <div>
+                          <strong>Cardiology specialist — timing unclear</strong>
+                          <p class="meta" style="margin-top:4px">Source: "refer to cardiology" — no timeframe extracted</p>
+                        </div>
+                        <span style="display:inline-flex;align-items:center;gap:5px;padding:3px 8px;background:var(--amber-soft);color:var(--amber);border-radius:999px;font-size:.74rem;font-weight:800;border:1px solid var(--amber);white-space:nowrap">⚠ 62%</span>
+                      </div>
+                      <div style="display:flex;gap:8px;margin-top:12px">
+                        <button class="button button-sm button-primary" type="button" data-message="Edit panel opened">Edit &amp; approve</button>
+                        <button class="button button-sm" type="button" style="color:var(--red);border-color:var(--red)" data-message="Instruction rejected">✗ Reject</button>
+                      </div>
+                    </div>
+                  </div>
+                </section>
+
+                <!-- Category: Diet -->
+                <section class="card" style="margin-bottom:14px" aria-labelledby="cat-diet">
+                  <div class="section-header">
+                    <h2 id="cat-diet" style="font-size:1rem;margin:0">🥗 Diet &amp; Fluid <span class="subtle" style="font-weight:400;font-size:.82rem">(2 instructions)</span></h2>
+                  </div>
+                  <div style="display:grid;gap:10px">
+                    <div style="padding:14px;border:1px solid var(--line);border-radius:10px">
+                      <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px;flex-wrap:wrap">
+                        <div>
+                          <strong>Low-sodium diet — less than 2g sodium per day</strong>
+                          <p class="meta" style="margin-top:4px">Source: "sodium restricted diet &lt;2g/day"</p>
+                        </div>
+                        <span style="display:inline-flex;align-items:center;gap:5px;padding:3px 8px;background:var(--green-soft);color:var(--green);border-radius:999px;font-size:.74rem;font-weight:800;white-space:nowrap">● 96%</span>
+                      </div>
+                      <div style="display:flex;gap:8px;margin-top:12px">
+                        <button class="button button-sm button-primary" type="button" data-message="Instruction approved">✓ Approve</button>
+                        <button class="button button-sm button-secondary" type="button" data-message="Edit panel opened">Edit</button>
+                        <button class="button button-sm" type="button" style="color:var(--red);border-color:var(--red)" data-message="Instruction rejected">✗ Reject</button>
+                      </div>
+                    </div>
+                    <div style="padding:14px;border:1px solid var(--line);border-radius:10px">
+                      <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px;flex-wrap:wrap">
+                        <div>
+                          <strong>Fluid restriction — 1.5L per day</strong>
+                          <p class="meta" style="margin-top:4px">Source: "restrict fluids to 1500cc/day"</p>
+                        </div>
+                        <span style="display:inline-flex;align-items:center;gap:5px;padding:3px 8px;background:var(--green-soft);color:var(--green);border-radius:999px;font-size:.74rem;font-weight:800;white-space:nowrap">● 89%</span>
+                      </div>
+                      <div style="display:flex;gap:8px;margin-top:12px">
+                        <button class="button button-sm button-primary" type="button" data-message="Instruction approved">✓ Approve</button>
+                        <button class="button button-sm button-secondary" type="button" data-message="Edit panel opened">Edit</button>
+                        <button class="button button-sm" type="button" style="color:var(--red);border-color:var(--red)" data-message="Instruction rejected">✗ Reject</button>
+                      </div>
+                    </div>
+                  </div>
+                </section>
+
+                <!-- Warning signs -->
+                <section class="card" style="margin-bottom:20px" aria-labelledby="cat-warning">
+                  <div class="section-header">
+                    <h2 id="cat-warning" style="font-size:1rem;margin:0">🚨 Warning signs <span class="subtle" style="font-weight:400;font-size:.82rem">(3 instructions)</span></h2>
+                  </div>
+                  <div style="display:grid;gap:10px">
+                    <div style="padding:14px;border:1px solid var(--line);border-radius:10px">
+                      <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px">
+                        <strong>Sudden weight gain (&gt;3 lbs in 2 days) — call doctor</strong>
+                        <span style="display:inline-flex;align-items:center;gap:5px;padding:3px 8px;background:var(--green-soft);color:var(--green);border-radius:999px;font-size:.74rem;font-weight:800;white-space:nowrap">● 97%</span>
+                      </div>
+                      <div style="display:flex;gap:8px;margin-top:12px">
+                        <button class="button button-sm button-primary" type="button" data-message="Instruction approved">✓ Approve</button>
+                        <button class="button button-sm button-secondary" type="button" data-message="Edit panel opened">Edit</button>
+                      </div>
+                    </div>
+                    <div style="padding:14px;border:1px solid var(--line);border-radius:10px">
+                      <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px">
+                        <strong>Shortness of breath at rest — go to ER</strong>
+                        <span style="display:inline-flex;align-items:center;gap:5px;padding:3px 8px;background:var(--green-soft);color:var(--green);border-radius:999px;font-size:.74rem;font-weight:800;white-space:nowrap">● 95%</span>
+                      </div>
+                      <div style="display:flex;gap:8px;margin-top:12px">
+                        <button class="button button-sm button-primary" type="button" data-message="Instruction approved">✓ Approve</button>
+                        <button class="button button-sm button-secondary" type="button" data-message="Edit panel opened">Edit</button>
+                      </div>
+                    </div>
+                    <div style="padding:14px;border:1px solid var(--line);border-radius:10px">
+                      <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px">
+                        <strong>Chest pain or tightness — call 911</strong>
+                        <span style="display:inline-flex;align-items:center;gap:5px;padding:3px 8px;background:var(--green-soft);color:var(--green);border-radius:999px;font-size:.74rem;font-weight:800;white-space:nowrap">● 99%</span>
+                      </div>
+                      <div style="display:flex;gap:8px;margin-top:12px">
+                        <button class="button button-sm button-primary" type="button" data-message="Instruction approved">✓ Approve</button>
+                        <button class="button button-sm button-secondary" type="button" data-message="Edit panel opened">Edit</button>
+                      </div>
+                    </div>
+                  </div>
+                </section>
+
+                <section class="card" style="background:var(--teal-900);color:#fff" aria-labelledby="activate-heading">
+                  <h2 id="activate-heading" style="color:#fff;margin-bottom:8px">Activate care plan</h2>
+                  <p style="color:#b8d5d4;font-size:.88rem;margin-bottom:16px">By activating, you confirm you have reviewed all instructions and that this plan is clinically appropriate for Margaret Kim. The 30-day window begins today (Jun 22 → Jul 22).</p>
+                  <div style="display:flex;gap:10px;flex-wrap:wrap">
+                    <button class="button button-primary" type="button" style="background:#fff;color:var(--teal-900);border-color:#fff" data-message="Plan activated — reminders will begin">✓ Sign &amp; Activate plan</button>
+                    <button class="button button-secondary" type="button" style="border-color:#b8d5d4;color:#b8d5d4" data-message="Plan saved as draft">Save draft</button>
+                  </div>
+                </section>
+              </div>
+
+              <aside>
+                <section class="card" style="position:sticky;top:20px" aria-labelledby="review-summary-heading">
+                  <h2 id="review-summary-heading" style="margin-bottom:14px">Review progress</h2>
+                  <div style="display:grid;gap:8px;margin-bottom:16px">
+                    <div style="display:flex;justify-content:space-between">
+                      <span class="subtle">Total instructions</span><strong>11</strong>
+                    </div>
+                    <div style="display:flex;justify-content:space-between">
+                      <span style="color:var(--green)">✓ Approved</span><strong>7</strong>
+                    </div>
+                    <div style="display:flex;justify-content:space-between">
+                      <span style="color:var(--amber)">⚠ Needs review</span><strong>2</strong>
+                    </div>
+                    <div style="display:flex;justify-content:space-between">
+                      <span style="color:var(--muted)">○ Pending</span><strong>2</strong>
+                    </div>
+                  </div>
+                  <div class="bar-track" role="progressbar" aria-valuenow="63" aria-valuemin="0" aria-valuemax="100" aria-label="Review progress">
+                    <span class="bar-fill" style="width:63%"></span>
+                  </div>
+                  <p class="meta" style="margin-top:6px">7 of 11 reviewed</p>
+
+                  <div style="margin-top:18px;padding:12px;background:var(--surface-alt);border-radius:8px">
+                    <strong style="font-size:.82rem">Patient</strong>
+                    <p class="subtle" style="font-size:.82rem;margin:4px 0 0">Margaret Kim · DOB on file</p>
+                    <p class="subtle" style="font-size:.82rem;margin:2px 0 0">Johns Hopkins · CHF discharge</p>
+                    <p class="subtle" style="font-size:.82rem;margin:2px 0 0">Risk level: <strong style="color:var(--red)">High</strong></p>
+                  </div>
+                </section>
+              </aside>
+            </div>
+          </div>
+
+          <!-- ── Transitions: Patient Plan ── -->
+          <div id="page-transitions-patient" class="web-page">
+            <div class="page-heading">
+              <div>
+                <p class="eyebrow">Transitions · Patient plan</p>
+                <h1>Beverly Thomas</h1>
+                <p class="subtle">Johns Hopkins · CHF · Discharged Jun 5 · 13 days remaining · <span style="color:var(--red);font-weight:750">High risk</span></p>
+              </div>
+              <div style="display:flex;gap:10px">
+                <button class="button button-secondary" type="button" data-message="Escalation created">⚠ Escalate</button>
+                <button class="button button-primary" type="button" data-message="Care coordinator contacted">📞 Contact coordinator</button>
+              </div>
+            </div>
+
+            <!-- 30-day timeline -->
+            <section class="card" style="margin-bottom:20px" aria-labelledby="timeline-heading">
+              <h2 id="timeline-heading" style="margin-bottom:14px">30-day window <span class="subtle" style="font-weight:400;font-size:.85rem">Jun 5 → Jul 5, 2026</span></h2>
+              <div style="position:relative;height:16px;background:var(--surface-alt);border-radius:999px;overflow:hidden;margin-bottom:8px">
+                <div style="position:absolute;top:0;left:0;height:100%;width:56.7%;background:var(--teal-700);border-radius:999px"></div>
+              </div>
+              <div style="display:flex;justify-content:space-between">
+                <span class="meta">Day 1 · Jun 5</span>
+                <span class="meta" style="color:var(--teal-700);font-weight:750">Today · Day 17 of 30</span>
+                <span class="meta">Day 30 · Jul 5</span>
+              </div>
+            </section>
+
+            <div class="dashboard-grid">
+              <div>
+                <!-- Reminders -->
+                <section class="card" style="margin-bottom:16px" aria-labelledby="reminders-heading">
+                  <div class="section-header">
+                    <h2 id="reminders-heading">Today's reminders</h2>
+                    <span class="status status-red">3 overdue</span>
+                  </div>
+                  <div style="display:grid;gap:10px">
+                    <div style="display:flex;justify-content:space-between;align-items:center;padding:12px;border:1px solid var(--red);border-radius:10px;background:var(--red-soft)">
+                      <div>
+                        <strong>💊 Metoprolol — morning dose</strong>
+                        <p class="meta" style="margin-top:3px">Scheduled 8:00 AM · No response</p>
+                      </div>
+                      <span class="status status-red">Missed</span>
+                    </div>
+                    <div style="display:flex;justify-content:space-between;align-items:center;padding:12px;border:1px solid var(--red);border-radius:10px;background:var(--red-soft)">
+                      <div>
+                        <strong>💊 Lisinopril — morning dose</strong>
+                        <p class="meta" style="margin-top:3px">Scheduled 8:00 AM · No response</p>
+                      </div>
+                      <span class="status status-red">Missed</span>
+                    </div>
+                    <div style="display:flex;justify-content:space-between;align-items:center;padding:12px;border:1px solid var(--amber);border-radius:10px;background:var(--amber-soft)">
+                      <div>
+                        <strong>📋 Symptom check-in</strong>
+                        <p class="meta" style="margin-top:3px">Scheduled 10:00 AM · Still pending</p>
+                      </div>
+                      <span class="status status-amber">Overdue</span>
+                    </div>
+                    <div style="display:flex;justify-content:space-between;align-items:center;padding:12px;border:1px solid var(--line);border-radius:10px">
+                      <div>
+                        <strong>💊 Metoprolol — evening dose</strong>
+                        <p class="meta" style="margin-top:3px">Scheduled 6:00 PM · Upcoming</p>
+                      </div>
+                      <span class="status status-blue">Scheduled</span>
+                    </div>
+                  </div>
+                </section>
+
+                <!-- Check-ins -->
+                <section class="card" style="margin-bottom:16px" aria-labelledby="checkins-heading">
+                  <div class="section-header">
+                    <h2 id="checkins-heading">Recent check-ins</h2>
+                    <button class="text-link" type="button" data-message="Full check-in history opened">View all →</button>
+                  </div>
+                  <div style="display:grid;gap:10px">
+                    <div style="padding:12px;border:1px solid var(--line);border-radius:10px">
+                      <div style="display:flex;justify-content:space-between;align-items:center;gap:8px">
+                        <strong style="font-size:.88rem">Jun 21 · 10:14 AM</strong>
+                        <span class="status status-green">Acknowledged</span>
+                      </div>
+                      <p class="meta" style="margin-top:4px">Feeling okay. No chest pain. Slight swelling in ankles noted.</p>
+                      <span style="font-size:.75rem;color:var(--amber);font-weight:750;display:block;margin-top:4px">⚠ Ankle swelling flagged for clinician review</span>
+                    </div>
+                    <div style="padding:12px;border:1px solid var(--line);border-radius:10px">
+                      <div style="display:flex;justify-content:space-between;align-items:center;gap:8px">
+                        <strong style="font-size:.88rem">Jun 20 · 9:58 AM</strong>
+                        <span class="status status-green">Acknowledged</span>
+                      </div>
+                      <p class="meta" style="margin-top:4px">All medications taken. Feeling well. No concerns.</p>
+                    </div>
+                    <div style="padding:12px;border:1px solid var(--line);border-radius:10px;opacity:.7">
+                      <div style="display:flex;justify-content:space-between;align-items:center;gap:8px">
+                        <strong style="font-size:.88rem">Jun 19 · —</strong>
+                        <span class="status status-red">Missed</span>
+                      </div>
+                      <p class="meta" style="margin-top:4px">No response. Retry SMS sent. No reply.</p>
+                    </div>
+                  </div>
+                </section>
+
+                <!-- Visit notes linked to this plan -->
+                <section class="card" aria-labelledby="visitnotes-heading">
+                  <div class="section-header">
+                    <h2 id="visitnotes-heading">Linked caregiver notes</h2>
+                    <button class="text-link" type="button" data-web-page="visit-notes">View all →</button>
+                  </div>
+                  <div style="display:grid;gap:10px">
+                    <div style="padding:12px;border:1px solid var(--line);border-radius:10px">
+                      <div style="display:flex;justify-content:space-between;align-items:center;gap:8px">
+                        <strong style="font-size:.88rem">Jun 21 · Amara Williams (CNA)</strong>
+                        <span class="status status-green">Submitted</span>
+                      </div>
+                      <p class="meta" style="margin-top:4px">Medication administered. Meal prep completed. Client alert and cooperative. Ankle edema observed — noted concerns field.</p>
+                    </div>
+                    <div style="padding:12px;border:1px solid var(--line);border-radius:10px">
+                      <div style="display:flex;justify-content:space-between;align-items:center;gap:8px">
+                        <strong style="font-size:.88rem">Jun 19 · Amara Williams (CNA)</strong>
+                        <span class="status status-green">Submitted</span>
+                      </div>
+                      <p class="meta" style="margin-top:4px">Personal care, meal prep, companionship. Client in good spirits. No concerns.</p>
+                    </div>
+                  </div>
+                </section>
+              </div>
+
+              <aside>
+                <!-- Escalation log -->
+                <section class="card" style="margin-bottom:16px;border-left:4px solid var(--red)" aria-labelledby="escalation-log-heading">
+                  <h2 id="escalation-log-heading" style="color:var(--red);margin-bottom:14px">Escalation log</h2>
+                  <div style="display:grid;gap:12px">
+                    <div style="padding:12px;background:var(--red-soft);border-radius:8px">
+                      <strong style="font-size:.84rem">Missed critical task</strong>
+                      <p class="meta" style="margin-top:3px">Jun 22 · 10:30 AM · Auto-triggered</p>
+                      <p style="font-size:.82rem;margin:6px 0 0">3 consecutive missed medication reminders. SMS and voice retry failed.</p>
+                      <span class="status status-red" style="margin-top:8px;display:inline-flex">Open — coordinator action needed</span>
+                    </div>
+                    <div style="padding:12px;background:var(--amber-soft);border-radius:8px">
+                      <strong style="font-size:.84rem">Warning symptom reported</strong>
+                      <p class="meta" style="margin-top:3px">Jun 21 · 10:16 AM · Patient check-in</p>
+                      <p style="font-size:.82rem;margin:6px 0 0">Ankle swelling reported. Coordinator reviewed. No escalation — caregiver instructed to monitor.</p>
+                      <span class="status status-green" style="margin-top:8px;display:inline-flex">Resolved</span>
+                    </div>
+                  </div>
+                </section>
+
+                <!-- Plan summary -->
+                <section class="card" aria-labelledby="plan-summary-heading">
+                  <h2 id="plan-summary-heading" style="margin-bottom:14px">Plan summary</h2>
+                  <div style="display:grid;gap:8px;font-size:.88rem">
+                    <div style="display:flex;justify-content:space-between"><span class="subtle">Hospital</span><span>Johns Hopkins</span></div>
+                    <div style="display:flex;justify-content:space-between"><span class="subtle">Diagnosis</span><span>CHF (HF-rEF)</span></div>
+                    <div style="display:flex;justify-content:space-between"><span class="subtle">Risk level</span><span style="color:var(--red);font-weight:750">High</span></div>
+                    <div style="display:flex;justify-content:space-between"><span class="subtle">Window</span><span>Jun 5 – Jul 5</span></div>
+                    <div style="display:flex;justify-content:space-between"><span class="subtle">Instructions</span><span>11 active</span></div>
+                    <div style="display:flex;justify-content:space-between"><span class="subtle">Caregiver</span><span>Amara Williams</span></div>
+                    <div style="display:flex;justify-content:space-between"><span class="subtle">Coordinator</span><span>Tobi Kareem</span></div>
+                    <div style="display:flex;justify-content:space-between"><span class="subtle">Verified by</span><span>Dr. S. Park (RN)</span></div>
+                  </div>
+                </section>
+              </aside>
+            </div>
+          </div>
+
         </div><!-- /desktop-main -->
       </div><!-- /web-app -->
     </section>
@@ -1540,6 +2205,116 @@
               </div>
             </div>
 
+            <!-- Mobile: Recovery (Transitions) screen -->
+            <div id="mobile-transitions" class="mobile-screen" role="region" aria-label="Recovery plan screen">
+              <header class="mobile-header-flat">
+                <span style="font-size:1.1rem" aria-hidden="true">⟳</span>
+                <h1>Recovery Plan</h1>
+              </header>
+              <div class="mobile-content-flat">
+
+                <!-- Patient context banner -->
+                <div style="background:var(--teal-700);color:#fff;padding:14px 16px;border-radius:0">
+                  <div style="display:flex;justify-content:space-between;align-items:center">
+                    <div>
+                      <strong style="display:block">Beverly Thomas</strong>
+                      <span style="font-size:.78rem;color:var(--teal-100)">CHF · Johns Hopkins · Jun 5 discharge</span>
+                    </div>
+                    <span style="background:var(--red);color:#fff;padding:3px 8px;border-radius:999px;font-size:.72rem;font-weight:800">High risk</span>
+                  </div>
+                  <div style="margin-top:10px">
+                    <div style="display:flex;justify-content:space-between;font-size:.75rem;color:var(--teal-100);margin-bottom:4px">
+                      <span>Day 17 of 30</span><span>13 days remaining</span>
+                    </div>
+                    <div style="height:6px;background:rgba(255,255,255,0.25);border-radius:999px;overflow:hidden">
+                      <div style="height:100%;width:56.7%;background:#fff;border-radius:999px"></div>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Today's tasks -->
+                <div style="padding:16px 16px 0">
+                  <strong style="font-size:.8rem;color:var(--muted);text-transform:uppercase;letter-spacing:.08em;display:block;margin-bottom:12px">Today's tasks</strong>
+
+                  <div style="display:grid;gap:10px">
+                    <!-- Missed medication -->
+                    <div style="padding:14px;border:1px solid var(--red);border-radius:12px;background:var(--red-soft)">
+                      <div style="display:flex;justify-content:space-between;align-items:center;gap:8px">
+                        <span style="font-size:1.2rem">💊</span>
+                        <div style="flex:1">
+                          <strong style="font-size:.9rem;display:block">Metoprolol 25mg</strong>
+                          <span class="meta">Morning dose · Scheduled 8:00 AM</span>
+                        </div>
+                        <span class="status status-red" style="flex-shrink:0">Missed</span>
+                      </div>
+                      <button class="button button-sm" type="button" style="width:100%;margin-top:10px;color:var(--red);border-color:var(--red)" data-message="Late acknowledgement recorded">Mark as taken (late)</button>
+                    </div>
+
+                    <!-- Missed medication 2 -->
+                    <div style="padding:14px;border:1px solid var(--red);border-radius:12px;background:var(--red-soft)">
+                      <div style="display:flex;justify-content:space-between;align-items:center;gap:8px">
+                        <span style="font-size:1.2rem">💊</span>
+                        <div style="flex:1">
+                          <strong style="font-size:.9rem;display:block">Lisinopril 10mg</strong>
+                          <span class="meta">Morning dose · Scheduled 8:00 AM</span>
+                        </div>
+                        <span class="status status-red" style="flex-shrink:0">Missed</span>
+                      </div>
+                      <button class="button button-sm" type="button" style="width:100%;margin-top:10px;color:var(--red);border-color:var(--red)" data-message="Late acknowledgement recorded">Mark as taken (late)</button>
+                    </div>
+
+                    <!-- Pending check-in -->
+                    <div style="padding:14px;border:1px solid var(--amber);border-radius:12px;background:var(--amber-soft)">
+                      <div style="display:flex;justify-content:space-between;align-items:center;gap:8px">
+                        <span style="font-size:1.2rem">📋</span>
+                        <div style="flex:1">
+                          <strong style="font-size:.9rem;display:block">Symptom check-in</strong>
+                          <span class="meta">How are you feeling today?</span>
+                        </div>
+                        <span class="status status-amber" style="flex-shrink:0">Due</span>
+                      </div>
+                      <button class="button button-sm button-primary" type="button" style="width:100%;margin-top:10px" data-message="Check-in started">Start check-in</button>
+                    </div>
+
+                    <!-- Evening upcoming -->
+                    <div style="padding:14px;border:1px solid var(--line);border-radius:12px">
+                      <div style="display:flex;justify-content:space-between;align-items:center;gap:8px">
+                        <span style="font-size:1.2rem">💊</span>
+                        <div style="flex:1">
+                          <strong style="font-size:.9rem;display:block">Metoprolol 25mg</strong>
+                          <span class="meta">Evening dose · Scheduled 6:00 PM</span>
+                        </div>
+                        <span class="status status-blue" style="flex-shrink:0">Upcoming</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Warning signs -->
+                <div style="padding:16px">
+                  <strong style="font-size:.8rem;color:var(--muted);text-transform:uppercase;letter-spacing:.08em;display:block;margin-bottom:10px">Warning signs to watch</strong>
+                  <div style="padding:14px;border:1px solid var(--line);border-radius:12px;background:var(--surface)">
+                    <ul style="margin:0;padding:0 0 0 18px;display:grid;gap:8px;font-size:.84rem">
+                      <li><strong>Weight gain &gt;3 lbs in 2 days</strong> — call doctor</li>
+                      <li><strong>Shortness of breath at rest</strong> — go to ER</li>
+                      <li><strong>Chest pain or tightness</strong> — call 911</li>
+                      <li><strong>Ankle swelling getting worse</strong> — call doctor</li>
+                    </ul>
+                  </div>
+                </div>
+
+                <!-- Flag concern -->
+                <div style="padding:0 16px 24px">
+                  <button class="button button-sm" type="button"
+                    style="width:100%;background:var(--orange-soft);color:var(--orange);border-color:var(--orange);min-height:52px;font-size:.95rem;font-weight:800"
+                    data-message="Caregiver alert created — coordinator notified">
+                    ⚠ Flag a concern to coordinator
+                  </button>
+                  <p class="meta" style="text-align:center;margin-top:8px">Creates a CaregiverAlert escalation. Coordinator is notified immediately.</p>
+                </div>
+              </div>
+            </div>
+
             <!-- Mobile bottom nav (shared) -->
             <nav class="mobile-nav" aria-label="Mobile navigation">
               <button type="button" data-mobile-screen="mobile-home" aria-current="page">
@@ -1553,6 +2328,9 @@
               </button>
               <button type="button" data-mobile-screen="mobile-profile">
                 <span aria-hidden="true">♙</span><span>Profile</span>
+              </button>
+              <button type="button" data-mobile-screen="mobile-transitions">
+                <span aria-hidden="true">⟳</span><span>Recovery</span>
               </button>
             </nav>
 

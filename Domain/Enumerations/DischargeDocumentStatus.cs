@@ -1,7 +1,7 @@
 namespace CarePath.Domain.Enumerations;
 
 /// <summary>
-/// Tracks the processing lifecycle of a <see cref="Entities.Transitions.DischargeDocument"/>.
+/// Tracks the processing lifecycle of a <see cref="CarePath.Domain.Entities.Transitions.DischargeDocument"/>.
 /// </summary>
 public enum DischargeDocumentStatus
 {

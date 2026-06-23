@@ -1,7 +1,7 @@
 namespace CarePath.Domain.Enumerations;
 
 /// <summary>
-/// Severity level of a <see cref="Entities.Transitions.TransitionEscalation"/>.
+/// Severity level of a <see cref="CarePath.Domain.Entities.Transitions.TransitionEscalation"/>.
 /// Determines what action the care coordinator takes.
 /// The system never escalates autonomously beyond creating the record and alerting the coordinator.
 /// All human contact decisions are made by the coordinator.

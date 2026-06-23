@@ -1,0 +1,56 @@
+# Safe, repeatable inspection and verification commands.
+prefix_rule(
+    pattern = ["dotnet", "--version"],
+    decision = "allow",
+    justification = "Reading the installed .NET SDK version is non-mutating.",
+)
+
+prefix_rule(
+    pattern = ["dotnet", "build"],
+    decision = "allow",
+    justification = "Building is required to verify CarePath changes.",
+)
+
+prefix_rule(
+    pattern = ["dotnet", "test"],
+    decision = "allow",
+    justification = "Running tests is required to verify CarePath changes.",
+)
+
+prefix_rule(
+    pattern = ["git", "status"],
+    decision = "allow",
+    justification = "Git status is read-only.",
+)
+
+prefix_rule(
+    pattern = ["git", "diff"],
+    decision = "allow",
+    justification = "Git diff is read-only.",
+)
+
+prefix_rule(
+    pattern = ["git", "log"],
+    decision = "allow",
+    justification = "Git log is read-only.",
+)
+
+# These operations can start services or mutate a database/schema and should
+# always remain visible to the user.
+prefix_rule(
+    pattern = ["dotnet", "run"],
+    decision = "prompt",
+    justification = "Starting the API can bind ports and access configured external services.",
+)
+
+prefix_rule(
+    pattern = ["dotnet", "ef", "migrations", ["add", "remove"]],
+    decision = "prompt",
+    justification = "Generating or removing migrations changes repository state.",
+)
+
+prefix_rule(
+    pattern = ["dotnet", "ef", "database", "update"],
+    decision = "prompt",
+    justification = "Database updates mutate external state and require explicit approval.",
+)

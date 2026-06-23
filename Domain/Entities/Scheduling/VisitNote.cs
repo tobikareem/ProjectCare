@@ -105,7 +105,7 @@ public class VisitNote : BaseEntity
     // Transitions Integration
 
     /// <summary>
-    /// Optional link to an active <see cref="Transitions.TransitionPlan"/>.
+    /// Optional link to an active <see cref="CarePath.Domain.Entities.Transitions.TransitionPlan"/>.
     /// When set, this VisitNote's observations contribute to the patient's 30-day
     /// post-discharge adherence monitoring. Set by the Application layer when the
     /// caregiver's client has an active transition plan at the time of the visit.

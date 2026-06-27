@@ -1,6 +1,6 @@
 # CarePath Health — Project Progress
 
-Last updated: 2026-06-22
+Last updated: 2026-06-27
 
 ---
 
@@ -15,44 +15,64 @@ Last updated: 2026-06-22
 
 ---
 
-## CP-02 — CarePath Transitions
+## CP-02 — Infrastructure / EF Core
 
-**Status**: Approved 2026-06-22 — implementation in progress
+**Status**: Sprint 2 implementation in progress
 
-**What it is**: 30-day post-discharge care management. Intake → Verify → Guide → Escalate.
+**What it is**: EF Core persistence, SQL Server, Identity schema foundation, repositories, UnitOfWork, audit field population, soft-delete filters, UTC conversion, migrations, and synthetic seed strategy.
+
+**Completed in current Sprint 2 slice**:
+- `Infrastructure` and `Infrastructure.Tests` projects scaffolded and added to `CarePath.sln`.
+- EF Core, SQL Server, Identity EF, EF tools/design, and EF InMemory package versions added.
+- `CarePathDbContext` created for CP-01 entities only, with centralized UTC conversion and soft-delete conventions.
+- `ApplicationUser` Identity schema foundation added and linked to Domain `User`.
+- UTC converters, audit interceptor, DbContext smoke tests, soft-delete filter tests, and audit/converter tests added.
+
+**Still remaining before migration**:
+- Explicit CP-01 entity configurations with string lengths, indexes, decimal precision, ignored computed properties, and PHI-safe delete behaviors.
+- Repository, UnitOfWork, DI/WebApi registration, migration, migration review, local database update, synthetic seed strategy, and full Infrastructure tests.
+- CP-03 Transitions persistence is deferred until explicit Transitions configurations are in scope; do not map Transitions DbSets in CP-02 Phase 1.
+
+**Spec files**:
+- `_specs/01-requirements/cp-02-infrastructure-ef-core.md`
+- `_specs/02-design/cp-02-infrastructure-ef-core.md`
+- `_specs/03-tasks/cp-02-infrastructure-ef-core.md`
+
+**Next action**: Implement CP-01 entity configurations and delete-behavior metadata tests before generating any migration.
+
+---
+
+## CP-03 — CarePath Transitions
+
+**Status**: Approved for Domain slice; backend workflow planned for Sprint 5 after Infrastructure/Application prerequisites
+
+**What it is**: 30-day post-discharge care management. Intake -> Verify -> Guide -> Escalate.
 
 **6 new entities** (`Entities/Transitions/`):
 - `DischargeDocument` — source upload
-- `TransitionPlan` — clinician-verified plan (status: Draft → PendingVerification → Active → Completed)
+- `TransitionPlan` — clinician-verified plan (status: Draft -> PendingVerification -> Active -> Completed)
 - `TransitionInstruction` — extracted item with AI confidence score
 - `TransitionReminder` — scheduled delivery (App / SMS / Voice via Twilio)
 - `TransitionCheckIn` — patient symptom response
 - `TransitionEscalation` — coordinator alert
 
-**11 new enumerations** — see CLAUDE.md for full list
+**11 new enumerations** — see AGENTS.md / CLAUDE.md for full list
 
-**Existing change**: `VisitNote` gains optional `TransitionPlanId` FK
+**Existing change**: `VisitNote` has optional `TransitionPlanId` FK
 
 **Spec files**:
-- `_specs/01-requirements/cp-02-transitions.md`
-- `_specs/02-design/cp-02-transitions.md`
-- `_specs/03-tasks/cp-02-transitions.md` (TASK-020 through TASK-037)
-
-**MVP phases**:
-- Month 1: Domain entities + enumerations (TASK-020–024)
-- Month 1–2: Infrastructure — EF Core, Twilio, AI extraction interface (TASK-025–028)
-- Month 2: Application commands + queries (TASK-029–032)
-- Month 2–3: WebApi controller (TASK-033)
-- Month 4+: FHIR import, multilingual, outcome reporting (TASK-034–037)
+- `_specs/01-requirements/cp-03-transitions.md`
+- `_specs/02-design/cp-03-transitions.md`
+- `_specs/03-tasks/cp-03-transitions.md` (TASK-020 through TASK-037)
 
 **Domain layer complete** (2026-06-22):
-- TASK-020 ✅ — 11 enumerations added to `Domain/Enumerations/`
-- TASK-021 ✅ — 6 entities created in `Domain/Entities/Transitions/`
-- TASK-022 ✅ — `VisitNote.TransitionPlanId` added
-- TASK-023 ✅ — 3 repository interfaces added to `Domain/Interfaces/Repositories/`
-- TASK-024 ✅ — 3 test files, 24 unit tests in `Domain.Tests/Entities/Transitions/`
+- TASK-020 complete — 11 enumerations added to `Domain/Enumerations/`
+- TASK-021 complete — 6 entities created in `Domain/Entities/Transitions/`
+- TASK-022 complete — `VisitNote.TransitionPlanId` added
+- TASK-023 complete — 3 repository interfaces added to `Domain/Interfaces/Repositories/`
+- TASK-024 complete — 3 test files, 24 unit tests in `Domain.Tests/Entities/Transitions/`
 
-**Next action**: Run `dotnet build CarePath.sln` and `dotnet test Domain.Tests` to verify. Then begin TASK-025 (EF Core DbContext additions) — Infrastructure layer.
+**Next action**: Do not continue CP-03 backend work until CP-02 Infrastructure and Sprint 3 Application/contracts are in place.
 
 ---
 

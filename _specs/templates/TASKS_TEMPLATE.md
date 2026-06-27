@@ -232,7 +232,7 @@ Each task should follow this structure:
 - **Success Criteria**:
   - `DbSet<CheckInRecord>` added to `CarePathDbContext`
 - **Files**:
-  - MODIFY: `src/CarePath.Infrastructure/Persistence/CarePathDbContext.cs`
+  - MODIFY: `Infrastructure/Persistence/CarePathDbContext.cs`
 
 ---
 
@@ -248,7 +248,7 @@ Each task should follow this structure:
   - Foreign keys: ShiftId, CaregiverId (with cascade delete)
   - Indexes: ShiftId, CheckInTime, CaregiverId
 - **Files**:
-  - CREATE: `src/CarePath.Infrastructure/Persistence/Configurations/CheckInRecordConfiguration.cs`
+  - CREATE: `Infrastructure/Persistence/Configurations/CheckInRecordConfiguration.cs`
 
 ---
 
@@ -261,7 +261,7 @@ Each task should follow this structure:
   - Shift entity configuration updated with new columns
   - GPS coordinates configured as owned entities (or separate columns)
 - **Files**:
-  - MODIFY: `src/CarePath.Infrastructure/Persistence/Configurations/ShiftConfiguration.cs`
+  - MODIFY: `Infrastructure/Persistence/Configurations/ShiftConfiguration.cs`
 
 ---
 
@@ -279,11 +279,11 @@ Each task should follow this structure:
     - Updated table: `Shifts` (new columns)
     - Indexes created
 - **Files**:
-  - CREATE: `src/CarePath.Infrastructure/Persistence/Migrations/YYYYMMDDHHMMSS_AddGpsCheckInTracking.cs`
+  - CREATE: `Infrastructure/Persistence/Migrations/YYYYMMDDHHMMSS_AddGpsCheckInTracking.cs`
 - **Commands**:
   ```bash
-  dotnet ef migrations add AddGpsCheckInTracking --project src/CarePath.Infrastructure --startup-project src/CarePath.Api
-  dotnet ef database update --project src/CarePath.Api
+  dotnet ef migrations add AddGpsCheckInTracking --project Infrastructure --startup-project WebApi
+  dotnet ef database update --startup-project WebApi
   ```
 
 ---
@@ -312,7 +312,7 @@ Each task should follow this structure:
   - Query optimization (no N+1 queries)
   - Integration tests pass
 - **Files**:
-  - MODIFY: `src/CarePath.Infrastructure/Persistence/Repositories/ShiftRepository.cs`
+  - MODIFY: `Infrastructure/Persistence/Repositories/ShiftRepository.cs`
   - CREATE: `tests/CarePath.Infrastructure.Tests/Repositories/ShiftRepositoryTests.cs`
 
 ---
@@ -329,7 +329,7 @@ Each task should follow this structure:
   - Fetches expected location from Client address in database
   - Unit tests pass (mock repository)
 - **Files**:
-  - CREATE: `src/CarePath.Infrastructure/Services/Geolocation/GpsValidator.cs`
+  - CREATE: `Infrastructure/Services/Geolocation/GpsValidator.cs`
   - CREATE: `tests/CarePath.Infrastructure.Tests/Services/GpsValidatorTests.cs`
 
 ---
@@ -347,7 +347,7 @@ Each task should follow this structure:
   - Returns `GpsCoordinates?` (null if unavailable)
   - Unit tests pass (mock Geolocation API)
 - **Files**:
-  - CREATE: `src/CarePath.Infrastructure/Services/Geolocation/GpsService.cs`
+  - CREATE: `Infrastructure/Services/Geolocation/GpsService.cs`
   - CREATE: `src/CarePath.Domain/Interfaces/Services/IGpsService.cs`
   - CREATE: `tests/CarePath.Infrastructure.Tests/Services/GpsServiceTests.cs`
 
@@ -362,14 +362,14 @@ Each task should follow this structure:
   - Services registered in `DependencyInjection.cs`
   - Lifetimes: Scoped for `GpsValidator`, Transient for `GpsService`
 - **Files**:
-  - MODIFY: `src/CarePath.Infrastructure/DependencyInjection.cs`
+  - MODIFY: `Infrastructure/DependencyInjection.cs`
 
 ---
 
 ## Phase 4: API Layer
 
 ### TASK-021: Create ShiftsController.CheckIn Endpoint
-- **Layer**: CarePath.Api
+- **Layer**: WebApi
 - **Dependencies**: TASK-009, TASK-010
 - **Estimate**: 2 hours
 - **Priority**: Critical
@@ -384,13 +384,13 @@ Each task should follow this structure:
   - Returns `403 Forbidden` if shift doesn't belong to caregiver
   - Integration tests pass
 - **Files**:
-  - MODIFY: `src/CarePath.Api/Controllers/ShiftsController.cs`
-  - CREATE: `tests/CarePath.Api.Tests/Controllers/ShiftsControllerCheckInTests.cs`
+  - MODIFY: `WebApi/Controllers/ShiftsController.cs`
+  - CREATE: `tests/WebApi.Tests/Controllers/ShiftsControllerCheckInTests.cs`
 
 ---
 
 ### TASK-022: Create ShiftsController.GetActiveShift Endpoint
-- **Layer**: CarePath.Api
+- **Layer**: WebApi
 - **Dependencies**: TASK-009
 - **Estimate**: 1 hour
 - **Priority**: High
@@ -400,13 +400,13 @@ Each task should follow this structure:
   - Returns `404` if no active shift
   - Integration tests pass
 - **Files**:
-  - MODIFY: `src/CarePath.Api/Controllers/ShiftsController.cs`
-  - CREATE: `tests/CarePath.Api.Tests/Controllers/ShiftsControllerGetActiveTests.cs`
+  - MODIFY: `WebApi/Controllers/ShiftsController.cs`
+  - CREATE: `tests/WebApi.Tests/Controllers/ShiftsControllerGetActiveTests.cs`
 
 ---
 
 ### TASK-023: Create ShiftHub SignalR Hub
-- **Layer**: CarePath.Api
+- **Layer**: WebApi
 - **Dependencies**: None
 - **Estimate**: 2 hours
 - **Priority**: Medium
@@ -418,8 +418,8 @@ Each task should follow this structure:
   - Hub registered in `Program.cs`
   - SignalR endpoint mapped: `/hubs/shifts`
 - **Files**:
-  - CREATE: `src/CarePath.Api/Hubs/ShiftHub.cs`
-  - MODIFY: `src/CarePath.Api/Program.cs`
+  - CREATE: `WebApi/Hubs/ShiftHub.cs`
+  - MODIFY: `WebApi/Program.cs`
 
 ---
 
@@ -440,7 +440,7 @@ Each task should follow this structure:
 ---
 
 ### TASK-025: Add Swagger Documentation
-- **Layer**: CarePath.Api
+- **Layer**: WebApi
 - **Dependencies**: TASK-021, TASK-022
 - **Estimate**: 0.5 hours
 - **Priority**: Low
@@ -449,7 +449,7 @@ Each task should follow this structure:
   - Swagger UI shows check-in endpoint with request/response examples
   - Response types documented: 200, 400, 404, 403
 - **Files**:
-  - MODIFY: `src/CarePath.Api/Controllers/ShiftsController.cs`
+  - MODIFY: `WebApi/Controllers/ShiftsController.cs`
 
 ---
 
@@ -656,7 +656,7 @@ Each task should follow this structure:
   - Tests use in-memory database or test container
   - All tests pass
 - **Files**:
-  - Multiple test files in `tests/CarePath.Api.Tests/`
+  - Multiple test files in `tests/WebApi.Tests/`
 
 ---
 
@@ -714,10 +714,10 @@ Each task should follow this structure:
 - **Commands**:
   ```bash
   # Staging
-  dotnet ef database update --project src/CarePath.Infrastructure --startup-project src/CarePath.Api --connection "StagingConnectionString"
+  dotnet ef database update --project Infrastructure --startup-project WebApi --connection "StagingConnectionString"
 
   # Production
-  dotnet ef database update --project src/CarePath.Infrastructure --startup-project src/CarePath.Api --connection "ProductionConnectionString"
+  dotnet ef database update --project Infrastructure --startup-project WebApi --connection "ProductionConnectionString"
   ```
 
 ---
@@ -813,7 +813,7 @@ Each task should follow this structure:
     - Alert if API response time > 2 seconds
   - Dashboard created in Azure Portal
 - **Files**:
-  - MODIFY: `src/CarePath.Api/Program.cs` (add telemetry)
+  - MODIFY: `WebApi/Program.cs` (add telemetry)
 
 ---
 

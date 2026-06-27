@@ -1,12 +1,12 @@
-# CP-02 — CarePath Transitions: Tasks
+# CP-03 — CarePath Transitions: Tasks
 
-**Status**: Approved  
+**Status**: Approved for Domain slice; backend tasks deferred  
 **Created**: 2026-06-22  
-**Depends on**: CP-01 (complete)  
-**Design spec**: `_specs/02-design/cp-02-transitions.md`  
-**Requirements spec**: `_specs/01-requirements/cp-02-transitions.md`
+**Depends on**: CP-01 (complete) for TASK-020 through TASK-024; CP-02 Infrastructure and Sprint 3 Application/contracts for TASK-025 and later  
+**Design spec**: `_specs/02-design/cp-03-transitions.md`  
+**Requirements spec**: `_specs/01-requirements/cp-03-transitions.md`
 
-> All specs must reach **Approved** status before implementation begins.
+> TASK-020 through TASK-024 are approved and complete. TASK-025 and later must not start until CP-02 Infrastructure and Sprint 3 Application/contracts are complete and this tasks spec is re-approved for backend implementation.
 > Tasks are sequenced by dependency. Never skip ahead.
 
 ---
@@ -43,7 +43,7 @@
 - `CarePath.Domain/Entities/Transitions/TransitionCheckIn.cs`
 - `CarePath.Domain/Entities/Transitions/TransitionEscalation.cs`
 
-**Rules**: All entities inherit `BaseEntity`. Explicit `using` directives. XML docs on all public members. Computed properties must be pure C# (no EF involvement). Follow designs in `_specs/02-design/cp-02-transitions.md` exactly.
+**Rules**: All entities inherit `BaseEntity`. Explicit `using` directives. XML docs on all public members. Computed properties must be pure C# (no EF involvement). Follow designs in `_specs/02-design/cp-03-transitions.md` exactly.
 
 **Acceptance**: `dotnet build` passes zero warnings. Entities compile with correct namespace and base class.
 
@@ -96,11 +96,13 @@
 
 ---
 
-## Phase 2 — Infrastructure Layer (MVP Core — Month 1–2)
+## Phase 2 - Infrastructure Layer (Deferred until CP-02 Infrastructure is complete)
+
+> Backend tasks below are planning placeholders. They are not approved for implementation until CP-02 Infrastructure and Sprint 3 Application/contracts are complete.
 
 ### TASK-025 — EF Core DbContext additions
 **Estimate**: 1.5 hours  
-**Depends on**: TASK-021  
+**Depends on**: TASK-021, CP-02 Infrastructure complete  
 **Files**:
 - `CarePath.Infrastructure/Persistence/AppDbContext.cs` (add DbSets)
 - `CarePath.Infrastructure/Persistence/Configurations/Transitions/` (6 entity configuration files)
@@ -118,11 +120,11 @@
 
 ### TASK-026 — Implement Transitions repositories
 **Estimate**: 2 hours  
-**Depends on**: TASK-023, TASK-025  
+**Depends on**: TASK-023, TASK-025, CP-02 Infrastructure complete  
 **Files**:
-- `CarePath.Infrastructure/Repositories/Transitions/DischargeDocumentRepository.cs`
-- `CarePath.Infrastructure/Repositories/Transitions/TransitionPlanRepository.cs`
-- `CarePath.Infrastructure/Repositories/Transitions/TransitionReminderRepository.cs`
+- `CarePath.Infrastructure/Persistence/Repositories/Transitions/DischargeDocumentRepository.cs`
+- `CarePath.Infrastructure/Persistence/Repositories/Transitions/TransitionPlanRepository.cs`
+- `CarePath.Infrastructure/Persistence/Repositories/Transitions/TransitionReminderRepository.cs`
 
 **Notes**: `GetAllActiveAsync()` must filter `Status == Active AND TransitionWindowEnd >= DateTime.UtcNow`. Add paging via `GetPagedAsync` pattern from the Infrastructure spec.
 
@@ -130,7 +132,7 @@
 
 ### TASK-027 — Define Application service interfaces for extraction and delivery
 **Estimate**: 1 hour  
-**Depends on**: TASK-021  
+**Depends on**: TASK-021, Sprint 3 Application/contracts complete  
 **Files**:
 - `CarePath.Application/Transitions/Interfaces/IDischargeExtractionService.cs`
 - `CarePath.Application/Transitions/Interfaces/IReminderDeliveryService.cs`
@@ -229,3 +231,9 @@
 - Wrap Azure OpenAI GPT-4o or OpenAI API
 - Structured output → `ExtractedInstructionDto[]`
 - Include confidence scoring in the prompt schema
+
+## Global Compliance Acceptance
+
+- [ ] Every Transitions API route using {id} enforces object-level authorization and has tests for denied cross-client/cross-tenant access to prevent IDOR.
+- [ ] Every Transitions PHI read/write/update/delete is audit logged with user, timestamp, action, entity type, and entity id, without PHI values.
+- [ ] DischargeDocument.RawContent, TransitionInstruction.SourceText, patient symptoms, names, DOB, addresses, and contact details never appear in logs, URLs, exception messages, browser console output, SMS/voice provider logs, or AI/OCR provider logs.

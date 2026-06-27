@@ -1,4 +1,4 @@
-# CP-02 — CarePath Transitions: Requirements
+# CP-03 — CarePath Transitions: Requirements
 
 **Status**: Approved  
 **Author**: CarePath Health  
@@ -172,3 +172,9 @@ Feature: Discharge Document Intake
     Then ContainsWarningSymptom is set to true
     And an escalation is triggered immediately regardless of risk level
 ```
+
+## Cross-Sprint Compliance Gates
+
+- Every Transitions endpoint that accepts an entity id must enforce object-level authorization to prevent IDOR.
+- Every PHI read, write, update, and delete must be audit logged without PHI values.
+- DischargeDocument.RawContent and TransitionInstruction.SourceText must never appear in logs, URLs, exception messages, or third-party provider logs.

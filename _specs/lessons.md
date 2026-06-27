@@ -17,6 +17,7 @@ This file captures recurring mistakes, corrections, and hard-won patterns discov
 
 ## EF Core / Infrastructure
 
+- **Do not map CP-03 Transitions DbSets during CP-02 Phase 1** - Transitions entities contain PHI and need explicit configurations before entering the EF model. Mapping them early lets EF conventions create unbounded PHI columns and cascade-delete FKs. Add Transitions DbSets only with their CP-03 backend configurations.
 - **`TransitionPlan.TransitionWindowEnd`** must be set in the Application layer before save (`DischargeDate.AddDays(30)` in UTC). Never compute it in the entity constructor — that would make it hard to test without mocking DateTime.
 - **`TransitionCheckIn.ResponsesJson`** is PHI stored as `nvarchar(max)`. Configure it that way in EF. Never serialize it into a log string.
 - **PHI cascade deletes**: ALL 6 PHI entities (Client, CarePlan, Shift, VisitNote, VisitPhoto, CaregiverCertification) must use `DeleteBehavior.Restrict` — no exceptions. The subagent initially set CaregiverCertification and VisitPhoto to Cascade because they're "dependent" entities, but HIPAA overrides that logic.
@@ -36,8 +37,9 @@ This file captures recurring mistakes, corrections, and hard-won patterns discov
 
 ## Spec Workflow
 
-- **CP-02 Transitions specs are in Draft status as of 2026-06-22** — they must be reviewed and moved to Approved before TASK-020 begins. Do not start implementation with Draft specs.
-- **When a task spec says TASK-XXX, the XX number continues from the last CP-01 task** — CP-01 ended at TASK-019a. CP-02 starts at TASK-020.
+- **User corrections from code review must update task status immediately** - If review shows a task was over-marked complete or scope was wrong, correct the board/spec in the same turn before continuing implementation.
+- **Spec numbering baseline**: CP-02 is Infrastructure / EF Core. CP-03 is CarePath Transitions. Transitions Domain work already exists; backend work waits for Infrastructure and Application foundations.
+- **Task numbers are historical identifiers, not CP identifiers** — completed Transitions Domain tasks remain TASK-020 through TASK-024; CP-02 Infrastructure tasks remain TASK-040+. Do not renumber completed tasks just to match CP numbers.
 - **Design spec is source of truth**: When tasks spec or CLAUDE.md conflicts with the approved design spec, the design spec wins. Update the stale document, not the design spec.
 - **User corrections are authoritative**: When the user edits a spec directly (e.g., changing file paths, correcting role names), those edits override any prior assumptions. Check the system-reminder for modifications.
 
@@ -55,10 +57,10 @@ This file captures recurring mistakes, corrections, and hard-won patterns discov
 - Updated wireframe navigation (`carepath-wireframe.html`) with working page/screen switching
 - Scoped CarePath Transitions feature (30-day post-discharge care management)
 - Created `CarePath_Transitions_Feature_Presentation_v2.pptx` — 10 slides, full B2B business case, competitor landscape, solution, MVP path
-- Created three spec files for CP-02 (requirements, design, tasks)
+- Created three spec files for CP-03 Transitions (requirements, design, tasks); originally CP-02 before Sprint 1 renumbering
 - Updated CLAUDE.md with full Transitions domain model and new entities
 
 **What's next**:
-- Get CP-02 specs approved (review with Tobi)
-- Begin TASK-020 (enumerations) when specs reach Approved status
-- Application and Infrastructure layers (CP-01 work) are the prerequisite for shipping CP-02
+- CP-03 Transitions specs are approved for the Domain slice; backend work is scheduled after Infrastructure/Application prerequisites
+- TASK-020 through TASK-024 for CP-03 Transitions Domain are complete
+- Infrastructure (CP-02) and Application/contracts are prerequisites for shipping CP-03 Transitions backend

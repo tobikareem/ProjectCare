@@ -13,4 +13,12 @@
   <ItemGroup Label="WebApi">
     <PackageVersion Include="Microsoft.AspNetCore.OpenApi" Version="9.0.13" />
   </ItemGroup>
+  <ItemGroup Label="Infrastructure">
+    <PackageVersion Include="Microsoft.AspNetCore.Identity.EntityFrameworkCore" Version="9.0.13" />
+    <PackageVersion Include="Microsoft.EntityFrameworkCore" Version="9.0.13" />
+    <PackageVersion Include="Microsoft.EntityFrameworkCore.Design" Version="9.0.13" />
+    <PackageVersion Include="Microsoft.EntityFrameworkCore.InMemory" Version="9.0.13" />
+    <PackageVersion Include="Microsoft.EntityFrameworkCore.SqlServer" Version="9.0.13" />
+    <PackageVersion Include="Microsoft.EntityFrameworkCore.Tools" Version="9.0.13" />
+  </ItemGroup>
 </Project>

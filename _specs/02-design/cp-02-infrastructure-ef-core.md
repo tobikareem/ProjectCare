@@ -105,7 +105,7 @@ This spec emphasizes **HIPAA compliance**, **soft-delete enforcement**, **UTC da
 ## 2. Project Structure
 
 ```
-src/CarePath.Infrastructure/
+Infrastructure/
 ├── Persistence/
 │   ├── CarePathDbContext.cs                          # DbContext with all DbSets + Identity
 │   ├── Configurations/
@@ -145,7 +145,7 @@ src/CarePath.Infrastructure/
 
 ## 3. CarePathDbContext
 
-**File**: `src/CarePath.Infrastructure/Persistence/CarePathDbContext.cs`
+**File**: `Infrastructure/Persistence/CarePathDbContext.cs`
 
 ```csharp
 using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
@@ -258,9 +258,25 @@ public class CarePathDbContext : IdentityDbContext<ApplicationUser, IdentityRole
 
 All configurations use Fluent API (no data annotations). Each configuration demonstrates full setup for its entity.
 
+> **CONVENTION (authoritative) — UTC converters and soft-delete filters are applied centrally.**
+> `CarePathDbContext.OnModelCreating` runs `ApplyBaseEntityConventions`, which iterates every
+> `BaseEntity`-derived type after `ApplyConfigurationsFromAssembly` and applies:
+> 1. the soft-delete query filter (`IsDeleted == false`) to the entity, and
+> 2. the UTC `DateTime`/`DateTime?` value converters to **every** `DateTime` property.
+>
+> Therefore individual `IEntityTypeConfiguration<T>` implementations **MUST NOT** call
+> `HasQueryFilter(x => !x.IsDeleted)` or per-property `.HasConversion(new UtcDateTimeConverter())` /
+> `.HasConversion(new NullableUtcDateTimeConverter())`. In EF Core 9 a second `HasQueryFilter` or
+> `SetValueConverter` call silently **replaces** the central one, so leaving these in a per-entity
+> config is a debugging trap, not a redundancy. The `.HasConversion(...)` and `HasQueryFilter(...)`
+> lines shown in the §4.3–§4.13 examples below are **superseded by this convention** and retained
+> only to illustrate which fields are involved — do not copy them into the actual configurations.
+> Per-entity configs are still responsible for: table name, keys, property requiredness/lengths,
+> decimal precision, indexes, relationships/delete behavior, and `.Ignore(...)` of computed properties.
+
 ### 4.1 UTC DateTime Converter
 
-**File**: `src/CarePath.Infrastructure/Persistence/Converters/UtcDateTimeConverter.cs`
+**File**: `Infrastructure/Persistence/Converters/UtcDateTimeConverter.cs`
 
 ```csharp
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
@@ -270,12 +286,16 @@ namespace CarePath.Infrastructure.Persistence.Converters;
 /// <summary>
 /// ValueConverter that preserves UTC kind on DateTime round-trips through SQL Server.
 /// SQL Server's datetime2 type loses DateTime.Kind information, so we manually restore it.
+/// On write: Local values are converted to UTC; Utc/Unspecified values are treated as UTC
+/// without offset-shifting (the system only ever persists DateTime.UtcNow values).
 /// </summary>
-public class UtcDateTimeConverter : ValueConverter<DateTime, DateTime>
+public sealed class UtcDateTimeConverter : ValueConverter<DateTime, DateTime>
 {
     public UtcDateTimeConverter()
         : base(
-            v => v,
+            v => v.Kind == DateTimeKind.Local
+                ? v.ToUniversalTime()
+                : DateTime.SpecifyKind(v, DateTimeKind.Utc),
             v => DateTime.SpecifyKind(v, DateTimeKind.Utc))
     {
     }
@@ -284,11 +304,15 @@ public class UtcDateTimeConverter : ValueConverter<DateTime, DateTime>
 /// <summary>
 /// ValueConverter for nullable DateTime (DateTime?) UTC preservation.
 /// </summary>
-public class UtcDateTimeNullableConverter : ValueConverter<DateTime?, DateTime?>
+public sealed class NullableUtcDateTimeConverter : ValueConverter<DateTime?, DateTime?>
 {
-    public UtcDateTimeNullableConverter()
+    public NullableUtcDateTimeConverter()
         : base(
-            v => v,
+            v => v.HasValue
+                ? v.Value.Kind == DateTimeKind.Local
+                    ? v.Value.ToUniversalTime()
+                    : DateTime.SpecifyKind(v.Value, DateTimeKind.Utc)
+                : null,
             v => v.HasValue ? DateTime.SpecifyKind(v.Value, DateTimeKind.Utc) : null)
     {
     }
@@ -297,7 +321,7 @@ public class UtcDateTimeNullableConverter : ValueConverter<DateTime?, DateTime?>
 
 ### 4.2 AuditableEntityInterceptor
 
-**File**: `src/CarePath.Infrastructure/Persistence/Interceptors/AuditableEntityInterceptor.cs`
+**File**: `Infrastructure/Persistence/Interceptors/AuditableEntityInterceptor.cs`
 
 ```csharp
 using Microsoft.EntityFrameworkCore;
@@ -373,7 +397,7 @@ public class AuditableEntityInterceptor : SaveChangesInterceptor
 
 ### 4.3 User Configuration
 
-**File**: `src/CarePath.Infrastructure/Persistence/Configurations/Identity/UserConfiguration.cs`
+**File**: `Infrastructure/Persistence/Configurations/Identity/UserConfiguration.cs`
 
 ```csharp
 using Microsoft.EntityFrameworkCore;
@@ -455,7 +479,7 @@ public class UserConfiguration : IEntityTypeConfiguration<User>
 
 ### 4.4 Caregiver Configuration
 
-**File**: `src/CarePath.Infrastructure/Persistence/Configurations/Identity/CaregiverConfiguration.cs`
+**File**: `Infrastructure/Persistence/Configurations/Identity/CaregiverConfiguration.cs`
 
 ```csharp
 using Microsoft.EntityFrameworkCore;
@@ -534,7 +558,7 @@ public class CaregiverConfiguration : IEntityTypeConfiguration<Caregiver>
 
 ### 4.5 CaregiverCertification Configuration
 
-**File**: `src/CarePath.Infrastructure/Persistence/Configurations/Identity/CaregiverCertificationConfiguration.cs`
+**File**: `Infrastructure/Persistence/Configurations/Identity/CaregiverCertificationConfiguration.cs`
 
 ```csharp
 using Microsoft.EntityFrameworkCore;
@@ -599,7 +623,7 @@ public class CaregiverCertificationConfiguration : IEntityTypeConfiguration<Care
 
 ### 4.6 Client Configuration
 
-**File**: `src/CarePath.Infrastructure/Persistence/Configurations/Identity/ClientConfiguration.cs`
+**File**: `Infrastructure/Persistence/Configurations/Identity/ClientConfiguration.cs`
 
 ```csharp
 using Microsoft.EntityFrameworkCore;
@@ -702,7 +726,7 @@ public class ClientConfiguration : IEntityTypeConfiguration<Client>
 
 ### 4.7 CarePlan Configuration
 
-**File**: `src/CarePath.Infrastructure/Persistence/Configurations/Identity/CarePlanConfiguration.cs`
+**File**: `Infrastructure/Persistence/Configurations/Identity/CarePlanConfiguration.cs`
 
 ```csharp
 using Microsoft.EntityFrameworkCore;
@@ -771,7 +795,7 @@ public class CarePlanConfiguration : IEntityTypeConfiguration<CarePlan>
 
 ### 4.8 Shift Configuration
 
-**File**: `src/CarePath.Infrastructure/Persistence/Configurations/Scheduling/ShiftConfiguration.cs`
+**File**: `Infrastructure/Persistence/Configurations/Scheduling/ShiftConfiguration.cs`
 
 ```csharp
 using Microsoft.EntityFrameworkCore;
@@ -888,7 +912,7 @@ public class ShiftConfiguration : IEntityTypeConfiguration<Shift>
 
 ### 4.9 VisitNote Configuration
 
-**File**: `src/CarePath.Infrastructure/Persistence/Configurations/Scheduling/VisitNoteConfiguration.cs`
+**File**: `Infrastructure/Persistence/Configurations/Scheduling/VisitNoteConfiguration.cs`
 
 ```csharp
 using Microsoft.EntityFrameworkCore;
@@ -973,7 +997,7 @@ public class VisitNoteConfiguration : IEntityTypeConfiguration<VisitNote>
 
 ### 4.10 VisitPhoto Configuration
 
-**File**: `src/CarePath.Infrastructure/Persistence/Configurations/Scheduling/VisitPhotoConfiguration.cs`
+**File**: `Infrastructure/Persistence/Configurations/Scheduling/VisitPhotoConfiguration.cs`
 
 ```csharp
 using Microsoft.EntityFrameworkCore;
@@ -1027,7 +1051,7 @@ public class VisitPhotoConfiguration : IEntityTypeConfiguration<VisitPhoto>
 
 ### 4.11 Invoice Configuration
 
-**File**: `src/CarePath.Infrastructure/Persistence/Configurations/Billing/InvoiceConfiguration.cs`
+**File**: `Infrastructure/Persistence/Configurations/Billing/InvoiceConfiguration.cs`
 
 ```csharp
 using Microsoft.EntityFrameworkCore;
@@ -1118,7 +1142,7 @@ public class InvoiceConfiguration : IEntityTypeConfiguration<Invoice>
 
 ### 4.12 InvoiceLineItem Configuration
 
-**File**: `src/CarePath.Infrastructure/Persistence/Configurations/Billing/InvoiceLineItemConfiguration.cs`
+**File**: `Infrastructure/Persistence/Configurations/Billing/InvoiceLineItemConfiguration.cs`
 
 ```csharp
 using Microsoft.EntityFrameworkCore;
@@ -1192,7 +1216,7 @@ public class InvoiceLineItemConfiguration : IEntityTypeConfiguration<InvoiceLine
 
 ### 4.13 Payment Configuration
 
-**File**: `src/CarePath.Infrastructure/Persistence/Configurations/Billing/PaymentConfiguration.cs`
+**File**: `Infrastructure/Persistence/Configurations/Billing/PaymentConfiguration.cs`
 
 ```csharp
 using Microsoft.EntityFrameworkCore;
@@ -1257,7 +1281,7 @@ public class PaymentConfiguration : IEntityTypeConfiguration<Payment>
 
 ### 4.14 ApplicationUser Configuration
 
-**File**: `src/CarePath.Infrastructure/Persistence/Configurations/Identity/ApplicationUserConfiguration.cs`
+**File**: `Infrastructure/Persistence/Configurations/Identity/ApplicationUserConfiguration.cs`
 
 ```csharp
 using Microsoft.EntityFrameworkCore;
@@ -1321,7 +1345,7 @@ public class ApplicationUserConfiguration : IEntityTypeConfiguration<Application
 
 ## 5. ApplicationUser Entity
 
-**File**: `src/CarePath.Infrastructure/Identity/ApplicationUser.cs`
+**File**: `Infrastructure/Identity/ApplicationUser.cs`
 
 ```csharp
 using Microsoft.AspNetCore.Identity;
@@ -1354,7 +1378,7 @@ public class ApplicationUser : IdentityUser<Guid>
 
 ## 6. Generic Repository Implementation
 
-**File**: `src/CarePath.Infrastructure/Persistence/Repositories/Repository.cs`
+**File**: `Infrastructure/Persistence/Repositories/Repository.cs`
 
 ```csharp
 using System.Linq.Expressions;
@@ -1455,7 +1479,7 @@ public class Repository<T> : IRepository<T> where T : BaseEntity
 
 ## 7. Unit of Work Implementation
 
-**File**: `src/CarePath.Infrastructure/Persistence/Repositories/UnitOfWork.cs`
+**File**: `Infrastructure/Persistence/Repositories/UnitOfWork.cs`
 
 ```csharp
 using CarePath.Domain.Entities.Common;
@@ -1567,7 +1591,7 @@ public class UnitOfWork : IUnitOfWork
 
 ## 8. Dependency Injection
 
-**File**: `src/CarePath.Infrastructure/DependencyInjection.cs`
+**File**: `Infrastructure/DependencyInjection.cs`
 
 ```csharp
 using Microsoft.AspNetCore.Identity;
@@ -1688,7 +1712,7 @@ public static class DependencyInjection
 
 ```bash
 dotnet ef migrations add InitialCreate \
-  --project src/CarePath.Infrastructure \
+  --project Infrastructure \
   --startup-project src/CarePath.WebApi
 ```
 
@@ -1935,17 +1959,17 @@ public class RepositoryIntegrationTestsWithSqlServer : IAsyncLifetime
 
 ## 14. Success Criteria
 
-✅ CarePathDbContext created with 12 domain entities + Identity DbSets
-✅ All entity configurations implement Fluent API (no data annotations)
-✅ UTC DateTime converters on all DateTime properties
-✅ Global soft-delete query filter on all domain entities
-✅ AuditableEntityInterceptor auto-populates audit fields
-✅ Generic Repository<T> with CRUD and soft-delete support
-✅ UnitOfWork with lazy repository initialization
-✅ DependencyInjection extension method
-✅ InitialCreate migration generated and validated
-✅ Integration tests with in-memory and SQL Server Test Containers
-✅ All HIPAA compliance checks documented
+- [ ] CarePathDbContext created with 12 domain entities + Identity DbSets
+- [ ] All entity configurations implement Fluent API (no data annotations)
+- [ ] UTC DateTime converters on all DateTime properties
+- [ ] Global soft-delete query filter on all domain entities
+- [ ] AuditableEntityInterceptor auto-populates audit fields
+- [ ] Generic Repository<T> with CRUD and soft-delete support
+- [ ] UnitOfWork with lazy repository initialization
+- [ ] DependencyInjection extension method
+- [ ] InitialCreate migration generated and validated
+- [ ] Integration tests with in-memory and SQL Server Test Containers
+- [ ] All HIPAA compliance checks documented
 
 ---
 

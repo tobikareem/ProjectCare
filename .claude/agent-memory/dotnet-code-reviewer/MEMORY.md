@@ -131,6 +131,15 @@
 - `WebApi.csproj` missing `<RootNamespace>CarePath.WebApi</RootNamespace>` and `<AssemblyName>CarePath.WebApi</AssemblyName>` — STILL OPEN
 - Phase 3 issues resolved in Domain entity code: `Invoice.RecalculateStatus()` ADDED; `Caregiver.TotalShiftsCompleted`/`NoShowCount` have `private set` + domain methods; `VisitNote.*SignatureUrl` renamed correctly; `CarePlan` in `Clinical` namespace; `InvoiceLineItem.BillableHours` renamed correctly; `User.State` is `string?` — all confirmed RESOLVED by reading source files 2026-02-16
 
+## CP-02 Phase 1 (feature/dispatch) — REVIEWED 2026-06-27
+- See [project_cp02_phase1_review.md](project_cp02_phase1_review.md) for full findings
+- Infrastructure project scaffold, core EF Core components, and 3 test files shipped
+- OPEN BUGS: `ApplicationUser.DomainUser` should be `User DomainUser { get; set; } = null!;` not `User?`; `UtcDateTimeConverter` write path treats Unspecified as Local; `OnConfiguring` base call order wrong
+- CP-03 Transitions DbSets are in the context without entity configurations — must be removed until CP-03 entity configs are complete
+- Solution folder nesting: Infrastructure and Infrastructure.Tests are at sln root, not under src/tests
+- Missing per spec: entity configs (TASK-047–058), Repository, UnitOfWork, DI registration, migrations, seed data
+- Architecture decision: centralized `ApplyBaseEntityConventions` handles UTC converters + query filters — individual entity configs MUST NOT duplicate them
+
 ## CP-01 Phase 5 Test Suite (Domain.Tests) — REVIEWED 2026-02-16
 - 184 tests, 18 files: Entities/, Business/, Enumerations/, Integration/
 - `Domain.Tests.csproj`: RootNamespace, AssemblyName, TreatWarningsAsErrors all present; coverlet PrivateAssets="all" — CLEAN

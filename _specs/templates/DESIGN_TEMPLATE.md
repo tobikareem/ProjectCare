@@ -45,10 +45,10 @@ Check all layers that will be modified:
 - [ ] **CarePath.Domain** - Domain entities, value objects, interfaces
 - [ ] **CarePath.Application** - Services, DTOs, validators, AutoMapper
 - [ ] **CarePath.Infrastructure** - EF Core, repositories, external services
-- [ ] **CarePath.Api** - Controllers, SignalR hubs, middleware
+- [ ] **WebApi** - Controllers, SignalR hubs, middleware
 - [ ] **CarePath.MauiApp** - Mobile UI, platform-specific services
 - [ ] **CarePath.Web** - Blazor WebAssembly admin dashboard
-- [ ] **CarePath.Shared** - Shared DTOs, constants
+- [ ] **CarePath.Contracts / CarePath.Client / CarePath.Client.UI** - Shared DTOs, constants
 
 ---
 
@@ -324,7 +324,7 @@ public class CheckInRecordConfiguration : IEntityTypeConfiguration<CheckInRecord
 **Migration Strategy**:
 ```bash
 # Migration name: AddGpsCheckInTracking
-dotnet ef migrations add AddGpsCheckInTracking --project src/CarePath.Infrastructure --startup-project src/CarePath.Api
+dotnet ef migrations add AddGpsCheckInTracking --project Infrastructure --startup-project WebApi
 ```
 
 **Expected Schema Changes**:
@@ -396,7 +396,7 @@ public class GpsService : IGpsService
 
 **Controller**:
 ```csharp
-// CarePath.Api/Controllers/ShiftsController.cs
+// WebApi/Controllers/ShiftsController.cs
 
 [ApiController]
 [Route("api/[controller]")]
@@ -436,7 +436,7 @@ public class ShiftsController : ControllerBase
 
 **Minimal API Alternative** (if using Minimal APIs):
 ```csharp
-// CarePath.Api/Endpoints/ShiftEndpoints.cs
+// WebApi/Endpoints/ShiftEndpoints.cs
 
 public static class ShiftEndpoints
 {
@@ -466,7 +466,7 @@ public static class ShiftEndpoints
 
 ### 5.2 SignalR Hubs (Real-Time)
 ```csharp
-// CarePath.Api/Hubs/ShiftHub.cs
+// WebApi/Hubs/ShiftHub.cs
 
 [Authorize]
 public class ShiftHub : Hub
@@ -494,7 +494,7 @@ await _hubContext.Clients.Group("Administrators")
 
 ### 5.3 Middleware
 ```csharp
-// CarePath.Api/Middleware/GpsValidationMiddleware.cs (if needed)
+// WebApi/Middleware/GpsValidationMiddleware.cs (if needed)
 
 public class GpsValidationMiddleware
 {
@@ -749,7 +749,7 @@ public class ShiftServiceTests
 
 ### 7.2 Integration Tests
 ```csharp
-// CarePath.Api.Tests/Controllers/ShiftsControllerTests.cs
+// WebApi.Tests/Controllers/ShiftsControllerTests.cs
 
 public class ShiftsControllerTests : IClassFixture<WebApplicationFactory<Program>>
 {
@@ -848,10 +848,10 @@ public void CheckIn_WithGpsEnabled_ShouldSucceed()
 ### 10.1 Database Deployment
 ```bash
 # Apply migration
-dotnet ef database update --project src/CarePath.Infrastructure --startup-project src/CarePath.Api
+dotnet ef database update --project Infrastructure --startup-project WebApi
 
 # Verify migration
-dotnet ef migrations list --project src/CarePath.Infrastructure
+dotnet ef migrations list --project Infrastructure
 ```
 
 ### 10.2 API Deployment
@@ -907,7 +907,7 @@ _logger.LogInformation(
 <!-- CarePath.MauiApp -->
 <PackageReference Include="Microsoft.Maui.Essentials" Version="9.0.0" />
 
-<!-- CarePath.Api -->
+<!-- WebApi -->
 <PackageReference Include="Microsoft.AspNetCore.SignalR" Version="9.0.0" />
 ```
 

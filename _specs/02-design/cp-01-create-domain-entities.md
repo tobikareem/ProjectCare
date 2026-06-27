@@ -53,8 +53,8 @@ This spec focuses exclusively on the **Domain Layer** (CarePath.Domain project).
 │  • User.FullName: FirstName + LastName                          │
 │  • Client.Age: Calculated from DateOfBirth                      │
 │  • Shift.BillableHours: (ActualEnd - ActualStart - Breaks)/60  │
-│  • Shift.GrossMargin: BillRate - PayRate                        │
-│  • Shift.GrossMarginPercentage: (Margin/BillRate) × 100        │
+│  • Shift.GrossMargin: (BillRate - PayRate) * BillableHours      │
+│  • Shift.GrossMarginPercentage: Margin / total revenue × 100   │
 │  • CaregiverCertification.IsExpired: ExpirationDate < Now      │
 │  • CaregiverCertification.IsExpiringSoon: < 30 days away       │
 │  • Invoice.Subtotal: Sum(LineItems.Total)                      │
@@ -86,6 +86,7 @@ src/CarePath.Domain/
 │   │   ├── Caregiver.cs               # Caregiver profile
 │   │   ├── CaregiverCertification.cs  # Certifications (CNA, LPN, RN)
 │   │   ├── Client.cs                  # Client/patient profile
+│   ├── Clinical/
 │   │   └── CarePlan.cs                # Care plan documentation
 │   ├── Scheduling/
 │   │   ├── Shift.cs                   # Scheduled care sessions
@@ -118,7 +119,7 @@ src/CarePath.Domain/
 **Out of Scope** (Future Phases):
 - ❌ CarePath.Application (DTOs, Services, Validators, AutoMapper)
 - ❌ CarePath.Infrastructure (EF Core, Migrations, Repository implementations)
-- ❌ CarePath.Api (Controllers, SignalR, Middleware)
+- ❌ WebApi (Controllers, SignalR, Middleware)
 - ❌ CarePath.MauiApp (Mobile UI)
 - ❌ CarePath.Web (Blazor admin dashboard)
 
@@ -525,14 +526,14 @@ public class Shift : BaseEntity
         }
     }
 
-    /// <summary>Gross margin per hour (BillRate - PayRate). Used for profitability tracking.</summary>
-    public decimal GrossMargin => BillRate - PayRate;
+    /// <summary>Total gross margin for the completed shift: (BillRate - PayRate) * BillableHours.</summary>
+    public decimal GrossMargin => (BillRate - PayRate) * BillableHours;
 
     /// <summary>
-    /// Gross margin percentage: (GrossMargin / BillRate) × 100.
+    /// Gross margin percentage: GrossMargin / (BillRate × BillableHours) × 100.
     /// Target: 40-45% for in-home care, 25-30% for facility staffing.
     /// </summary>
-    public decimal GrossMarginPercentage => BillRate > 0 ? (GrossMargin / BillRate) * 100 : 0;
+    public decimal GrossMarginPercentage => BillRate > 0 && BillableHours > 0 ? (GrossMargin / (BillRate * BillableHours)) * 100 : 0;
 }
 ```
 
@@ -873,7 +874,7 @@ public class ShiftTests
             PayRate = 18m    // $18/hr
         };
 
-        shift.GrossMargin.Should().Be(17m);
+        shift.GrossMargin.Should().Be(136m);
         shift.GrossMarginPercentage.Should().BeApproximately(48.57m, 0.01m);
     }
 }

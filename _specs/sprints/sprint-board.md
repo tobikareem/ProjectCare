@@ -9,7 +9,7 @@ Purpose: Track the staged path from Domain foundation to web/mobile MVP while pr
 | Sprint | Goal | Key Deliverables | Exit Gate |
 |---|---|---|---|
 | Sprint 1 | Clean up planning and architecture baseline | Spec drift resolved, CP-02/CP-03 numbering fixed, shared-code strategy defined, compliance gates defined | Complete |
-| Sprint 2 | Build persistence foundation | In progress: Infrastructure project, EF Core packages, DbContext, UTC converter, audit interceptor, Identity user foundation, initial tests. Remaining: configs, repositories, migrations, seed strategy, full tests. | PHI persistence rules verified |
+| Sprint 2 | Build persistence foundation | Complete: Infrastructure project, EF Core packages, DbContext, UTC converter, audit interceptor, Identity user foundation, CP-01 entity configurations, repositories, UnitOfWork, DI/WebApi registration, InitialCreate migration, local DB update, synthetic seed strategy, migration/seed tests, HIPAA spot-check, and reviewer verification. | Complete |
 | Sprint 3 | Build application/auth/contracts boundary | Application project, auth, DTOs, validators, contracts, typed client foundation, object authorization | UI/API have stable contracts and business boundary |
 | Sprint 4 | Build core operations backend | Caregiver/client/care plan/scheduling/VisitNote/billing APIs and workflows | Operations backend supports web/mobile MVP |
 | Sprint 5 | Build Transitions backend MVP | Discharge intake, extraction stub, clinical review, activation, check-ins, escalations | 30-day transition loop works through API |
@@ -52,4 +52,6 @@ Sprint 1
 - [ ] Third-party provider gates are satisfied before any PHI is sent externally.
 - [ ] File/photo storage uses private access, encryption, short-lived URLs, malware scanning, and no public blobs.
 - [ ] `task.md` checkbox updated.
+
+
 

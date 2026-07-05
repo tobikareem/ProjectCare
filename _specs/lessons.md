@@ -17,6 +17,8 @@ This file captures recurring mistakes, corrections, and hard-won patterns discov
 
 ## EF Core / Infrastructure
 
+- **Ignore CP-03 scalar placeholders in CP-02 mappings** - `VisitNote.TransitionPlanId` exists in Domain for future integration, but CP-02 must ignore it until Transitions persistence is explicitly configured; otherwise migrations create a partial CP-03 schema without reviewed FKs.
+- **Nullable FKs on PHI records still use `DeleteBehavior.Restrict`** - Nullable means the Application layer may explicitly unassign with audit logging; the database must not silently `SET NULL` during parent deletion because that erases clinical history.
 - **Do not map CP-03 Transitions DbSets during CP-02 Phase 1** - Transitions entities contain PHI and need explicit configurations before entering the EF model. Mapping them early lets EF conventions create unbounded PHI columns and cascade-delete FKs. Add Transitions DbSets only with their CP-03 backend configurations.
 - **`TransitionPlan.TransitionWindowEnd`** must be set in the Application layer before save (`DischargeDate.AddDays(30)` in UTC). Never compute it in the entity constructor — that would make it hard to test without mocking DateTime.
 - **`TransitionCheckIn.ResponsesJson`** is PHI stored as `nvarchar(max)`. Configure it that way in EF. Never serialize it into a log string.
@@ -25,6 +27,9 @@ This file captures recurring mistakes, corrections, and hard-won patterns discov
 - **Property names must match CP-01**: When writing Infrastructure configurations, always cross-reference the approved CP-01 design spec for exact property names. Common mismatches caught: `IssuingBody` vs `IssuingAuthority`, `TransactionId` vs `ReferenceNumber`, `StartLatitude` vs `CheckInLatitude`.
 - **GPS fields are `double?`**: CP-01 defines GPS coordinates as `double?`, not `decimal(10,7)`. EF Core maps `double` to SQL Server `float` by default — no explicit precision config needed.
 - **Scope boundaries**: When a feature is listed in both in-scope and out-of-scope sections, it creates implementation confusion. Resolve immediately. If implementation code exists in the design spec, it's in-scope.
+
+- **Development seed credentials must never be hard-coded** - Even development-only seed users become dangerous if an environment is accidentally marked Development. Read temporary passwords from user secrets, environment variables, or other uncommitted configuration and fail closed when missing.
+- **Save resurrected soft-deleted principal rows before Identity lookups** - If `ApplicationUser` has a query filter through `DomainUser.IsDeleted`, undeleting the domain user only in memory can hide the existing Identity row and cause duplicate-key failures. Persist the undelete before `UserManager` lookup.
 
 ## Testing
 
@@ -64,3 +69,5 @@ This file captures recurring mistakes, corrections, and hard-won patterns discov
 - CP-03 Transitions specs are approved for the Domain slice; backend work is scheduled after Infrastructure/Application prerequisites
 - TASK-020 through TASK-024 for CP-03 Transitions Domain are complete
 - Infrastructure (CP-02) and Application/contracts are prerequisites for shipping CP-03 Transitions backend
+
+

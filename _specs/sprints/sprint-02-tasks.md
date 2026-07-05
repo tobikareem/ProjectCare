@@ -2,7 +2,7 @@
 
 Date: 2026-06-27
 Author: CarePath Health
-Status: Active
+Status: Complete
 Sprint: Sprint 2
 Primary spec: CP-02 Infrastructure / EF Core
 
@@ -431,27 +431,31 @@ S2-TASK-001 -> S2-TASK-003 -> S2-TASK-005 -> S2-TASK-007 -> S2-TASK-009 -> S2-TA
 | S2-TASK-005 | Complete | SaveChanges interceptor implemented and tested |
 | S2-TASK-006 | Complete | Identity user and DomainUser relationship config implemented |
 | S2-TASK-007 | Complete | CarePathDbContext added with CP-01 DbSets plus UTC/soft-delete conventions; Transitions DbSets intentionally deferred |
-| S2-TASK-008 | Not Started | Identity/person configs |
-| S2-TASK-009 | Not Started | Clinical/scheduling configs |
-| S2-TASK-010 | Not Started | Billing configs |
+| S2-TASK-008 | Complete | Identity/person entity configurations implemented and covered by metadata tests |
+| S2-TASK-009 | Complete | Clinical/scheduling configurations implemented with PHI-safe delete behavior |
+| S2-TASK-010 | Complete | Billing configurations implemented with precision, indexes, and retention-safe relationships |
 | S2-TASK-011 | Deferred | Transitions persistence deferred until CP-03 backend configs exist |
-| S2-TASK-012 | Not Started | Repository |
-| S2-TASK-013 | Not Started | UnitOfWork |
-| S2-TASK-014 | Not Started | Repository contract paging |
-| S2-TASK-015 | Not Started | AddInfrastructure |
-| S2-TASK-016 | Not Started | WebApi registration |
-| S2-TASK-017 | Not Started | Initial migration |
-| S2-TASK-018 | Not Started | Migration review |
-| S2-TASK-019 | Not Started | Local database update |
-| S2-TASK-020 | Not Started | Seed strategy |
+| S2-TASK-012 | Complete | Generic Repository<T> implemented with soft delete and paging |
+| S2-TASK-013 | Complete | UnitOfWork implemented with lazy repositories, SaveChanges, disposal, and transaction guards |
+| S2-TASK-014 | Complete | IRepository<T> now exposes GetPagedAsync without EF dependencies |
+| S2-TASK-015 | Complete | AddInfrastructure registers DbContext, Identity, interceptor, repositories, UnitOfWork, SQL retry, and logging/accessor dependencies |
+| S2-TASK-016 | Complete | WebApi references Infrastructure, calls AddInfrastructure, and has encrypted non-secret connection strings |
+| S2-TASK-017 | Complete | InitialCreate migration generated and compiles |
+| S2-TASK-018 | Complete | Migration reviewed: no CP-03 tables, PHI FKs restrict deletes, lengths/precision/indexes verified |
+| S2-TASK-019 | Complete | InitialCreate applied to local CarePathHealth_Dev database and listed as applied |
+| S2-TASK-020 | Complete | Development-only synthetic seed strategy added; password comes from external configuration |
 | S2-TASK-021 | Complete | Focused converter and interceptor tests added |
-| S2-TASK-022 | In Progress | DbContext model and soft-delete filter smoke tests added; entity configuration tests remain |
-| S2-TASK-023 | Not Started | Repository/UoW tests |
-| S2-TASK-024 | Not Started | Migration/seed tests |
-| S2-TASK-025 | Not Started | Final verification |
+| S2-TASK-022 | Complete | DbContext model, soft-delete filters, delete behaviors, lengths, precision, and computed-property ignores verified |
+| S2-TASK-023 | Complete | Repository and UnitOfWork tests cover CRUD, soft delete, paging, lazy reuse, SaveChanges, and transaction guards |
+| S2-TASK-024 | Complete | Migration shape and synthetic seed tests added, including idempotency and missing-password coverage |
+| S2-TASK-025 | Complete | Final build, tests, migration state, HIPAA spot-check, and dotnet-code-reviewer verification passed |
 
 ## Revision History
 
 | Version | Date | Author | Changes |
 |---|---|---|---|
 | 1.0 | 2026-06-27 | Codex | Initial Sprint 2 task spec. |
+
+
+
+

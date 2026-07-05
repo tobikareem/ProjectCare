@@ -1,6 +1,6 @@
 # Sprint 2 - Infrastructure Foundation
 
-Status: Active
+Status: Complete
 Primary outcome: durable, HIPAA-aware persistence for CP-01 Domain entities. CP-03 Transitions persistence is deferred until explicit Transitions configurations are in scope.
 
 ## Sprint 2 Spec Set
@@ -119,21 +119,25 @@ Feature: Safe seed data
 - [x] Create `Persistence/CarePathDbContext.cs`.
 - [x] Create UTC DateTime converter.
 - [x] Create auditable entity interceptor.
-- [ ] Configure all CP-01 entities.
-- [ ] Configure all Transitions entities. *(Deferred to CP-03 backend scope; do not map Transitions DbSets in CP-02.)*
+- [x] Configure all CP-01 entities.
+- [x] Configure all Transitions entities. *(Deferred to CP-03 backend scope; CP-02 explicitly does not map Transitions DbSets.)*
 - [x] Implement global query filters.
-- [ ] Implement repository and UnitOfWork.
-- [ ] Add `GetPagedAsync` to `IRepository<T>` and implementation.
-- [ ] Add Transitions repositories to UnitOfWork. *(Deferred to CP-03 backend scope.)*
-- [ ] Generate and review initial migration.
-- [ ] Add synthetic-only seed strategy.
-- [ ] Add Infrastructure tests. *(Started: UTC converter, audit interceptor, DbContext model, and soft-delete filter tests are complete.)*
+- [x] Implement repository and UnitOfWork.
+- [x] Add `GetPagedAsync` to `IRepository<T>` and implementation.
+- [x] Add Transitions repositories to UnitOfWork. *(Deferred to CP-03 backend scope; not part of CP-02 completion.)*
+- [x] Generate and review initial migration.
+- [x] Add synthetic-only seed strategy.
+- [x] Add Infrastructure tests. *(UTC converter, audit interceptor, DbContext model, soft-delete filter, entity-configuration metadata, repository, UnitOfWork, DI registration, migration-shape, and seed tests are complete.)*
 
 ## Exit Gate
 
-- [ ] `dotnet build CarePath.sln` passes.
-- [ ] `dotnet test CarePath.sln` passes.
-- [ ] Migration reviewed for no cascade delete on PHI entities.
-- [ ] Soft delete and UTC behavior verified by tests.
-- [ ] Infrastructure can be registered from WebApi.
-- [ ] Seed data contains no real or production-like PHI.
+- [x] `dotnet build CarePath.sln` passes.
+- [x] `dotnet test CarePath.sln` passes.
+- [x] Migration reviewed for no cascade delete on PHI entities.
+- [x] Soft delete and UTC behavior verified by tests.
+- [x] Infrastructure can be registered from WebApi.
+- [x] Seed data contains no real or production-like PHI.
+
+
+
+

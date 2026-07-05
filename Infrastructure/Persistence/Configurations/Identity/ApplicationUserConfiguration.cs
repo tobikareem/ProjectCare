@@ -12,6 +12,8 @@ public sealed class ApplicationUserConfiguration : IEntityTypeConfiguration<Appl
     /// <inheritdoc />
     public void Configure(EntityTypeBuilder<ApplicationUser> builder)
     {
+        builder.HasQueryFilter(user => !user.DomainUser.IsDeleted);
+
         builder.Property(user => user.DomainUserId).IsRequired();
 
         builder.Property(user => user.Email).HasMaxLength(256);

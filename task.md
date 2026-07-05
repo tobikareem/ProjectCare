@@ -1,7 +1,7 @@
 # CarePath Sprint Execution Tracker
 
 Last updated: 2026-06-27  
-Status: Sprint 2 in progress - Infrastructure foundation started
+Status: Sprint 2 complete - ready for Sprint 3
 
 This tracker is the working checklist for moving CarePath from a Domain-only foundation into a usable backend, Blazor web app, and MAUI Blazor Hybrid mobile app. The detailed sprint specs live in `_specs/sprints/`.
 
@@ -17,7 +17,7 @@ Build one shared healthcare operations backbone for:
 | Sprint | Theme | Status | Spec |
 |---|---|---:|---|
 | Sprint 1 | Spec Hygiene & Architecture Baseline | [x] Complete | `_specs/sprints/sprint-01-spec-hygiene.md` |
-| Sprint 2 | Infrastructure Foundation | [ ] In Progress | `_specs/sprints/sprint-02-infrastructure-foundation.md` |
+| Sprint 2 | Infrastructure Foundation | [x] Complete | `_specs/sprints/sprint-02-infrastructure-foundation.md` |
 | Sprint 3 | Application, Auth & Shared Contracts | [ ] Not Started | `_specs/sprints/sprint-03-application-auth-contracts.md` |
 | Sprint 4 | Core Operations Backend | [ ] Not Started | `_specs/sprints/sprint-04-core-operations-backend.md` |
 | Sprint 5 | CarePath Transitions Backend MVP | [ ] Not Started | `_specs/sprints/sprint-05-transitions-backend-mvp.md` |
@@ -56,4 +56,7 @@ Build one shared healthcare operations backbone for:
 
 ## Immediate Next Step
 
-Continue Sprint 2 with CP-01 entity configurations, repository/UnitOfWork, Infrastructure DI, migrations, synthetic seed strategy, and full Infrastructure tests. CP-03 Transitions persistence remains deferred until explicit Transitions configurations are approved.
+Begin Sprint 3: Application, Auth, and Shared Contracts boundary. CP-03 Transitions persistence remains deferred until explicit Transitions configurations are approved.
+
+
+

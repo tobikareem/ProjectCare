@@ -1,7 +1,7 @@
 # CarePath Sprint Execution Tracker
 
 Last updated: 2026-07-04  
-Status: Sprint 3 in progress - client libraries (CarePath.Client, CarePath.Client.UI) done; remaining: S3-TASK-035 (Domain→Contracts mapping, Codex), 070 (exit verification)
+Status: Sprint 3 complete - ready for Sprint 4
 
 This tracker is the working checklist for moving CarePath from a Domain-only foundation into a usable backend, Blazor web app, and MAUI Blazor Hybrid mobile app. The detailed sprint specs live in `_specs/sprints/`.
 
@@ -18,7 +18,7 @@ Build one shared healthcare operations backbone for:
 |---|---|---:|---|
 | Sprint 1 | Spec Hygiene & Architecture Baseline | [x] Complete | `_specs/sprints/sprint-01-spec-hygiene.md` |
 | Sprint 2 | Infrastructure Foundation | [x] Complete | `_specs/sprints/sprint-02-infrastructure-foundation.md` |
-| Sprint 3 | Application, Auth & Shared Contracts | [~] In Progress (board: `_specs/sprints/sprint-03-tasks.md`) | `_specs/sprints/sprint-03-application-auth-contracts.md` |
+| Sprint 3 | Application, Auth & Shared Contracts | [x] Complete | `_specs/sprints/sprint-03-application-auth-contracts.md` |
 | Sprint 4 | Core Operations Backend | [ ] Not Started | `_specs/sprints/sprint-04-core-operations-backend.md` |
 | Sprint 5 | CarePath Transitions Backend MVP | [ ] Not Started | `_specs/sprints/sprint-05-transitions-backend-mvp.md` |
 | Sprint 6 | Blazor Web App MVP | [ ] Not Started | `_specs/sprints/sprint-06-blazor-web-mvp.md` |
@@ -56,7 +56,7 @@ Build one shared healthcare operations backbone for:
 
 ## Immediate Next Step
 
-Execute the Sprint 3 board at `_specs/sprints/sprint-03-tasks.md`. Critical path: S3-TASK-010 (normalize Application scaffolds) → S3-TASK-020 (Clinician=6) → S3-TASK-030+ (Application boundary). `CarePath.Contracts` envelopes and enum mirrors are scaffolded; its CarePath.sln entry needs re-adding (`dotnet sln add CarePath.Contracts/CarePath.Contracts.csproj`) after a concurrent solution rewrite dropped it. CP-03 Transitions persistence remains deferred until explicit Transitions configurations are approved.
+Commit the Sprint 3 completion state on `feature/dispatch` (post-`409f095` work: mappers, client libraries, sprint closure docs), then begin Sprint 4: Core Operations Backend (`_specs/sprints/sprint-04-core-operations-backend.md`). First Sprint 4 items per decision D2: `ClientAccessGrant` Domain entity + persistence for family-proxy object-level access, and WeatherForecast template removal from WebApi. CP-03 Transitions persistence remains deferred until Sprint 5.
 
 
 

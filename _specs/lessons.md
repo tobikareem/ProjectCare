@@ -69,5 +69,8 @@ This file captures recurring mistakes, corrections, and hard-won patterns discov
 - CP-03 Transitions specs are approved for the Domain slice; backend work is scheduled after Infrastructure/Application prerequisites
 - TASK-020 through TASK-024 for CP-03 Transitions Domain are complete
 - Infrastructure (CP-02) and Application/contracts are prerequisites for shipping CP-03 Transitions backend
+## Sprint 3 Mapping / Contracts
 
-
+- **Never map persisted media/blob URLs directly into DTOs** - Signature URLs are biometric PHI and persisted storage locators may be durable or public. Application mappers should leave signature URL fields null until an authorized, audited short-lived URL service exists.
+- **Summary DTO PHI guards must use a broad denylist** - Client summaries must exclude DOB and clinical/insurance/location fields, but all `*SummaryDto` types also need reflection guards for care-plan text, visit-note clinical text, notes, signature URLs, raw GPS, and rate/margin fields. Detail DTO exposure is allowed only behind role + object authorization.
+- **Contracts boundary tests should inspect the Contracts assembly directly** - Mapper-signature tests are useful, but Sprint 3 also requires proving `CarePath.Contracts` has no Domain assembly reference and no public member types from `CarePath.Domain.*`.

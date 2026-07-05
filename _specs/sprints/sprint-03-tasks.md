@@ -1,6 +1,6 @@
 # Sprint 3 Tasks — Application, Auth & Shared Contracts
 
-Status: Active
+Status: Complete (closed 2026-07-04)
 Parent spec: `_specs/sprints/sprint-03-application-auth-contracts.md`
 Last updated: 2026-07-04
 
@@ -55,13 +55,13 @@ Owners: **Claude** = PM/Contracts lead (this agent; owns Contracts, Client, Clie
 | S3-TASK-032 | `IAuditLogger` (LogReadAsync/LogWriteAsync: UserId, TimestampUtc, Action, EntityType, EntityId, CorrelationId — never PHI values) + PHI read-audit decorator over `IPhiResource`-marked handlers per D3 | Codex | S3-TASK-031 | Pending |
 | S3-TASK-033 | `IResourceAuthorizationService` + role policy constants + `IClientAccessEvaluator` (family/caregiver scoping) + not-found denial semantics + denial audit per D3 | Codex | S3-TASK-031, S3-TASK-032 | Pending |
 | S3-TASK-034 | FluentValidation validators for core commands (CreateShift incl. end-after-start, CreateClient, CreateCaregiver, CreateInvoice, RecordPayment) — PHI-free error messages, no attempted values | Codex | S3-TASK-030, S3-TASK-013 | Pending |
-| S3-TASK-035 | Domain→Contracts mapping (per-module mappers or AutoMapper profiles) + PHI-safe mapping tests: assert summary DTOs expose no PHI-heavy fields, no Domain types leak into Contracts signatures | Codex | S3-TASK-013, S3-TASK-030 | Pending |
+| S3-TASK-035 | Domain→Contracts mapping (per-module mappers or AutoMapper profiles) + PHI-safe mapping tests: assert summary DTOs expose no PHI-heavy fields, no Domain types leak into Contracts signatures | Codex | S3-TASK-013, S3-TASK-030 | Done 2026-07-04 — 4 manual mappers in `Application/Common/Mapping`, computed flattening, reflection PHI guards (verified: summary has Age not DOB; no insurance identifiers/GPS/rates mapped) |
 | S3-TASK-036 | JWT/Identity service contracts in Application: `ITokenService`, `IIdentityService`, login/register/refresh request-response shapes (Contracts) | Codex | S3-TASK-030 | Pending |
 | S3-TASK-050 | Infrastructure/WebApi auth foundation: JWT issuance + validation, role policies incl. Clinician, deny-by-default fallback policy, secrets from user secrets/env (never committed) | Codex | S3-TASK-036, S3-TASK-020 | Done 2026-07-04 — verified: `WebApi/Security/*` FallbackPolicy=RequireAuthenticatedUser, 6 role policies incl. Clinician |
 | S3-TASK-051 | WebApi problem-details middleware mapping exceptions/validation to `ApiProblemDetails`; verify no PHI in exception output or logs | Codex | S3-TASK-050 | Done 2026-07-04 — verified: `WebApi/Middleware/ProblemDetailsMiddleware` uses `resource.not_found`, identical missing/denied 404s, no AttemptedValue anywhere, generic 500s |
 | S3-TASK-060 | `CarePath.Client` typed client foundation: `ApiClientBase` (GET/POST/PUT + `ApiProblemDetails`→`ApiResponse` error mapping incl. TraceId), `IAccessTokenProvider` abstraction, `AuthorizationMessageHandler`, `PagedRequest` query helper (references Contracts only) | Claude | S3-TASK-013 stable | Done 2026-07-04 — builds 0 warnings |
 | S3-TASK-061 | `CarePath.Client.UI` RCL primitives: `StatusBadge` + `StatusBadgeTones` (Shift/Invoice/Payment mappings), `ValidationErrorList`, `ApiErrorAlert` (message + TraceId support reference), generic `PagedTable<TItem>` shell (references Contracts + Client) | Claude | S3-TASK-060 | Done 2026-07-04 — builds 0 warnings; both projects in sln under src; `Microsoft.AspNetCore.Components.Web 9.0.13` added to Directory.Packages.props (Client label) |
-| S3-TASK-070 | Exit verification: `dotnet build CarePath.sln` zero warnings; all tests green; `dotnet-code-reviewer` pass; HIPAA spot check (no PHI in logs/URLs/sample data); update PROGRESS.md, lessons.md, task.md | Codex + Tobi | all above | Pending |
+| S3-TASK-070 | Exit verification: `dotnet build CarePath.sln` zero warnings; all tests green; `dotnet-code-reviewer` pass; HIPAA spot check (no PHI in logs/URLs/sample data); update PROGRESS.md, lessons.md, task.md | Codex + Tobi | all above | Done 2026-07-04 — build 0 warnings; 335 tests green (D251/A29/I55); reviewer findings fixed; HIPAA spot check clean; PROGRESS/lessons updated |
 
 ### Success criteria (apply to every task)
 

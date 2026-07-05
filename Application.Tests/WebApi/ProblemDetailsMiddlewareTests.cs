@@ -49,7 +49,7 @@ public sealed class ProblemDetailsMiddlewareTests
     }
 
     [Fact]
-    public async Task InvokeAsync_WhenValidationFails_ReturnsValidationProblemWithoutAttemptedValues()
+    public async Task InvokeAsync_WhenValidationFails_DoesNotEchoSubmittedValues()
     {
         // Arrange
         const string attemptedValue = "Submitted Sensitive Value";
@@ -58,7 +58,6 @@ public sealed class ProblemDetailsMiddlewareTests
             new ValidationFailure("StartAt", "Start time is required.")
             {
                 ErrorCode = "shift.start_required",
-                AttemptedValue = attemptedValue,
             },
         }));
 

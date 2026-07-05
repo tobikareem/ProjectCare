@@ -1,6 +1,6 @@
 # Sprint 3 - Application, Auth & Shared Contracts
 
-Status: Approved (spec owner approval 2026-07-04; implementation active)
+Status: Complete (closed 2026-07-04)
 Primary outcome: create the business boundary and shared DTO/client contract layer before UI work begins.
 
 > **Implementation breakdown**: `_specs/sprints/sprint-03-tasks.md` — S3-TASK board with dependencies, owners, and success criteria, plus the ratified decisions D1–D4 (Application→Contracts dependency, Clinician/Family role mapping, object-level authorization + PHI read audit enforcement, Application scaffold normalization) and the full Contracts plan. Read that file before implementing any Sprint 3 task.
@@ -120,26 +120,28 @@ Feature: System actor audit
 
 Task-level tracking has moved to `_specs/sprints/sprint-03-tasks.md` (S3-TASK IDs). The checklist below is the summary view.
 
-- [ ] Create `Application` and `Application.Tests`. (S3-TASK-010/030 — scaffolds exist but must be normalized: net9.0, CPM, Domain+Contracts refs)
-- [x] Create `CarePath.Contracts`. (S3-TASK-011 — envelopes + 8 enum mirrors, 2026-07-04; sln entry pending re-add after concurrent sln rewrite)
-- [ ] Create `CarePath.Client`.
-- [ ] Create `CarePath.Client.UI`.
+- [x] Create `Application` and `Application.Tests`. (S3-TASK-010/030)
+- [x] Create `CarePath.Contracts`. (S3-TASK-011 — envelopes + 8 enum mirrors)
+- [x] Create `CarePath.Client`. (S3-TASK-060)
+- [x] Create `CarePath.Client.UI`. (S3-TASK-061)
 - [x] Define `ApiResponse<T>`, `PagedResult<T>`, validation error, and problem details contracts. (S3-TASK-011)
-- [ ] Define client-safe DTOs for identity, clients, care plans, shifts, visit notes, billing, and transitions.
-- [ ] Add FluentValidation validators for core commands.
-- [ ] Add current-user and permission interfaces.
-- [ ] Add audit logging interfaces.
-- [ ] Add role and object-level authorization services.
-- [ ] Add IDOR-safe authorization behavior for `{id}` endpoints.
-- [ ] Add system-actor audit support for background jobs.
-- [ ] Add JWT/Identity service contracts.
-- [ ] Add Application tests for validation, authorization, and PHI-safe DTO mapping.
+- [x] Define client-safe DTOs for identity, clients, care plans, shifts, visit notes, billing. Transitions DTOs deliberately reserved for Sprint 5. (S3-TASK-013/014)
+- [x] Add FluentValidation validators for core commands. (S3-TASK-034)
+- [x] Add current-user and permission interfaces. (S3-TASK-031)
+- [x] Add audit logging interfaces. (S3-TASK-032)
+- [x] Add role and object-level authorization services. (S3-TASK-033)
+- [x] Add IDOR-safe authorization behavior for `{id}` endpoints. (S3-TASK-033/051 — identical missing/denied 404s)
+- [x] Add system-actor audit support for background jobs. (S3-TASK-031/032)
+- [x] Add JWT/Identity service contracts. (S3-TASK-036/050)
+- [x] Add Application tests for validation, authorization, and PHI-safe DTO mapping. (S3-TASK-034/035)
 
 ## Exit Gate
 
-- [ ] UI-facing DTOs exist for core modules.
-- [ ] Application does not depend on Infrastructure.
-- [ ] Authorization model covers Admin, Coordinator, Caregiver, Client/Family, FacilityManager, and Clinician.
-- [ ] PHI-safe audit interfaces exist.
-- [ ] PHI read audit and background-job audit contracts exist.
-- [ ] Build/tests pass.
+- [x] UI-facing DTOs exist for core modules.
+- [x] Application does not depend on Infrastructure. (architecture tests enforce)
+- [x] Authorization model covers Admin, Coordinator, Caregiver, Client/Family, FacilityManager, and Clinician.
+- [x] PHI-safe audit interfaces exist.
+- [x] PHI read audit and background-job audit contracts exist.
+- [x] Build/tests pass. (0 warnings; Domain 251 / Application 29 / Infrastructure 55, 2026-07-04)
+
+Sprint closed 2026-07-04 by PM/spec owner after independent verification.

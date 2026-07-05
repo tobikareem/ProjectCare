@@ -1,7 +1,7 @@
 # CarePath Sprint Execution Tracker
 
 Last updated: 2026-07-04  
-Status: Sprint 3 in progress - decisions ratified, Contracts scaffolded, task board published
+Status: Sprint 3 in progress - client libraries (CarePath.Client, CarePath.Client.UI) done; remaining: S3-TASK-035 (Domain→Contracts mapping, Codex), 070 (exit verification)
 
 This tracker is the working checklist for moving CarePath from a Domain-only foundation into a usable backend, Blazor web app, and MAUI Blazor Hybrid mobile app. The detailed sprint specs live in `_specs/sprints/`.
 

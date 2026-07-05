@@ -1,0 +1,23 @@
+@namespace CarePath.Client.UI.Components
+
+@if (Errors is { Count: > 0 })
+{
+    <ul class="cp-validation-errors" role="alert">
+        @foreach (var error in Errors)
+        {
+            <li class="cp-validation-error">
+                <span class="cp-validation-error-field">@error.PropertyName</span>:
+                <span class="cp-validation-error-message">@error.ErrorMessage</span>
+            </li>
+        }
+    </ul>
+}
+
+@code {
+    /// <summary>
+    /// Field-level validation failures from the API. Messages are PHI-free by contract
+    /// (ValidationError never carries attempted values).
+    /// </summary>
+    [Parameter]
+    public IReadOnlyList<ValidationError>? Errors { get; set; }
+}

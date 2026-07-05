@@ -42,7 +42,7 @@ bash _specs/scripts/new-spec.sh CP-XX "Feature Name"
 | Layer | Namespace | Responsibility |
 |---|---|---|
 | Domain | `CarePath.Domain` | Entities, enums, interfaces. Zero external dependencies. |
-| Application | `CarePath.Application` | Services, DTOs, validators, interfaces (depends on Domain only). |
+| Application | `CarePath.Application` | Services, DTOs, validators, interfaces (depends on Domain and CarePath.Contracts only). |
 | Infrastructure | `CarePath.Infrastructure` | EF Core DbContext, repositories, external services. |
 | WebApi | `CarePath.WebApi` | ASP.NET Core controllers, middleware, SignalR hubs. |
 
@@ -256,7 +256,7 @@ Follow this sequence for every implementation task:
 - `Invoice.Subtotal` = sum of `LineItems.Amount`
 - `Invoice.Balance` = `TotalAmount - AmountPaid`
 
-**Enumerations**: `UserRole` (Admin, Coordinator, Caregiver, Client, FacilityManager), `EmploymentType` (W2Employee, Contractor1099), `CertificationType`, `ServiceType` (InHomeCare, FacilityStaffing), `ShiftStatus` (Scheduled, InProgress, Completed, Cancelled, NoShow), `InvoiceStatus`, `PaymentMethod`
+**Enumerations**: `UserRole` (Admin, Coordinator, Caregiver, Client, FacilityManager, Clinician; Family is not a role - family proxies authenticate as Client with explicit access grants deferred to Sprint 4), `EmploymentType` (W2Employee, Contractor1099), `CertificationType`, `ServiceType` (InHomeCare, FacilityStaffing), `ShiftStatus` (Scheduled, InProgress, Completed, Cancelled, NoShow), `InvoiceStatus`, `PaymentMethod`
 
 ---
 

@@ -1,0 +1,21 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <RootNamespace>CarePath.Client</RootNamespace>
+    <AssemblyName>CarePath.Client</AssemblyName>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+  </PropertyGroup>
+
+  <!--
+    CarePath.Client is the shared typed API client for Blazor WebAssembly and MAUI Blazor Hybrid.
+    RULES (enforced by review):
+      - May reference CarePath.Contracts ONLY. Never Domain, Application, Infrastructure, or WebApi.
+      - No provider SDKs, no persistence, no platform-specific services.
+  -->
+
+  <ItemGroup>
+    <ProjectReference Include="..\CarePath.Contracts\CarePath.Contracts.csproj" />
+  </ItemGroup>
+
+</Project>

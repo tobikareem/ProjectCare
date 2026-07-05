@@ -1,4 +1,6 @@
+using CarePath.Application.Abstractions.Auth;
 using CarePath.Domain.Interfaces.Repositories;
+using CarePath.Infrastructure.Auth;
 using CarePath.Infrastructure.Identity;
 using CarePath.Infrastructure.Persistence;
 using CarePath.Infrastructure.Persistence.Interceptors;
@@ -31,7 +33,12 @@ public static class DependencyInjection
         var connectionString = configuration.GetConnectionString("DefaultConnection")
             ?? throw new InvalidOperationException("Connection string 'DefaultConnection' not found.");
 
-        return services.AddInfrastructure(connectionString);
+        services.AddInfrastructure(connectionString);
+        services.AddSingleton(configuration);
+        services.AddScoped<IJwtTokenService, JwtTokenService>();
+        services.AddScoped<IIdentityService, IdentityService>();
+
+        return services;
     }
 
     /// <summary>

@@ -1,0 +1,66 @@
+@namespace CarePath.Client.UI.Components
+@typeparam TItem
+
+<div class="cp-paged-table">
+    <table class="cp-table">
+        <thead>
+            @HeaderTemplate
+        </thead>
+        <tbody>
+            @if (Result is { Items.Count: > 0 })
+            {
+                @foreach (var item in Result.Items)
+                {
+                    @RowTemplate(item)
+                }
+            }
+            else
+            {
+                <tr>
+                    <td class="cp-table-empty" colspan="100">@EmptyText</td>
+                </tr>
+            }
+        </tbody>
+    </table>
+
+    @if (Result is not null && Result.TotalPages > 1)
+    {
+        <nav class="cp-pager" aria-label="Pagination">
+            <button type="button"
+                    class="cp-pager-prev"
+                    disabled="@(!Result.HasPreviousPage)"
+                    @onclick="() => OnPageChanged.InvokeAsync(Result.PageNumber - 1)">
+                Previous
+            </button>
+            <span class="cp-pager-status">Page @Result.PageNumber of @Result.TotalPages</span>
+            <button type="button"
+                    class="cp-pager-next"
+                    disabled="@(!Result.HasNextPage)"
+                    @onclick="() => OnPageChanged.InvokeAsync(Result.PageNumber + 1)">
+                Next
+            </button>
+        </nav>
+    }
+</div>
+
+@code {
+    /// <summary>The current page of results.</summary>
+    [Parameter, EditorRequired]
+    public PagedResult<TItem>? Result { get; set; }
+
+    /// <summary>Table header row(s) — supply th cells inside tr.</summary>
+    [Parameter, EditorRequired]
+    public RenderFragment HeaderTemplate { get; set; } = default!;
+
+    /// <summary>Row template invoked per item — supply a tr per item.</summary>
+    [Parameter, EditorRequired]
+    public RenderFragment<TItem> RowTemplate { get; set; } = default!;
+
+    /// <summary>Message shown when the page has no items. Must be PHI-free.</summary>
+    [Parameter]
+    public string EmptyText { get; set; } = "No records found.";
+
+    /// <summary>Raised with the requested one-based page number when the user pages.</summary>
+    [Parameter]
+    public EventCallback<int> OnPageChanged { get; set; }
+}

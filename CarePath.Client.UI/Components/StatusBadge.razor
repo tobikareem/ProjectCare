@@ -1,0 +1,13 @@
+@namespace CarePath.Client.UI.Components
+
+<span class="cp-badge cp-badge-@Tone.ToString().ToLowerInvariant()">@Text</span>
+
+@code {
+    /// <summary>Badge label. Must be PHI-free (status words, not patient data).</summary>
+    [Parameter, EditorRequired]
+    public string Text { get; set; } = string.Empty;
+
+    /// <summary>Visual tone.</summary>
+    [Parameter]
+    public BadgeTone Tone { get; set; } = BadgeTone.Neutral;
+}

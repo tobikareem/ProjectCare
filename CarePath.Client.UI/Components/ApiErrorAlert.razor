@@ -1,0 +1,24 @@
+@namespace CarePath.Client.UI.Components
+
+@if (Response is { Success: false })
+{
+    <div class="cp-api-error" role="alert">
+        @foreach (var error in Response.Errors)
+        {
+            <p class="cp-api-error-message">@error.Message</p>
+        }
+        @if (!string.IsNullOrWhiteSpace(Response.TraceId))
+        {
+            <p class="cp-api-error-trace">Support reference: @Response.TraceId</p>
+        }
+    </div>
+}
+
+@code {
+    /// <summary>
+    /// The failed response to display. Renders nothing for successful responses.
+    /// Error messages and TraceId are PHI-free by contract.
+    /// </summary>
+    [Parameter, EditorRequired]
+    public ApiResponse? Response { get; set; }
+}

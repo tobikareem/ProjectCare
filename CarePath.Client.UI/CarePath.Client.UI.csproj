@@ -1,0 +1,31 @@
+<Project Sdk="Microsoft.NET.Sdk.Razor">
+
+  <PropertyGroup>
+    <RootNamespace>CarePath.Client.UI</RootNamespace>
+    <AssemblyName>CarePath.Client.UI</AssemblyName>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <!-- GenerateDocumentationFile intentionally off: Razor-generated component classes
+         cannot carry XML docs and would fail CS1591 under TreatWarningsAsErrors. -->
+  </PropertyGroup>
+
+  <!--
+    CarePath.Client.UI is the shared Razor Class Library for Blazor WebAssembly and MAUI Blazor
+    Hybrid. RULES (enforced by review):
+      - May reference CarePath.Contracts and CarePath.Client ONLY.
+      - UI primitives and formatting only — no pages, no platform services, no PHI persistence.
+  -->
+
+  <ItemGroup>
+    <SupportedPlatform Include="browser" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.AspNetCore.Components.Web" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\CarePath.Contracts\CarePath.Contracts.csproj" />
+    <ProjectReference Include="..\CarePath.Client\CarePath.Client.csproj" />
+  </ItemGroup>
+
+</Project>

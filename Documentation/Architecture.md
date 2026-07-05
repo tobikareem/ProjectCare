@@ -165,20 +165,21 @@
 ```
 CarePath.sln
 │
-├── src/
-│   ├── CarePath.Domain/              # Core domain models & interfaces
-│   ├── CarePath.Application/         # Business logic & services
-│   ├── CarePath.Infrastructure/      # Data access & external integrations
-│   ├── CarePath.Api/                 # ASP.NET Core 9 Web API
-│   ├── CarePath.MauiApp/             # .NET MAUI Blazor Hybrid (Mobile)
-│   ├── CarePath.Web/                 # Blazor WebAssembly (Admin)
-│   └── CarePath.Shared/              # Shared DTOs, ViewModels, Constants
+├── Domain/                         # Core domain models and interfaces
+├── Application/                    # Business logic and services
+├── Infrastructure/                 # Data access and external integrations
+├── WebApi/                         # ASP.NET Core 9 Web API
+├── CarePath.MauiApp/               # .NET MAUI Blazor Hybrid (Mobile)
+├── CarePath.Web/                   # Blazor WebAssembly (Admin)
+├── CarePath.Contracts/             # Client-safe DTOs and response models
+├── CarePath.Client/                # Typed API client and client helpers
+├── CarePath.Client.UI/             # Shared Razor components and UI primitives
 │
 └── tests/
-    ├── CarePath.Domain.Tests/
-    ├── CarePath.Application.Tests/
-    ├── CarePath.Infrastructure.Tests/
-    └── CarePath.Api.Tests/
+    ├── Domain.Tests/
+    ├── Application.Tests/
+    ├── Infrastructure.Tests/
+    └── WebApi.Tests/
 ```
 
 ---
@@ -369,12 +370,12 @@ CarePath.Infrastructure/
 
 ---
 
-### 5. **CarePath.Api** (API Layer)
+### 5. **WebApi** (API Layer)
 
 **Purpose**: REST API endpoints, SignalR hubs, middleware. Entry point for backend.
 
 ```
-CarePath.Api/
+WebApi/
 ├── Controllers/
 │   ├── AuthController.cs
 │   ├── CaregiversController.cs
@@ -509,34 +510,31 @@ CarePath.Web/
 
 ---
 
-### 8. **CarePath.Shared** (Shared Library)
+### 8. **CarePath.Contracts / CarePath.Client / CarePath.Client.UI** (Shared Client Architecture)
 
-**Purpose**: Code shared between Web and MAUI apps (DTOs, ViewModels, Constants).
+**Purpose**: Client-safe code shared by Blazor WebAssembly and MAUI Blazor Hybrid without binding UI directly to Domain entities.
 
 ```
-CarePath.Shared/
-├── DTOs/                              # Same as Application DTOs
-│   ├── CaregiverDto.cs
-│   ├── ShiftDto.cs
-│   └── InvoiceDto.cs
-│
-├── ViewModels/                        # For data binding
-│   ├── CaregiverViewModel.cs
-│   └── ShiftViewModel.cs
-│
-├── Constants/
-│   ├── ApiRoutes.cs                   # "/api/caregivers", etc.
-│   ├── AppSettings.cs
-│   └── ValidationMessages.cs
-│
-├── Enums/                             # Mirror domain enums
-│   ├── ShiftStatus.cs
-│   └── ServiceLineType.cs
-│
-└── Extensions/
-    ├── DateTimeExtensions.cs
-    └── StringExtensions.cs
+CarePath.Contracts/
+├── DTOs/                              # Client-safe request/response models
+├── Pagination/                        # PagedResult, query parameters
+├── Results/                           # Error/result envelopes
+└── Validation/                        # Shared validation metadata
+
+CarePath.Client/
+├── Api/                               # Typed API clients
+├── Auth/                              # Token abstractions and auth helpers
+├── Errors/                            # API error mapping
+└── DependencyInjection.cs
+
+CarePath.Client.UI/
+├── Components/                        # Shared Razor UI primitives
+├── Forms/                             # Reusable form components
+├── Tables/                            # Grid/list components
+└── StatusBadges/                      # Enum/status display components
 ```
+
+Do not put Domain entities, EF models, WebApi controllers, platform services, provider SDK clients, secrets, or full application pages in shared client projects.
 
 ---
 
@@ -654,16 +652,16 @@ public class MarginAnalyzer : IMarginAnalyzer
 ### 1. **Database First Development**
 ```bash
 # Create migration
-dotnet ef migrations add InitialCreate --project src/CarePath.Infrastructure
+dotnet ef migrations add InitialCreate --project Infrastructure --startup-project WebApi
 
 # Update database
-dotnet ef database update --project src/CarePath.Api
+dotnet ef database update --startup-project WebApi
 ```
 
 ### 2. **API Development**
 ```bash
 # Run API
-cd src/CarePath.Api
+cd WebApi
 dotnet run
 
 # API available at: https://localhost:7001
@@ -672,7 +670,7 @@ dotnet run
 ### 3. **Mobile App Development**
 ```bash
 # Run on Android emulator
-cd src/CarePath.MauiApp
+cd CarePath.MauiApp
 dotnet build -t:Run -f net9.0-android
 
 # Run on iOS simulator

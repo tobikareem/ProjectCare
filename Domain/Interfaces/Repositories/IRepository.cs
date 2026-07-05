@@ -97,4 +97,15 @@ public interface IRepository<T> where T : BaseEntity
     Task<int> CountAsync(
         Expression<Func<T, bool>>? predicate = null,
         CancellationToken cancellationToken = default);
+    /// <summary>
+    /// Retrieves a one-based page of non-deleted entities and the total non-deleted row count.
+    /// </summary>
+    /// <param name="pageNumber">One-based page number. Must be greater than zero.</param>
+    /// <param name="pageSize">Number of rows per page. Must be greater than zero.</param>
+    /// <param name="cancellationToken">Token to cancel the asynchronous operation.</param>
+    /// <returns>A tuple containing the materialized page items and total non-deleted row count.</returns>
+    Task<(IReadOnlyList<T> Items, int TotalCount)> GetPagedAsync(
+        int pageNumber,
+        int pageSize,
+        CancellationToken cancellationToken = default);
 }

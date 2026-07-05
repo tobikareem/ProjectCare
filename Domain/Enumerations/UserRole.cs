@@ -34,5 +34,13 @@ public enum UserRole
     /// Facility manager for 1099 staffing placements. Can submit staffing
     /// requests, view contractor assignments, and approve facility invoices.
     /// </summary>
-    FacilityManager = 5
+    FacilityManager = 5,
+
+    /// <summary>
+    /// Licensed clinician. Reviews AI-extracted transition instructions and
+    /// e-signs/activates transition plans. Kept distinct from
+    /// <see cref="Coordinator"/> because plan activation is a licensure-gated
+    /// action that must be distinguishable in audit logs (Sprint 3 decision D2).
+    /// </summary>
+    Clinician = 6
 }

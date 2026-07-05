@@ -6,8 +6,8 @@
 **Status**: Draft
 **Related Specs**:
 - [CP-01 Design Spec](../02-design/cp-01-create-domain-entities.md) - Domain entities and interfaces (Approved)
-- [CP-02 Design Spec](../02-design/cp-02-infrastructure-ef-core.md) - Infrastructure design (to be created)
-- [CP-02 Tasks Spec](../03-tasks/cp-02-infrastructure-ef-core.md) - Implementation tasks (to be created after this is approved)
+- [CP-02 Design Spec](../02-design/cp-02-infrastructure-ef-core.md) - Infrastructure design
+- [CP-02 Tasks Spec](../03-tasks/cp-02-infrastructure-ef-core.md) - Implementation tasks
 - [CLAUDE.md](../../CLAUDE.md) - Coding conventions and architecture rules
 - [Architecture.md](../../Documentation/Architecture.md) - System architecture overview
 
@@ -468,20 +468,20 @@ Feature: GetPagedAsync for Shift and VisitNote Tables
 
 ## 6. Success Criteria
 
-### Phase 1: Core Infrastructure (Approved for Implementation)
+### Phase 1: Core Infrastructure (Planned Acceptance)
 
-- [x] **CarePathDbContext created** with DbSet<> for all 12 entities
-- [x] **Fluent API configurations** applied to all entities (table names, PKs, FKs, indexes, string/decimal precision)
-- [x] **UTC value converters** configured on all DateTime properties
-- [x] **Global query filter** (IsDeleted == false) applied to all entities
-- [x] **Repository<T> implementation** with 8 core CRUD methods + soft delete enforcement
-- [x] **IUnitOfWork implementation** with 11 repository properties, SaveChangesAsync, and transaction support
-- [x] **SaveChangesInterceptor** for audit trail logging (no PHI in logs)
-- [x] **Initial migration** created with all tables, indexes, constraints
-- [x] **Seed data** (Admin user + dev sample data)
-- [x] **DependencyInjection.cs** with DbContext, UnitOfWork, Repository, Interceptor registration
-- [x] **Zero compiler warnings** and all tests pass
-- [x] **Documentation** updated (Architecture.md, migration guide)
+- [ ] **CarePathDbContext created** with DbSet<> for all 12 entities
+- [ ] **Fluent API configurations** applied to all entities (table names, PKs, FKs, indexes, string/decimal precision)
+- [ ] **UTC value converters** configured on all DateTime properties
+- [ ] **Global query filter** (IsDeleted == false) applied to all entities
+- [ ] **Repository<T> implementation** with 8 core CRUD methods + soft delete enforcement
+- [ ] **IUnitOfWork implementation** with 11 repository properties, SaveChangesAsync, and transaction support
+- [ ] **SaveChangesInterceptor** for audit trail logging (no PHI in logs)
+- [ ] **Initial migration** created with all tables, indexes, constraints
+- [ ] **Seed data** (Admin user + dev sample data)
+- [ ] **DependencyInjection.cs** with DbContext, UnitOfWork, Repository, Interceptor registration
+- [ ] **Zero compiler warnings** and all tests pass
+- [ ] **Documentation** updated (Architecture.md, migration guide)
 
 ### Phase 2: Advanced Query Support (Future)
 
@@ -622,4 +622,4 @@ A requirement is complete when:
 
 ---
 
-**Next Step**: Once this spec is approved, the Design Spec (CP-02 Design) will be created with detailed Fluent API configuration code samples. After design approval, implementation tasks (CP-02 Tasks) will be created and development will begin.
+**Next Step**: Review and approve the existing CP-02 requirements, design, and tasks specs; then begin Sprint 2 implementation.

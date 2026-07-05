@@ -201,7 +201,7 @@ Your specs should align with the CarePath Health architecture:
 1. **Domain** (`CarePath.Domain`) - Entities, value objects, interfaces
 2. **Application** (`CarePath.Application`) - Services, DTOs, validators
 3. **Infrastructure** (`CarePath.Infrastructure`) - EF Core, repositories
-4. **API** (`CarePath.Api`) - Controllers, SignalR hubs
+4. **API** (`WebApi`) - Controllers, SignalR hubs
 5. **MAUI Mobile** (`CarePath.MauiApp`) - iOS/Android app
 6. **Web Admin** (`CarePath.Web`) - Blazor WebAssembly dashboard
 

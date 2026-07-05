@@ -148,10 +148,10 @@ When creating specs, consider which layers are affected:
 1. **CarePath.Domain** - Core entities, value objects, interfaces
 2. **CarePath.Application** - Services, DTOs, validators, AutoMapper
 3. **CarePath.Infrastructure** - EF Core, repositories, external services
-4. **CarePath.Api** - Controllers, SignalR hubs, middleware
+4. **WebApi** - Controllers, SignalR hubs, middleware
 5. **CarePath.MauiApp** - Mobile UI (.NET MAUI Blazor Hybrid)
 6. **CarePath.Web** - Admin dashboard (Blazor WebAssembly)
-7. **CarePath.Shared** - Shared DTOs, constants
+7. **CarePath.Contracts** - Client-safe DTOs and response models; **CarePath.Client** - typed API client; **CarePath.Client.UI** - reusable Razor components
 
 See `/Documentation/Architecture.md` for full architecture details.
 
@@ -159,20 +159,20 @@ See `/Documentation/Architecture.md` for full architecture details.
 
 **Entity Framework Core Migrations**:
 ```bash
-dotnet ef migrations add <MigrationName> --project src/CarePath.Infrastructure --startup-project src/CarePath.Api
-dotnet ef database update --project src/CarePath.Api
+dotnet ef migrations add <MigrationName> --project Infrastructure --startup-project WebApi
+dotnet ef database update --startup-project WebApi
 ```
 
 **Running Tests**:
 ```bash
 dotnet test tests/CarePath.Domain.Tests/
 dotnet test tests/CarePath.Application.Tests/
-dotnet test tests/CarePath.Api.Tests/
+dotnet test WebApi.Tests/
 ```
 
 **Running the API**:
 ```bash
-cd src/CarePath.Api
+cd WebApi
 dotnet run
 # API available at: https://localhost:7001
 ```

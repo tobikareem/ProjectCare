@@ -178,7 +178,7 @@ Domain → Application → Infrastructure → API → UI (MAUI + Web)
 1. **Domain** (`CarePath.Domain`): Core entities, value objects, interfaces
 2. **Application** (`CarePath.Application`): Services, DTOs, validators
 3. **Infrastructure** (`CarePath.Infrastructure`): EF Core, repositories, external services
-4. **API** (`CarePath.Api`): Controllers, SignalR hubs
+4. **API** (`WebApi`): Controllers, SignalR hubs
 5. **UI Mobile** (`CarePath.MauiApp`): .NET MAUI Blazor Hybrid (iOS/Android)
 6. **UI Web** (`CarePath.Web`): Blazor WebAssembly admin dashboard
 
@@ -186,8 +186,8 @@ Domain → Application → Infrastructure → API → UI (MAUI + Web)
 
 **EF Core Migration:**
 ```bash
-dotnet ef migrations add MyFeature --project src/CarePath.Infrastructure --startup-project src/CarePath.Api
-dotnet ef database update --project src/CarePath.Api
+dotnet ef migrations add MyFeature --project Infrastructure --startup-project WebApi
+dotnet ef database update --startup-project WebApi
 ```
 
 **Repository Pattern:**

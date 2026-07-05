@@ -17,6 +17,9 @@ This file captures recurring mistakes, corrections, and hard-won patterns discov
 
 ## EF Core / Infrastructure
 
+- **Ignore CP-03 scalar placeholders in CP-02 mappings** - `VisitNote.TransitionPlanId` exists in Domain for future integration, but CP-02 must ignore it until Transitions persistence is explicitly configured; otherwise migrations create a partial CP-03 schema without reviewed FKs.
+- **Nullable FKs on PHI records still use `DeleteBehavior.Restrict`** - Nullable means the Application layer may explicitly unassign with audit logging; the database must not silently `SET NULL` during parent deletion because that erases clinical history.
+- **Do not map CP-03 Transitions DbSets during CP-02 Phase 1** - Transitions entities contain PHI and need explicit configurations before entering the EF model. Mapping them early lets EF conventions create unbounded PHI columns and cascade-delete FKs. Add Transitions DbSets only with their CP-03 backend configurations.
 - **`TransitionPlan.TransitionWindowEnd`** must be set in the Application layer before save (`DischargeDate.AddDays(30)` in UTC). Never compute it in the entity constructor — that would make it hard to test without mocking DateTime.
 - **`TransitionCheckIn.ResponsesJson`** is PHI stored as `nvarchar(max)`. Configure it that way in EF. Never serialize it into a log string.
 - **PHI cascade deletes**: ALL 6 PHI entities (Client, CarePlan, Shift, VisitNote, VisitPhoto, CaregiverCertification) must use `DeleteBehavior.Restrict` — no exceptions. The subagent initially set CaregiverCertification and VisitPhoto to Cascade because they're "dependent" entities, but HIPAA overrides that logic.
@@ -24,6 +27,9 @@ This file captures recurring mistakes, corrections, and hard-won patterns discov
 - **Property names must match CP-01**: When writing Infrastructure configurations, always cross-reference the approved CP-01 design spec for exact property names. Common mismatches caught: `IssuingBody` vs `IssuingAuthority`, `TransactionId` vs `ReferenceNumber`, `StartLatitude` vs `CheckInLatitude`.
 - **GPS fields are `double?`**: CP-01 defines GPS coordinates as `double?`, not `decimal(10,7)`. EF Core maps `double` to SQL Server `float` by default — no explicit precision config needed.
 - **Scope boundaries**: When a feature is listed in both in-scope and out-of-scope sections, it creates implementation confusion. Resolve immediately. If implementation code exists in the design spec, it's in-scope.
+
+- **Development seed credentials must never be hard-coded** - Even development-only seed users become dangerous if an environment is accidentally marked Development. Read temporary passwords from user secrets, environment variables, or other uncommitted configuration and fail closed when missing.
+- **Save resurrected soft-deleted principal rows before Identity lookups** - If `ApplicationUser` has a query filter through `DomainUser.IsDeleted`, undeleting the domain user only in memory can hide the existing Identity row and cause duplicate-key failures. Persist the undelete before `UserManager` lookup.
 
 ## Testing
 
@@ -36,8 +42,9 @@ This file captures recurring mistakes, corrections, and hard-won patterns discov
 
 ## Spec Workflow
 
-- **CP-02 Transitions specs are in Draft status as of 2026-06-22** — they must be reviewed and moved to Approved before TASK-020 begins. Do not start implementation with Draft specs.
-- **When a task spec says TASK-XXX, the XX number continues from the last CP-01 task** — CP-01 ended at TASK-019a. CP-02 starts at TASK-020.
+- **User corrections from code review must update task status immediately** - If review shows a task was over-marked complete or scope was wrong, correct the board/spec in the same turn before continuing implementation.
+- **Spec numbering baseline**: CP-02 is Infrastructure / EF Core. CP-03 is CarePath Transitions. Transitions Domain work already exists; backend work waits for Infrastructure and Application foundations.
+- **Task numbers are historical identifiers, not CP identifiers** — completed Transitions Domain tasks remain TASK-020 through TASK-024; CP-02 Infrastructure tasks remain TASK-040+. Do not renumber completed tasks just to match CP numbers.
 - **Design spec is source of truth**: When tasks spec or CLAUDE.md conflicts with the approved design spec, the design spec wins. Update the stale document, not the design spec.
 - **User corrections are authoritative**: When the user edits a spec directly (e.g., changing file paths, correcting role names), those edits override any prior assumptions. Check the system-reminder for modifications.
 
@@ -55,10 +62,15 @@ This file captures recurring mistakes, corrections, and hard-won patterns discov
 - Updated wireframe navigation (`carepath-wireframe.html`) with working page/screen switching
 - Scoped CarePath Transitions feature (30-day post-discharge care management)
 - Created `CarePath_Transitions_Feature_Presentation_v2.pptx` — 10 slides, full B2B business case, competitor landscape, solution, MVP path
-- Created three spec files for CP-02 (requirements, design, tasks)
+- Created three spec files for CP-03 Transitions (requirements, design, tasks); originally CP-02 before Sprint 1 renumbering
 - Updated CLAUDE.md with full Transitions domain model and new entities
 
 **What's next**:
-- Get CP-02 specs approved (review with Tobi)
-- Begin TASK-020 (enumerations) when specs reach Approved status
-- Application and Infrastructure layers (CP-01 work) are the prerequisite for shipping CP-02
+- CP-03 Transitions specs are approved for the Domain slice; backend work is scheduled after Infrastructure/Application prerequisites
+- TASK-020 through TASK-024 for CP-03 Transitions Domain are complete
+- Infrastructure (CP-02) and Application/contracts are prerequisites for shipping CP-03 Transitions backend
+## Sprint 3 Mapping / Contracts
+
+- **Never map persisted media/blob URLs directly into DTOs** - Signature URLs are biometric PHI and persisted storage locators may be durable or public. Application mappers should leave signature URL fields null until an authorized, audited short-lived URL service exists.
+- **Summary DTO PHI guards must use a broad denylist** - Client summaries must exclude DOB and clinical/insurance/location fields, but all `*SummaryDto` types also need reflection guards for care-plan text, visit-note clinical text, notes, signature URLs, raw GPS, and rate/margin fields. Detail DTO exposure is allowed only behind role + object authorization.
+- **Contracts boundary tests should inspect the Contracts assembly directly** - Mapper-signature tests are useful, but Sprint 3 also requires proving `CarePath.Contracts` has no Domain assembly reference and no public member types from `CarePath.Domain.*`.

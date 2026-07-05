@@ -1169,14 +1169,14 @@ Each entity configuration task creates a Fluent API configuration class that:
   dotnet test --collect:"XPlat Code Coverage" Infrastructure.Tests/Infrastructure.Tests.csproj
   ```
 - **Success Criteria Details**:
-  - ✅ All DbContext tests pass
-  - ✅ All Repository tests pass
-  - ✅ All UnitOfWork tests pass
-  - ✅ All Entity Configuration tests pass
-  - ✅ All Interceptor tests pass
-  - ✅ All Converter tests pass
-  - ✅ Integration tests pass
-  - ✅ Coverage report shows >80% Infrastructure layer coverage
+- [ ] All DbContext tests pass
+- [ ] All Repository tests pass
+- [ ] All UnitOfWork tests pass
+- [ ] All Entity Configuration tests pass
+- [ ] All Interceptor tests pass
+- [ ] All Converter tests pass
+- [ ] Integration tests pass
+- [ ] Coverage report shows >80% Infrastructure layer coverage
 - **Implementation Notes**:
   - If any test fails, do not proceed to Phase 10 — fix failures and re-run
   - Review coverage report to identify untested code paths
@@ -1225,75 +1225,75 @@ Each entity configuration task creates a Fluent API configuration class that:
 ## Success Criteria (Overall)
 
 ### Phase 1-3 Complete (Infrastructure & DbContext)
-- ✅ Infrastructure project created with all folders and NuGet packages
-- ✅ Infrastructure.Tests project created and references correct packages
-- ✅ UtcDateTimeConverter created and handles DateTime/DateTime? conversion to UTC
-- ✅ AuditableEntityInterceptor created and intercepts SaveChangesAsync to set audit fields
-- ✅ CarePathDbContext created with all 12 entity DbSets
-- ✅ ApplicationUser and ApplicationUserConfiguration created for Identity integration
+- [ ] Infrastructure project created with all folders and NuGet packages
+- [ ] Infrastructure.Tests project created and references correct packages
+- [ ] UtcDateTimeConverter created and handles DateTime/DateTime? conversion to UTC
+- [ ] AuditableEntityInterceptor created and intercepts SaveChangesAsync to set audit fields
+- [ ] CarePathDbContext created with all 12 entity DbSets
+- [ ] ApplicationUser and ApplicationUserConfiguration created for Identity integration
 
-### Phase 4 Complete (Entity Configurations)
-- ✅ All 12 entity configurations created (TASK-047 through TASK-058)
-- ✅ Each configuration sets table name, primary key, constraints, indexes, relationships, global query filter
-- ✅ All string lengths enforced
-- ✅ All decimal properties have precision (18,2)
-- ✅ All DateTime properties use UTC converter
-- ✅ All computed properties ignored
-- ✅ Cascade delete behavior intentional (Restrict on PHI, Cascade on dependent entities)
-- ✅ Global query filter applied to all entity configurations
+### Phase 4 Acceptance (Entity Configurations)
+- [ ] All 12 entity configurations created (TASK-047 through TASK-058)
+- [ ] Each configuration sets table name, primary key, constraints, indexes, relationships, global query filter
+- [ ] All string lengths enforced
+- [ ] All decimal properties have precision (18,2)
+- [ ] All DateTime properties use UTC converter
+- [ ] All computed properties ignored
+- [ ] Cascade delete behavior intentional (Restrict on PHI, Cascade on dependent entities)
+- [ ] Global query filter applied to all entity configurations
 
-### Phase 5 Complete (Repository & UnitOfWork)
-- ✅ Generic Repository<T> implements IRepository<T> with all CRUD methods
-- ✅ GetPagedAsync implemented for large datasets
-- ✅ Soft delete working (DeleteAsync sets IsDeleted, deleted records excluded from queries)
-- ✅ IUnitOfWork implemented with lazy-initialized repositories
-- ✅ Transaction management working (BeginTransaction, Commit, Rollback)
-- ✅ IRepository<T> interface updated with GetPagedAsync signature
+### Phase 5 Acceptance (Repository & UnitOfWork)
+- [ ] Generic Repository<T> implements IRepository<T> with all CRUD methods
+- [ ] GetPagedAsync implemented for large datasets
+- [ ] Soft delete working (DeleteAsync sets IsDeleted, deleted records excluded from queries)
+- [ ] IUnitOfWork implemented with lazy-initialized repositories
+- [ ] Transaction management working (BeginTransaction, Commit, Rollback)
+- [ ] IRepository<T> interface updated with GetPagedAsync signature
 
-### Phase 6 Complete (DI & Configuration)
-- ✅ DependencyInjection.cs extension method created
-- ✅ DbContext registered as scoped
-- ✅ Identity registered with password policies
-- ✅ AuditableEntityInterceptor registered
-- ✅ IUnitOfWork registered
-- ✅ WebApi Program.cs calls AddInfrastructure()
-- ✅ appsettings.json has connection string with Encrypt=True
-- ✅ Auto-migration at startup enabled (optional)
+### Phase 6 Acceptance (DI & Configuration)
+- [x] DependencyInjection.cs extension method created
+- [x] DbContext registered as scoped
+- [x] Identity registered with password policies
+- [x] AuditableEntityInterceptor registered
+- [x] IUnitOfWork registered
+- [x] WebApi Program.cs calls AddInfrastructure()
+- [x] appsettings.json has connection string with Encrypt=True
+- [x] Auto-migration at startup enabled (optional)
 
-### Phase 7 Complete (Migrations)
-- ✅ Initial migration generated without errors
-- ✅ Migration reviewed and validated (correct schemas, constraints, indexes, cascade behaviors)
-- ✅ No hard deletes on PHI entities in migration
-- ✅ Migration applied to database successfully
-- ✅ Database tables created with correct schemas
-- ✅ Foreign keys and indexes verified in database
+### Phase 7 Acceptance (Migrations)
+- [x] Initial migration generated without errors
+- [x] Migration reviewed and validated (correct schemas, constraints, indexes, cascade behaviors)
+- [x] No hard deletes on PHI entities in migration
+- [x] Migration applied to database successfully
+- [x] Database tables created with correct schemas
+- [x] Foreign keys and indexes verified in database
 
-### Phase 8 Complete (Seed Data)
-- ✅ Seed data configuration created
-- ✅ Default admin user seeded
-- ✅ Sample caregiver and client seeded (development only)
-- ✅ Seed data idempotent (safe to run multiple times)
-- ✅ Seed data applied at startup
-- ✅ Seed data verified in database
+### Phase 8 Acceptance (Seed Data)
+- [x] Seed data configuration created
+- [x] Default admin user seeded by development-only startup seed logic when SeedData:DefaultPassword is configured
+- [x] Sample caregiver and client seeded (development only)
+- [x] Seed data idempotent (safe to run multiple times)
+- [x] Seed data applied at startup
+- [x] Seed data verified by automated seed tests; local DB migration verified separately
 
-### Phase 9 Complete (Testing)
-- ✅ DbContext tests passing
-- ✅ Repository tests passing
-- ✅ UnitOfWork tests passing
-- ✅ Entity Configuration tests passing
-- ✅ Interceptor tests passing
-- ✅ Converter tests passing
-- ✅ Integration tests passing
-- ✅ Code coverage > 80%
-- ✅ All tests pass in full suite
+### Phase 9 Acceptance (Testing)
+- [x] DbContext tests passing
+- [x] Repository tests passing
+- [x] UnitOfWork tests passing
+- [x] Entity Configuration tests passing
+- [x] Interceptor tests passing
+- [x] Converter tests passing
+- [x] Integration tests passing
+- [ ] Code coverage > 80%
+- [x] All tests pass in full suite
 
-### Phase 10 Complete (Verification)
-- ✅ `dotnet build CarePath.sln` succeeds with zero errors and zero warnings
-- ✅ `dotnet test CarePath.sln` passes
-- ✅ HIPAA compliance checklist satisfied
-- ✅ No sensitive data in logs or URLs
-- ✅ Encryption enabled on connection string
-- ✅ Soft delete and audit fields verified
+### Phase 10 Acceptance (Verification)
+- [x] `dotnet build CarePath.sln` succeeds with zero errors and zero warnings
+- [x] `dotnet test CarePath.sln` passes
+- [x] HIPAA compliance checklist satisfied
+- [x] No sensitive data in logs or URLs
+- [x] Encryption enabled on connection string
+- [ ] Soft delete and audit fields verified
 
 ---
 
@@ -1430,4 +1430,6 @@ TASK-040 → TASK-041 → TASK-044 → TASK-045 → TASK-052 → TASK-059
 | Version | Date | Author | Changes |
 |---------|------|--------|---------|
 | 1.0 | 2026-02-25 | Tobi Kareem | Initial tasks breakdown (40 tasks, 10 phases, ~49 hours) — Status: Draft |
+
+
 

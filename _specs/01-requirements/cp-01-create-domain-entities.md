@@ -375,7 +375,7 @@ Acceptance Criteria:
    - GPS: CheckInLatitude, CheckInLongitude, CheckInTime, CheckOutLatitude, CheckOutLongitude, CheckOutTime
    - BreakMinutes, Notes, CancellationReason, CancelledAt
    - Collections: VisitNotes
-   - Computed: ScheduledDuration, ActualDuration, BillableHours, GrossMargin, GrossMarginPercentage
+   - Computed: ScheduledDuration, ActualDuration, BillableHours, GrossMargin (total shift margin), GrossMarginPercentage
 
 8. **VisitNote** (extends BaseEntity)
    - ShiftId (FK), CaregiverId (FK)
@@ -449,7 +449,7 @@ Acceptance Criteria:
    - Repository implementations
    - Database migrations
 
-4. **API Layer** (CarePath.Api) - Future Phase
+4. **API Layer** (WebApi) - Future Phase
    - Expose entities via REST API
 
 **No External Services for Domain Layer**:

@@ -1,64 +1,62 @@
-# CarePath Health — Project Progress
+# CarePath Health - Project Progress
 
-Last updated: 2026-06-22
-
----
-
-## CP-01 — Domain Layer
-
-**Status**: Complete  
-**All 39 tasks done.** 12 entities, 8 enumerations, `IRepository<T>` / `IUnitOfWork` interfaces, full test suite.
-
-**Entities implemented**: `User`, `Caregiver`, `Client`, `CarePlan`, `Shift`, `VisitNote`, `VisitPhoto`, `Invoice`, `InvoiceLineItem`, `Payment`, `CaregiverCertification`
-
-> Note: `CarePlan` lives in `Entities/Clinical/` in the actual code, not `Entities/Identity/` as the design spec states. Trust the actual file structure.
+Last updated: 2026-07-04
 
 ---
 
-## CP-02 — CarePath Transitions
+## CP-01 - Domain Layer
 
-**Status**: Approved 2026-06-22 — implementation in progress
+**Status**: Complete
 
-**What it is**: 30-day post-discharge care management. Intake → Verify → Guide → Escalate.
-
-**6 new entities** (`Entities/Transitions/`):
-- `DischargeDocument` — source upload
-- `TransitionPlan` — clinician-verified plan (status: Draft → PendingVerification → Active → Completed)
-- `TransitionInstruction` — extracted item with AI confidence score
-- `TransitionReminder` — scheduled delivery (App / SMS / Voice via Twilio)
-- `TransitionCheckIn` — patient symptom response
-- `TransitionEscalation` — coordinator alert
-
-**11 new enumerations** — see CLAUDE.md for full list
-
-**Existing change**: `VisitNote` gains optional `TransitionPlanId` FK
-
-**Spec files**:
-- `_specs/01-requirements/cp-02-transitions.md`
-- `_specs/02-design/cp-02-transitions.md`
-- `_specs/03-tasks/cp-02-transitions.md` (TASK-020 through TASK-037)
-
-**MVP phases**:
-- Month 1: Domain entities + enumerations (TASK-020–024)
-- Month 1–2: Infrastructure — EF Core, Twilio, AI extraction interface (TASK-025–028)
-- Month 2: Application commands + queries (TASK-029–032)
-- Month 2–3: WebApi controller (TASK-033)
-- Month 4+: FHIR import, multilingual, outcome reporting (TASK-034–037)
-
-**Domain layer complete** (2026-06-22):
-- TASK-020 ✅ — 11 enumerations added to `Domain/Enumerations/`
-- TASK-021 ✅ — 6 entities created in `Domain/Entities/Transitions/`
-- TASK-022 ✅ — `VisitNote.TransitionPlanId` added
-- TASK-023 ✅ — 3 repository interfaces added to `Domain/Interfaces/Repositories/`
-- TASK-024 ✅ — 3 test files, 24 unit tests in `Domain.Tests/Entities/Transitions/`
-
-**Next action**: Run `dotnet build CarePath.sln` and `dotnet test Domain.Tests` to verify. Then begin TASK-025 (EF Core DbContext additions) — Infrastructure layer.
+12 core entities, 8 core enumerations plus CP-03 Transitions Domain additions, repository interfaces, and pure Domain tests are in place.
 
 ---
 
-## Application Layer — Not Yet Started
+## CP-02 - Infrastructure / EF Core
 
-All features above require the Application layer (services, DTOs, validators, CQRS handlers). This is the next major milestone after spec approval. See `Documentation/Architecture.md` for planned structure.
+**Status**: Complete for Sprint 2 foundation
+
+EF Core SQL Server persistence, ASP.NET Core Identity schema foundation, repositories, UnitOfWork, audit field population, UTC conversion, soft-delete filters, initial migration, DI registration, and synthetic development seeding are implemented.
+
+CP-03 Transitions persistence remains deferred until the reviewed Sprint 5 backend slice.
+
+---
+
+## Sprint 3 - Application, Auth & Shared Contracts
+
+**Status**: Implementation complete pending PM sprint close
+
+Completed Sprint 3 slices:
+- Shared `CarePath.Contracts` envelopes, enum mirrors, and module DTOs for Identity, Clients/CarePlans, Scheduling, and Billing.
+- `CarePath.Client` typed client foundation and `CarePath.Client.UI` reusable primitives.
+- Application auth/audit abstractions, `IdorGuard`, and `CreateShiftCommand` validation foundation.
+- JWT auth foundation, Identity service, role policies including Clinician, deny-by-default fallback authorization, and IDOR-safe problem-details middleware.
+- Domain-to-Contracts manual mappers in Application for Identity, Clients, Scheduling, and Billing.
+- PHI boundary tests: enum parity, mapper computed flattening, DTO reflection guards, no Domain type exposure in contract signatures, validation response safety, and identical PHI missing/denied 404 response behavior.
+
+Verification from final Sprint 3 implementation slice:
+- `dotnet build CarePath.sln` passed with 0 warnings.
+- `dotnet test CarePath.sln` passed: Domain 251, Application 29, Infrastructure 55.
+- `dotnet-code-reviewer` reviewed the mapping slice; findings were fixed.
+- HIPAA spot check completed: no PHI values in new logs/exceptions/URLs, no direct persisted signature URL mapping, validation responses do not echo submitted values, and PHI missing vs denied responses remain byte-identical.
+
+PM agent still owns sprint board/spec close-out. Do not mark Sprint 3 complete here.
+
+---
+
+## CP-03 - CarePath Transitions
+
+**Status**: Approved for Domain slice; backend workflow planned for Sprint 5 after Infrastructure/Application prerequisites
+
+30-day post-discharge care management: Intake -> Verify -> Guide -> Escalate.
+
+Domain layer complete:
+- 6 Transitions entities in `Domain/Entities/Transitions/`.
+- 11 Transitions enumerations.
+- `VisitNote.TransitionPlanId` placeholder for future integration.
+- Repository interfaces and pure Domain tests.
+
+Backend implementation waits for Sprint 5.
 
 ---
 
@@ -66,9 +64,8 @@ All features above require the Application layer (services, DTOs, validators, CQ
 
 | File | Description |
 |---|---|
-| `CLAUDE.md` | Coding conventions, architecture rules, full domain model, Transitions scope |
-| `_specs/lessons.md` | Session notes, common mistakes, architectural decisions |
-| `_specs/PROGRESS.md` | This file — project status and next actions |
+| `AGENTS.md` | Coding conventions, architecture rules, full domain model, Sprint 3 shared-client architecture |
+| `CLAUDE.md` | Companion agent instructions and project conventions |
+| `_specs/lessons.md` | Recurring implementation lessons and corrections |
+| `_specs/PROGRESS.md` | This file - project status and next actions |
 | `Documentation/Architecture.md` | Full system architecture with layer diagrams |
-| `Documentation/Wireframes/carepath-wireframe.html` | Functional web + mobile wireframe with working navigation |
-| `Documentation/CarePath_Transitions_Feature_Presentation_v2.pptx` | 10-slide Transitions business case deck |

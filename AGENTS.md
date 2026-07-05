@@ -42,7 +42,7 @@ bash _specs/scripts/new-spec.sh CP-XX "Feature Name"
 | Layer | Namespace | Responsibility |
 |---|---|---|
 | Domain | `CarePath.Domain` | Entities, enums, interfaces. Zero external dependencies. |
-| Application | `CarePath.Application` | Services, DTOs, validators, interfaces (depends on Domain only). |
+| Application | `CarePath.Application` | Services, DTOs, validators, interfaces (depends on Domain and CarePath.Contracts only). |
 | Infrastructure | `CarePath.Infrastructure` | EF Core DbContext, repositories, external services. |
 | WebApi | `CarePath.WebApi` | ASP.NET Core controllers, middleware, SignalR hubs. |
 
@@ -54,7 +54,8 @@ bash _specs/scripts/new-spec.sh CP-XX "Feature Name"
 CarePath.Domain/
 ├── Entities/
 │   ├── Common/BaseEntity.cs              # Abstract base — all entities inherit this
-│   ├── Identity/                         # User, Caregiver, Client, CarePlan, CaregiverCertification
+│   ├── Identity/                         # User, Caregiver, Client, CaregiverCertification
+│   ├── Clinical/                         # CarePlan
 │   ├── Scheduling/                       # Shift, VisitNote, VisitPhoto
 │   └── Billing/                          # Invoice, InvoiceLineItem, Payment
 ├── Enumerations/                         # UserRole, EmploymentType, ShiftStatus, etc.
@@ -95,9 +96,26 @@ _specs/
 ### Repository Pattern
 
 - Interfaces defined in `Domain/Interfaces/Repositories/`
-- Implementations in `Infrastructure/Repositories/`
+- Implementations in `Infrastructure/Persistence/Repositories/`
 - Use `where T : BaseEntity` constraint on `IRepository<T>` — not `where T : class`
 - Apply a global EF Core query filter (`IsDeleted == false`) in Infrastructure so soft-deleted records are automatically excluded
+
+
+---
+
+## Shared Client Architecture
+
+Blazor WebAssembly and MAUI Blazor Hybrid must share client-safe code without binding directly to Domain entities.
+
+| Project | Purpose | May Reference |
+|---|---|---|
+| `CarePath.Contracts` | DTOs, request/response models, pagination/result envelopes, enum mirrors safe for clients | No Domain, Infrastructure, or WebApi references |
+| `CarePath.Client` | Typed API clients, auth token handling abstractions, retry/error mapping, client-side validation helpers | `CarePath.Contracts` |
+| `CarePath.Client.UI` | Reusable Razor components, forms, table primitives, status badges, validation display | `CarePath.Contracts`, `CarePath.Client` |
+
+Allowed to share: DTOs, typed clients, UI primitives, formatting helpers, and validation helpers that do not expose PHI beyond the current authorized view.
+
+Do not share: full pages, platform-specific services, persistence entities, EF models, Domain entities, WebApi controllers, secrets, or provider SDK clients.
 
 ---
 
@@ -119,11 +137,14 @@ All PHI (Protected Health Information) data requires:
 
 - **Encryption at rest** — SQL Server Transparent Data Encryption
 - **Role-based authorization** — enforce `[Authorize(Roles = "...")]` on every controller/endpoint that touches PHI
-- **Audit logging** — every read, write, and delete of PHI must be logged with `UserId`, `Timestamp`, `Action`, `EntityType`, `EntityId`
+- **Object-level authorization** — every `{id}` route that touches PHI must verify the current user can access that specific record to prevent IDOR
+- **Audit logging** — every read, write, update, and delete of PHI must be logged with `UserId`, `Timestamp`, `Action`, `EntityType`, `EntityId`; never log PHI values
 - **No PHI in logs** — never log patient names, DOB, diagnosis, SSN, or address strings
 - **No PHI in URLs** — never put patient identifiers in query strings or route parameters without authorization checks
 - **Data retention**: 6 years for all medical records (Maryland requirement)
 - `IsDeleted` soft-delete exists partly for compliance — hard deletes are forbidden on clinical data
+- **Third-party provider gates** — Twilio/SMS/voice, AI/OCR, email, and storage providers must have HIPAA readiness documented before PHI is sent externally; SMS/voice also needs BAA, consent, opt-out, webhook verification, and minimum-necessary content rules
+- **File/photo storage gates** — private blobs only, encryption, access control, short-lived URLs, malware scanning, and no public containers
 
 Affected entities (always treat as PHI): `Client`, `CarePlan`, `Shift`, `VisitNote`, `VisitPhoto`, `CaregiverCertification`, `DischargeDocument`, `TransitionPlan`, `TransitionInstruction`, `TransitionCheckIn`.
 
@@ -202,20 +223,21 @@ Follow this sequence for every implementation task:
 - `User.FullName` = `$"{FirstName} {LastName}"`
 - `Client.Age` = calculated from `DateOfBirth` (handle before/after birthday edge cases)
 - `Shift.BillableHours` = `(ActualEnd - ActualStart - BreakMinutes) / 60`
-- `Shift.GrossMargin` = `BillRate - PayRate`
-- `Shift.GrossMarginPercentage` = `(GrossMargin / BillRate) * 100` — guard against zero `BillRate`
+- `Shift.GrossMargin` = `(BillRate - PayRate) * BillableHours` (total shift margin)
+- `Shift.GrossMarginPercentage` = `(GrossMargin / (BillRate * BillableHours)) * 100` — guard against zero `BillRate` or zero `BillableHours`
+- Future dashboard/contracts work uses `HourlyGrossMargin = BillRate - PayRate` when hourly spread is needed
 - `CaregiverCertification.IsExpired` = `ExpirationDate.Date < DateTime.UtcNow.Date`
 - `CaregiverCertification.IsExpiringSoon` = expires within 30 days
 - `Invoice.Subtotal` = sum of `LineItems.Amount`
 - `Invoice.Balance` = `TotalAmount - AmountPaid`
 
-**Enumerations**: `UserRole` (Admin, Coordinator, Caregiver, Client, FacilityManager), `EmploymentType`, `CertificationType`, `ServiceType`, `ShiftStatus`, `InvoiceStatus`, `PaymentMethod`, `PaymentStatus`
+**Enumerations**: `UserRole` (Admin, Coordinator, Caregiver, Client, FacilityManager, Clinician; Family is not a role - family proxies authenticate as Client with explicit access grants deferred to Sprint 4), `EmploymentType`, `CertificationType`, `ServiceType`, `ShiftStatus`, `InvoiceStatus`, `PaymentMethod`, `PaymentStatus`
 
 ---
 
-### CarePath Transitions Entities (CP-02 — Planned)
+### CarePath Transitions Entities (CP-03 — Domain implemented, backend planned)
 
-**Spec**: `_specs/01-requirements/cp-02-transitions.md`, `_specs/02-design/cp-02-transitions.md`
+**Spec**: `_specs/01-requirements/cp-03-transitions.md`, `_specs/02-design/cp-03-transitions.md`
 
 **Purpose**: 30-day post-discharge care management. Four-step workflow: Intake → Verify → Guide → Escalate.
 
@@ -274,7 +296,7 @@ Follow this sequence for every implementation task:
 | Mobile | .NET MAUI Blazor Hybrid |
 | Admin UI | Blazor WebAssembly |
 | Docs | Context7 MCP (`.codex/config.toml`) |
-| SMS/Voice | Twilio (planned for CP-02 Transitions reminders) |
+| SMS/Voice | Twilio (planned for CP-03 Transitions reminders) |
 
 ---
 

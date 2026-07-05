@@ -128,8 +128,24 @@
 - `DateTime` vs `DateTimeOffset` — still UNRESOLVED; must decide before EF Core Infrastructure layer
 - Design spec Section 1.2 folder name (`Enums/`) must be corrected to `Enumerations/`
 - `Domain.Tests.csproj` — RESOLVED: `<AssemblyName>`, `<RootNamespace>`, `<TreatWarningsAsErrors>true` all present; `coverlet.collector` has `PrivateAssets="all"` — RESOLVED
-- `WebApi.csproj` missing `<RootNamespace>CarePath.WebApi</RootNamespace>` and `<AssemblyName>CarePath.WebApi</AssemblyName>` — STILL OPEN
+- `WebApi.csproj` missing RootNamespace/AssemblyName — RESOLVED (confirmed present 2026-07-04)
 - Phase 3 issues resolved in Domain entity code: `Invoice.RecalculateStatus()` ADDED; `Caregiver.TotalShiftsCompleted`/`NoShowCount` have `private set` + domain methods; `VisitNote.*SignatureUrl` renamed correctly; `CarePlan` in `Clinical` namespace; `InvoiceLineItem.BillableHours` renamed correctly; `User.State` is `string?` — all confirmed RESOLVED by reading source files 2026-02-16
+
+## CP-02 Phase 1 (feature/dispatch) — REVIEWED 2026-06-27
+- See [project_cp02_phase1_review.md](project_cp02_phase1_review.md) for full findings
+- Infrastructure project scaffold, core EF Core components, and 3 test files shipped
+- OPEN BUGS: `ApplicationUser.DomainUser` should be `User DomainUser { get; set; } = null!;` not `User?`; `UtcDateTimeConverter` write path treats Unspecified as Local; `OnConfiguring` base call order wrong
+- CP-03 Transitions DbSets are in the context without entity configurations — must be removed until CP-03 entity configs are complete
+- Solution folder nesting: Infrastructure and Infrastructure.Tests are at sln root, not under src/tests
+- Missing per spec: entity configs (TASK-047–058), Repository, UnitOfWork, DI registration, migrations, seed data
+- Architecture decision: centralized `ApplyBaseEntityConventions` handles UTC converters + query filters — individual entity configs MUST NOT duplicate them
+
+## CP-02 Phase 2 (feature/dispatch) — REVIEWED 2026-07-04
+- See [project_cp02_phase2_review.md](project_cp02_phase2_review.md) for full findings
+- Entity configurations (all 11 CP-01 entities + ApplicationUser), Repository<T>, UnitOfWork, DependencyInjection.cs, InitialCreate migration, CarePathDbContextSeed, and 6 Infrastructure.Tests files shipped — Sprint 2 marked Complete
+- Build: 0 warnings/errors. Tests: 289/289 passing (242 Domain.Tests + 47 Infrastructure.Tests)
+- All Phase 1 bugs (ApplicationUser.DomainUser nullability, OnConfiguring order, WebApi.csproj RootNamespace) confirmed FIXED
+- No Critical/HIPAA-breaking issues found — only spec-drift Improvements (Address=200 vs spec'd 500, InvoiceNumber=50 vs spec'd 20, inconsistent CreatedBy/UpdatedBy max lengths 100 vs 256) and minor Nitpicks (GetPagedAsync orders by Id not business date, redundant IRepository<> DI registration, no UseAuthentication/AddAuthorization yet)
 
 ## CP-01 Phase 5 Test Suite (Domain.Tests) — REVIEWED 2026-02-16
 - 184 tests, 18 files: Entities/, Business/, Enumerations/, Integration/

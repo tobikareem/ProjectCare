@@ -6,12 +6,13 @@ namespace CarePath.Infrastructure.Tests.Persistence;
 public class MigrationShapeTests
 {
     private const string InitialMigrationFile = "20260628003352_InitialCreate.cs";
+    private const string ClientAccessGrantMigrationFile = "20260705080331_AddClientAccessGrants.cs";
 
     [Fact]
     public void InitialCreateMigration_WhenGenerated_CreatesExpectedCp01TablesOnly()
     {
         // Arrange
-        var migrationText = ReadInitialMigration();
+        var migrationText = ReadMigration(InitialMigrationFile);
         var expectedTables = new[]
         {
             "Users",
@@ -42,7 +43,7 @@ public class MigrationShapeTests
     public void InitialCreateMigration_WhenGenerated_DoesNotContainDestructiveDataOperationsOrRawPhiColumns()
     {
         // Arrange
-        var migrationText = ReadInitialMigration();
+        var migrationText = ReadMigration(InitialMigrationFile);
 
         // Assert
         migrationText.Should().NotContain("DeleteData");
@@ -55,7 +56,7 @@ public class MigrationShapeTests
     public void InitialCreateMigration_WhenGenerated_RestrictsPhiForeignKeys()
     {
         // Arrange
-        var migrationText = ReadInitialMigration();
+        var migrationText = ReadMigration(InitialMigrationFile);
         var phiForeignKeys = new[]
         {
             "FK_AspNetUsers_Users_DomainUserId",
@@ -77,15 +78,59 @@ public class MigrationShapeTests
         // Assert
         foreach (var foreignKeyName in phiForeignKeys)
         {
-            var pattern = $"name: \"{Regex.Escape(foreignKeyName)}\"[\\s\\S]*?onDelete: ReferentialAction\\.Restrict";
-            Regex.IsMatch(migrationText, pattern).Should().BeTrue($"{foreignKeyName} must use Restrict delete behavior");
+            AssertRestrictForeignKey(migrationText, foreignKeyName);
         }
     }
 
-    private static string ReadInitialMigration()
+    [Fact]
+    public void AddClientAccessGrantsMigration_WhenGenerated_CreatesGrantTableOnlyWithBoundedColumns()
+    {
+        // Arrange
+        var migrationText = ReadMigration(ClientAccessGrantMigrationFile);
+
+        // Assert
+        migrationText.Should().Contain("name: \"ClientAccessGrants\"");
+        migrationText.Should().Contain("AccessScope = table.Column<int>(type: \"int\", nullable: false)");
+        migrationText.Should().Contain("CreatedBy = table.Column<string>(type: \"nvarchar(256)\", maxLength: 256, nullable: true)");
+        migrationText.Should().Contain("UpdatedBy = table.Column<string>(type: \"nvarchar(256)\", maxLength: 256, nullable: true)");
+        migrationText.Should().NotContain("nvarchar(max)");
+        migrationText.Should().NotContain("DeleteData");
+        migrationText.Should().NotContain("RawContent");
+        migrationText.Should().NotContain("SourceText");
+    }
+
+    [Fact]
+    public void AddClientAccessGrantsMigration_WhenGenerated_RestrictsAllGrantForeignKeys()
+    {
+        // Arrange
+        var migrationText = ReadMigration(ClientAccessGrantMigrationFile);
+        var foreignKeys = new[]
+        {
+            "FK_ClientAccessGrants_Clients_ClientId",
+            "FK_ClientAccessGrants_Users_GrantedByUserId",
+            "FK_ClientAccessGrants_Users_GranteeUserId",
+            "FK_ClientAccessGrants_Users_RevokedByUserId"
+        };
+
+        // Assert
+        foreach (var foreignKeyName in foreignKeys)
+        {
+            AssertRestrictForeignKey(migrationText, foreignKeyName);
+        }
+
+        migrationText.Should().NotContain("ReferentialAction.Cascade");
+    }
+
+    private static void AssertRestrictForeignKey(string migrationText, string foreignKeyName)
+    {
+        var pattern = $"name: \"{Regex.Escape(foreignKeyName)}\"[\\s\\S]*?onDelete: ReferentialAction\\.Restrict";
+        Regex.IsMatch(migrationText, pattern).Should().BeTrue($"{foreignKeyName} must use Restrict delete behavior");
+    }
+
+    private static string ReadMigration(string migrationFile)
     {
         var repositoryRoot = FindRepositoryRoot();
-        var migrationPath = Path.Combine(repositoryRoot, "Infrastructure", "Migrations", InitialMigrationFile);
+        var migrationPath = Path.Combine(repositoryRoot, "Infrastructure", "Migrations", migrationFile);
 
         File.Exists(migrationPath).Should().BeTrue($"expected migration file at {migrationPath}");
         return File.ReadAllText(migrationPath);
@@ -108,4 +153,3 @@ public class MigrationShapeTests
         throw new InvalidOperationException("Could not locate CarePath.sln from test output directory.");
     }
 }
-

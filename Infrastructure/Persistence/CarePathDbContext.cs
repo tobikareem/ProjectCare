@@ -46,6 +46,9 @@ public class CarePathDbContext : IdentityDbContext<ApplicationUser, IdentityRole
     /// <summary>Client profiles.</summary>
     public DbSet<Client> Clients => Set<Client>();
 
+    /// <summary>Client access grants for family-proxy and delegated client access.</summary>
+    public DbSet<ClientAccessGrant> ClientAccessGrants => Set<ClientAccessGrant>();
+
     /// <summary>Care plans.</summary>
     public DbSet<CarePlan> CarePlans => Set<CarePlan>();
 

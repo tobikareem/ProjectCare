@@ -36,6 +36,10 @@ public class EntityConfigurationTests
         GetDeleteBehavior<CaregiverCertification>(nameof(CaregiverCertification.CaregiverId))
             .Should().Be(DeleteBehavior.Restrict);
         GetDeleteBehavior<Client>(nameof(Client.UserId)).Should().Be(DeleteBehavior.Restrict);
+        GetDeleteBehavior<ClientAccessGrant>(nameof(ClientAccessGrant.GranteeUserId)).Should().Be(DeleteBehavior.Restrict);
+        GetDeleteBehavior<ClientAccessGrant>(nameof(ClientAccessGrant.ClientId)).Should().Be(DeleteBehavior.Restrict);
+        GetDeleteBehavior<ClientAccessGrant>(nameof(ClientAccessGrant.GrantedByUserId)).Should().Be(DeleteBehavior.Restrict);
+        GetDeleteBehavior<ClientAccessGrant>(nameof(ClientAccessGrant.RevokedByUserId)).Should().Be(DeleteBehavior.Restrict);
         GetDeleteBehavior<CarePlan>(nameof(CarePlan.ClientId)).Should().Be(DeleteBehavior.Restrict);
         GetDeleteBehavior<Shift>(nameof(Shift.ClientId)).Should().Be(DeleteBehavior.Restrict);
         GetDeleteBehavior<Shift>(nameof(Shift.CaregiverId)).Should().Be(DeleteBehavior.Restrict);
@@ -93,6 +97,7 @@ public class EntityConfigurationTests
         // Assert
         AssertPropertyNotMapped<User>(nameof(User.FullName));
         AssertPropertyNotMapped<Client>(nameof(Client.Age));
+        AssertPropertyNotMapped<ClientAccessGrant>(nameof(ClientAccessGrant.IsRevoked));
         AssertPropertyNotMapped<CaregiverCertification>(nameof(CaregiverCertification.IsExpired));
         AssertPropertyNotMapped<CaregiverCertification>(nameof(CaregiverCertification.IsExpiringSoon));
         AssertPropertyNotMapped<Shift>(nameof(Shift.BillableHours));
@@ -118,6 +123,7 @@ public class EntityConfigurationTests
         AssertTableName<Caregiver>("Caregivers");
         AssertTableName<CaregiverCertification>("CaregiverCertifications");
         AssertTableName<Client>("Clients");
+        AssertTableName<ClientAccessGrant>("ClientAccessGrants");
         AssertTableName<CarePlan>("CarePlans");
         AssertTableName<Shift>("Shifts");
         AssertTableName<VisitNote>("VisitNotes");
@@ -133,6 +139,8 @@ public class EntityConfigurationTests
         // Assert
         AssertHasIndex<User>(nameof(User.Email));
         AssertHasIndex<Client>(nameof(Client.UserId));
+        AssertHasIndex<ClientAccessGrant>(nameof(ClientAccessGrant.GranteeUserId));
+        AssertHasIndex<ClientAccessGrant>(nameof(ClientAccessGrant.ClientId));
         AssertHasIndex<Caregiver>(nameof(Caregiver.UserId));
         AssertHasIndex<CaregiverCertification>(nameof(CaregiverCertification.ExpirationDate));
         AssertHasIndex<Shift>(nameof(Shift.ScheduledStartTime));
@@ -150,6 +158,8 @@ public class EntityConfigurationTests
         AssertDateTimeConfigured<User>(nameof(User.CreatedAt));
         AssertDateTimeConfigured<User>(nameof(User.LastLoginAt));
         AssertDateTimeConfigured<Client>(nameof(Client.DateOfBirth));
+        AssertDateTimeConfigured<ClientAccessGrant>(nameof(ClientAccessGrant.GrantedAtUtc));
+        AssertDateTimeConfigured<ClientAccessGrant>(nameof(ClientAccessGrant.RevokedAtUtc));
         AssertDateTimeConfigured<Shift>(nameof(Shift.ScheduledStartTime));
         AssertDateTimeConfigured<Shift>(nameof(Shift.ActualStartTime));
         AssertDateTimeConfigured<VisitNote>(nameof(VisitNote.VisitDateTime));
@@ -167,6 +177,7 @@ public class EntityConfigurationTests
             typeof(Caregiver),
             typeof(CaregiverCertification),
             typeof(Client),
+            typeof(ClientAccessGrant),
             typeof(CarePlan),
             typeof(Shift),
             typeof(VisitNote),
@@ -247,5 +258,3 @@ public class EntityConfigurationTests
         return context.Model;
     }
 }
-
-

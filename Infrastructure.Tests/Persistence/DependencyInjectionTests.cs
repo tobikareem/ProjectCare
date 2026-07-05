@@ -1,3 +1,4 @@
+using CarePath.Application.Abstractions.Auth;
 using CarePath.Domain.Entities.Identity;
 using CarePath.Domain.Interfaces.Repositories;
 using CarePath.Infrastructure;
@@ -33,10 +34,25 @@ public class DependencyInjectionTests
         scope.ServiceProvider.GetRequiredService<CarePathDbContext>().Should().NotBeNull();
         scope.ServiceProvider.GetRequiredService<IUnitOfWork>().Should().NotBeNull();
         scope.ServiceProvider.GetRequiredService<IRepository<User>>().Should().NotBeNull();
+        scope.ServiceProvider.GetRequiredService<IClientAccessEvaluator>().Should().NotBeNull();
         scope.ServiceProvider.GetRequiredService<AuditableEntityInterceptor>().Should().NotBeNull();
         serviceProvider.GetRequiredService<IHttpContextAccessor>().Should().NotBeNull();
     }
 
+    [Fact]
+    public void AddInfrastructure_WithConnectionStringOverload_RegistersClientAccessEvaluator()
+    {
+        // Arrange
+        var services = new ServiceCollection();
+
+        // Act
+        services.AddInfrastructure("Server=localhost;Database=CarePathHealth_Test;Integrated Security=true;Encrypt=True;TrustServerCertificate=True;");
+        using var serviceProvider = BuildValidatedProvider(services);
+        using var scope = serviceProvider.CreateScope();
+
+        // Assert
+        scope.ServiceProvider.GetRequiredService<IClientAccessEvaluator>().Should().NotBeNull();
+    }
     [Fact]
     public void AddInfrastructure_WhenConnectionStringMissing_ThrowsInvalidOperationException()
     {

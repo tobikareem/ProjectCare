@@ -20,6 +20,7 @@ public sealed class UnitOfWork : IUnitOfWork
     private IRepository<Caregiver>? _caregivers;
     private IRepository<CaregiverCertification>? _caregiverCertifications;
     private IRepository<Client>? _clients;
+    private IRepository<ClientAccessGrant>? _clientAccessGrants;
     private IRepository<CarePlan>? _carePlans;
     private IRepository<Shift>? _shifts;
     private IRepository<VisitNote>? _visitNotes;
@@ -47,6 +48,10 @@ public sealed class UnitOfWork : IUnitOfWork
 
     /// <inheritdoc />
     public IRepository<Client> Clients => _clients ??= new Repository<Client>(_context);
+
+    /// <inheritdoc />
+    public IRepository<ClientAccessGrant> ClientAccessGrants =>
+        _clientAccessGrants ??= new Repository<ClientAccessGrant>(_context);
 
     /// <inheritdoc />
     public IRepository<CarePlan> CarePlans => _carePlans ??= new Repository<CarePlan>(_context);

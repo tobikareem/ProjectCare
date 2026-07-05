@@ -31,7 +31,7 @@ namespace CarePath.Domain.Interfaces.Repositories;
 /// </remarks>
 public interface IUnitOfWork : IDisposable, IAsyncDisposable
 {
-    // ── Identity Repositories ─────────────────────────────────────────────────
+    // â”€â”€ Identity Repositories â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
     /// <summary>Repository for <see cref="User"/> entities.</summary>
     IRepository<User> Users { get; }
@@ -45,12 +45,15 @@ public interface IUnitOfWork : IDisposable, IAsyncDisposable
     /// <summary>Repository for <see cref="Client"/> profiles.</summary>
     IRepository<Client> Clients { get; }
 
-    // ── Clinical Repositories ─────────────────────────────────────────────────
+    /// <summary>Repository for <see cref="ClientAccessGrant"/> records.</summary>
+    IRepository<ClientAccessGrant> ClientAccessGrants { get; }
+
+    // â”€â”€ Clinical Repositories â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
     /// <summary>Repository for <see cref="CarePlan"/> documents.</summary>
     IRepository<CarePlan> CarePlans { get; }
 
-    // ── Scheduling Repositories ───────────────────────────────────────────────
+    // â”€â”€ Scheduling Repositories â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
     /// <summary>Repository for <see cref="Shift"/> entities.</summary>
     IRepository<Shift> Shifts { get; }
@@ -61,7 +64,7 @@ public interface IUnitOfWork : IDisposable, IAsyncDisposable
     /// <summary>Repository for <see cref="VisitPhoto"/> entities.</summary>
     IRepository<VisitPhoto> VisitPhotos { get; }
 
-    // ── Billing Repositories ──────────────────────────────────────────────────
+    // â”€â”€ Billing Repositories â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
     /// <summary>Repository for <see cref="Invoice"/> entities.</summary>
     IRepository<Invoice> Invoices { get; }
@@ -72,7 +75,7 @@ public interface IUnitOfWork : IDisposable, IAsyncDisposable
     /// <summary>Repository for <see cref="Payment"/> entities.</summary>
     IRepository<Payment> Payments { get; }
 
-    // ── Persistence ───────────────────────────────────────────────────────────
+    // â”€â”€ Persistence â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
     /// <summary>
     /// Persists all changes tracked across every repository in this unit of work to the database.
@@ -81,7 +84,7 @@ public interface IUnitOfWork : IDisposable, IAsyncDisposable
     /// <returns>The number of state entries written to the database.</returns>
     Task<int> SaveChangesAsync(CancellationToken cancellationToken = default);
 
-    // ── Transaction Management ────────────────────────────────────────────────
+    // â”€â”€ Transaction Management â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
     /// <summary>
     /// Begins a new explicit database transaction. Use when multiple

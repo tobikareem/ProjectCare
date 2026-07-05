@@ -13,15 +13,16 @@ public class EnumerationsTests
     [InlineData(UserRole.Caregiver)]
     [InlineData(UserRole.Client)]
     [InlineData(UserRole.FacilityManager)]
+    [InlineData(UserRole.Clinician)]
     public void UserRole_MemberIsDefined(UserRole role)
     {
         Enum.IsDefined(role).Should().BeTrue();
     }
 
     [Fact]
-    public void UserRole_HasFiveMembers()
+    public void UserRole_HasSixMembers()
     {
-        Enum.GetValues<UserRole>().Should().HaveCount(5);
+        Enum.GetValues<UserRole>().Should().HaveCount(6);
     }
 
     // ── EmploymentType ────────────────────────────────────────────────────────

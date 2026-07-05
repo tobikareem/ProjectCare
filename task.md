@@ -1,7 +1,7 @@
 # CarePath Sprint Execution Tracker
 
-Last updated: 2026-06-27  
-Status: Sprint 2 complete - ready for Sprint 3
+Last updated: 2026-07-04  
+Status: Sprint 3 in progress - decisions ratified, Contracts scaffolded, task board published
 
 This tracker is the working checklist for moving CarePath from a Domain-only foundation into a usable backend, Blazor web app, and MAUI Blazor Hybrid mobile app. The detailed sprint specs live in `_specs/sprints/`.
 
@@ -18,7 +18,7 @@ Build one shared healthcare operations backbone for:
 |---|---|---:|---|
 | Sprint 1 | Spec Hygiene & Architecture Baseline | [x] Complete | `_specs/sprints/sprint-01-spec-hygiene.md` |
 | Sprint 2 | Infrastructure Foundation | [x] Complete | `_specs/sprints/sprint-02-infrastructure-foundation.md` |
-| Sprint 3 | Application, Auth & Shared Contracts | [ ] Not Started | `_specs/sprints/sprint-03-application-auth-contracts.md` |
+| Sprint 3 | Application, Auth & Shared Contracts | [~] In Progress (board: `_specs/sprints/sprint-03-tasks.md`) | `_specs/sprints/sprint-03-application-auth-contracts.md` |
 | Sprint 4 | Core Operations Backend | [ ] Not Started | `_specs/sprints/sprint-04-core-operations-backend.md` |
 | Sprint 5 | CarePath Transitions Backend MVP | [ ] Not Started | `_specs/sprints/sprint-05-transitions-backend-mvp.md` |
 | Sprint 6 | Blazor Web App MVP | [ ] Not Started | `_specs/sprints/sprint-06-blazor-web-mvp.md` |
@@ -56,7 +56,7 @@ Build one shared healthcare operations backbone for:
 
 ## Immediate Next Step
 
-Begin Sprint 3: Application, Auth, and Shared Contracts boundary. CP-03 Transitions persistence remains deferred until explicit Transitions configurations are approved.
+Execute the Sprint 3 board at `_specs/sprints/sprint-03-tasks.md`. Critical path: S3-TASK-010 (normalize Application scaffolds) → S3-TASK-020 (Clinician=6) → S3-TASK-030+ (Application boundary). `CarePath.Contracts` envelopes and enum mirrors are scaffolded; its CarePath.sln entry needs re-adding (`dotnet sln add CarePath.Contracts/CarePath.Contracts.csproj`) after a concurrent solution rewrite dropped it. CP-03 Transitions persistence remains deferred until explicit Transitions configurations are approved.
 
 
 

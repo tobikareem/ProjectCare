@@ -1,7 +1,9 @@
 # Sprint 3 - Application, Auth & Shared Contracts
 
-Status: Draft
+Status: Approved (spec owner approval 2026-07-04; implementation active)
 Primary outcome: create the business boundary and shared DTO/client contract layer before UI work begins.
+
+> **Implementation breakdown**: `_specs/sprints/sprint-03-tasks.md` — S3-TASK board with dependencies, owners, and success criteria, plus the ratified decisions D1–D4 (Application→Contracts dependency, Clinician/Family role mapping, object-level authorization + PHI read audit enforcement, Application scaffold normalization) and the full Contracts plan. Read that file before implementing any Sprint 3 task.
 
 ## Sprint Goal
 
@@ -116,11 +118,13 @@ Feature: System actor audit
 
 ## Tasks
 
-- [ ] Create `Application` and `Application.Tests`.
-- [ ] Create `CarePath.Contracts`.
+Task-level tracking has moved to `_specs/sprints/sprint-03-tasks.md` (S3-TASK IDs). The checklist below is the summary view.
+
+- [ ] Create `Application` and `Application.Tests`. (S3-TASK-010/030 — scaffolds exist but must be normalized: net9.0, CPM, Domain+Contracts refs)
+- [x] Create `CarePath.Contracts`. (S3-TASK-011 — envelopes + 8 enum mirrors, 2026-07-04; sln entry pending re-add after concurrent sln rewrite)
 - [ ] Create `CarePath.Client`.
 - [ ] Create `CarePath.Client.UI`.
-- [ ] Define `ApiResponse<T>`, `PagedResult<T>`, validation error, and problem details contracts.
+- [x] Define `ApiResponse<T>`, `PagedResult<T>`, validation error, and problem details contracts. (S3-TASK-011)
 - [ ] Define client-safe DTOs for identity, clients, care plans, shifts, visit notes, billing, and transitions.
 - [ ] Add FluentValidation validators for core commands.
 - [ ] Add current-user and permission interfaces.

@@ -173,7 +173,7 @@ public sealed class DomainToContractMapperTests
     }
 
     [Fact]
-    public void ToDto_WhenMappingVisitNote_MapsStructuredAndClinicalFields()
+    public void ToDetailDto_WhenMappingVisitNote_MapsStructuredAndClinicalFields()
     {
         // Arrange
         var visitNote = new VisitNote
@@ -196,9 +196,17 @@ public sealed class DomainToContractMapperTests
             CaregiverSignatureUrl = "https://storage.local/synthetic-caregiver-signature",
             ClientOrFamilySignatureUrl = "https://storage.local/synthetic-client-signature",
         };
+        visitNote.Photos.Add(new VisitPhoto
+        {
+            Id = Guid.NewGuid(),
+            VisitNoteId = visitNote.Id,
+            TakenAt = visitNote.VisitDateTime,
+            Caption = "Synthetic photo caption.",
+            PhotoUrl = "opaque-photo-object-id"
+        });
 
         // Act
-        var dto = visitNote.ToDto();
+        var dto = visitNote.ToDetailDto();
 
         // Assert
         dto.Id.Should().Be(visitNote.Id);
@@ -206,6 +214,9 @@ public sealed class DomainToContractMapperTests
         dto.Medication.Should().BeTrue();
         dto.Activities.Should().Be("Synthetic activity note.");
         dto.TransitionPlanId.Should().Be(visitNote.TransitionPlanId);
+        dto.Photos.Should().ContainSingle();
+        dto.Photos[0].Caption.Should().BeNull();
+        dto.Photos[0].Url.Should().BeNull();
     }
 
     [Fact]
@@ -273,12 +284,18 @@ public sealed class DomainToContractMapperTests
             "PayRate",
         };
         var dtoTypes = GetContractDtoTypes();
+        var approvedMarginRateMembers = new HashSet<string>(StringComparer.Ordinal)
+        {
+            $"{typeof(ShiftMarginDto).FullName}.BillRate",
+            $"{typeof(ShiftMarginDto).FullName}.PayRate",
+        };
 
         // Act
         var forbiddenMembers = dtoTypes
             .SelectMany(type => type.GetProperties(BindingFlags.Public | BindingFlags.Instance)
                 .Where(property => forbiddenExactNames.Contains(property.Name))
                 .Select(property => $"{type.FullName}.{property.Name}"))
+            .Where(member => !approvedMarginRateMembers.Contains(member))
             .ToArray();
 
         // Assert

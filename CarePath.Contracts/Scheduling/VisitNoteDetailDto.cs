@@ -1,11 +1,12 @@
 namespace CarePath.Contracts.Scheduling;
 
 /// <summary>
-/// A caregiver's visit note. Clinical PHI throughout: endpoints returning this DTO require
-/// role AND object-level authorization, and every read is audit logged. None of the free-text
-/// fields may ever appear in logs, exceptions, or URLs.
+/// Full visit note (renamed from <c>VisitNoteDto</c> per D-S4-7). Clinical PHI throughout:
+/// endpoints returning this DTO require role AND object-level authorization, and every read is
+/// audit logged. None of the free-text fields may ever appear in logs, exceptions, or URLs.
+/// Lists use <see cref="VisitNoteSummaryDto"/>, which carries no clinical text.
 /// </summary>
-public class VisitNoteDto
+public class VisitNoteDetailDto
 {
     /// <summary>Visit note identifier.</summary>
     public Guid Id { get; init; }
@@ -67,9 +68,12 @@ public class VisitNoteDto
     /// <summary>Linked transition plan, when this note feeds CP-03 adherence tracking.</summary>
     public Guid? TransitionPlanId { get; init; }
 
-    /// <summary>Short-lived, access-controlled URL to the caregiver signature blob.</summary>
+    /// <summary>Photos attached to this note (metadata only).</summary>
+    public IReadOnlyList<VisitPhotoDto> Photos { get; init; } = [];
+
+    /// <summary>Short-lived, access-controlled URL to the caregiver signature blob. Null until the signed-URL service exists (D-S4-3).</summary>
     public string? CaregiverSignatureUrl { get; init; }
 
-    /// <summary>Short-lived, access-controlled URL to the client/family signature blob.</summary>
+    /// <summary>Short-lived, access-controlled URL to the client/family signature blob. Null until the signed-URL service exists (D-S4-3).</summary>
     public string? ClientOrFamilySignatureUrl { get; init; }
 }

@@ -47,9 +47,28 @@ internal static class SchedulingContractMapper
         };
     }
 
-    internal static VisitNoteDto ToDto(this VisitNote visitNote)
+    internal static VisitNoteSummaryDto ToSummaryDto(this VisitNote visitNote)
     {
-        return new VisitNoteDto
+        return new VisitNoteSummaryDto
+        {
+            Id = visitNote.Id,
+            ShiftId = visitNote.ShiftId,
+            CaregiverId = visitNote.CaregiverId,
+            VisitDateTime = visitNote.VisitDateTime,
+            PersonalCare = visitNote.PersonalCare,
+            MealPreparation = visitNote.MealPreparation,
+            Medication = visitNote.Medication,
+            LightHousekeeping = visitNote.LightHousekeeping,
+            Companionship = visitNote.Companionship,
+            Transportation = visitNote.Transportation,
+            Exercise = visitNote.Exercise,
+            HasConcerns = !string.IsNullOrWhiteSpace(visitNote.Concerns),
+        };
+    }
+
+    internal static VisitNoteDetailDto ToDetailDto(this VisitNote visitNote)
+    {
+        return new VisitNoteDetailDto
         {
             Id = visitNote.Id,
             ShiftId = visitNote.ShiftId,
@@ -71,8 +90,21 @@ internal static class SchedulingContractMapper
             Temperature = visitNote.Temperature,
             HeartRate = visitNote.HeartRate,
             TransitionPlanId = visitNote.TransitionPlanId,
+            Photos = visitNote.Photos.Select(photo => photo.ToDto()).ToList(),
             CaregiverSignatureUrl = null,
             ClientOrFamilySignatureUrl = null,
+        };
+    }
+
+    internal static VisitPhotoDto ToDto(this VisitPhoto photo)
+    {
+        return new VisitPhotoDto
+        {
+            Id = photo.Id,
+            VisitNoteId = photo.VisitNoteId,
+            TakenAt = photo.TakenAt,
+            Caption = null,
+            Url = null,
         };
     }
 }

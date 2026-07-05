@@ -235,11 +235,11 @@ Owners: **Claude** = PM/Contracts lead (Contracts, Client, Client.UI, sprint doc
 | ID | Task | Owner | Depends on | Status |
 |---|---|---|---|---|
 | S4-TASK-001 | Approve this board + decisions D-S4-1..7 | Tobi | - | Done |
-| S4-TASK-010 | Remove WeatherForecast controller/model/.http sample from WebApi | Codex | S4-TASK-001 | Pending |
-| S4-TASK-011 | `ClientAccessGrant` Domain entity + `AccessScope` enum + XML docs + domain tests | Codex | S4-TASK-001 | Pending |
-| S4-TASK-012 | ClientAccessGrant EF configuration, migration, `IClientAccessEvaluator` Infrastructure implementation + tests | Codex | S4-TASK-011 | Pending |
-| S4-TASK-020 | Contracts: command/request DTOs for caregivers, clients, care plans, shifts, visit notes, invoices, payments, and grants; VisitNote summary/detail split + VisitPhotoDto per D-S4-7 | Claude | S4-TASK-001 | Pending |
-| S4-TASK-021 | Contracts: margin DTOs (`ShiftMarginDto`, `MarginSummaryDto` with service-line split) per D-S4-2 | Claude | S4-TASK-001 | Pending |
+| S4-TASK-010 | Remove WeatherForecast controller/model/.http sample from WebApi | Codex | S4-TASK-001 | Done 2026-07-05 (`d9e1749`, verified) |
+| S4-TASK-011 | `ClientAccessGrant` Domain entity + `AccessScope` enum + XML docs + domain tests | Codex | S4-TASK-001 | Done 2026-07-05 (`d9e1749`, verified on disk) |
+| S4-TASK-012 | ClientAccessGrant EF configuration, migration, `IClientAccessEvaluator` Infrastructure implementation + tests | Codex | S4-TASK-011 | Done 2026-07-05 (`d9e1749` — config, `AddClientAccessGrants` migration, `Infrastructure/Auth/ClientAccessEvaluator`, DI, tests) |
+| S4-TASK-020 | Contracts: command/request DTOs for caregivers, clients, care plans, shifts, visit notes, invoices, payments, and grants; VisitNote summary/detail split + VisitPhotoDto per D-S4-7 | Claude | S4-TASK-001 | Done 2026-07-04 — 15 request/DTO files + `AccessScope` mirror; `VisitNoteDto` deleted → `VisitNoteDetailDto` + `VisitNoteSummaryDto` (HasConcerns flag, no clinical text) + `VisitPhotoDto`. **⚠ Codex: the Application `SchedulingContractMapper` still references `VisitNoteDto` — include the one-line rename to `VisitNoteDetailDto` in your FIRST commit (slice 4A), not 4E, or `dotnet build CarePath.sln` stays red.** New files compile 0 warnings |
+| S4-TASK-021 | Contracts: margin DTOs (`ShiftMarginDto`, `MarginSummaryDto` with service-line split) per D-S4-2 | Claude | S4-TASK-001 | Done 2026-07-04 — + `ServiceLineMarginDto` (ShiftCount, TotalBillableHours, TotalRevenue, TotalLaborCost, TotalGrossMargin, AverageHourlyGrossMargin, GrossMarginPercentage); semantics per decision 0002 |
 | S4-TASK-030 | Application: caregiver + certification commands/queries with validators, user provisioning, authz, audit | Codex | S4-TASK-020 | Pending |
 | S4-TASK-031 | Application: client + care plan commands/queries with validators, object-level authz, grant evaluation, PHI read audit | Codex | S4-TASK-012, S4-TASK-020 | Pending |
 | S4-TASK-032 | Application: scheduling commands/queries - create/update/cancel shift, check-in/check-out, paged shift dashboard query via `GetPagedAsync` | Codex | S4-TASK-020 | Pending |

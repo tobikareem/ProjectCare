@@ -1,3 +1,5 @@
+using CarePath.Application;
+using CarePath.Application.Abstractions.Auth;
 using CarePath.Infrastructure;
 using CarePath.Infrastructure.Identity;
 using CarePath.Infrastructure.Persistence;
@@ -10,6 +12,8 @@ using Microsoft.EntityFrameworkCore;
 var builder = WebApplication.CreateBuilder(args);
 
 // Add services to the container.
+builder.Services.AddApplication();
+builder.Services.AddScoped<ICurrentUserContext, HttpCurrentUserContext>();
 builder.Services.AddInfrastructure(builder.Configuration);
 builder.Services.AddCarePathAuthentication(builder.Configuration);
 

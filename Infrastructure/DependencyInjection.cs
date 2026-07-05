@@ -1,5 +1,7 @@
+using CarePath.Application.Abstractions.Audit;
 using CarePath.Application.Abstractions.Auth;
 using CarePath.Domain.Interfaces.Repositories;
+using CarePath.Infrastructure.Audit;
 using CarePath.Infrastructure.Auth;
 using CarePath.Infrastructure.Identity;
 using CarePath.Infrastructure.Persistence;
@@ -89,6 +91,8 @@ public static class DependencyInjection
         services.AddScoped(typeof(IRepository<>), typeof(Repository<>));
         services.AddScoped<IUnitOfWork, UnitOfWork>();
         services.AddScoped<IClientAccessEvaluator, ClientAccessEvaluator>();
+        services.AddScoped<IIdentityProvisioningService, IdentityProvisioningService>();
+        services.AddScoped<IPhiAuditLogger, LoggingPhiAuditLogger>();
 
         return services;
     }

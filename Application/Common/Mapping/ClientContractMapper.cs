@@ -1,6 +1,7 @@
-using CarePath.Contracts.Clients;
+﻿using CarePath.Contracts.Clients;
 using CarePath.Domain.Entities.Clinical;
 using CarePath.Domain.Entities.Identity;
+using ContractAccessScope = CarePath.Contracts.Enumerations.AccessScope;
 using ContractServiceType = CarePath.Contracts.Enumerations.ServiceType;
 
 namespace CarePath.Application.Common.Mapping;
@@ -20,7 +21,9 @@ internal static class ClientContractMapper
         };
     }
 
-    internal static ClientDetailDto ToDetailDto(this Client client)
+    internal static ClientDetailDto ToDetailDto(this Client client) => client.ToDetailDto(includeOperationalFields: true);
+
+    internal static ClientDetailDto ToDetailDto(this Client client, bool includeOperationalFields)
     {
         return new ClientDetailDto
         {
@@ -41,8 +44,23 @@ internal static class ClientContractMapper
             MedicalConditions = client.MedicalConditions,
             Allergies = client.Allergies,
             ServiceType = (ContractServiceType)(int)client.ServiceType,
-            HourlyBillRate = client.HourlyBillRate,
-            EstimatedWeeklyHours = client.EstimatedWeeklyHours,
+            HourlyBillRate = includeOperationalFields ? client.HourlyBillRate : 0m,
+            EstimatedWeeklyHours = includeOperationalFields ? client.EstimatedWeeklyHours : 0,
+        };
+    }
+
+    internal static ClientAccessGrantDto ToDto(this ClientAccessGrant grant)
+    {
+        return new ClientAccessGrantDto
+        {
+            Id = grant.Id,
+            ClientId = grant.ClientId,
+            GranteeUserId = grant.GranteeUserId,
+            GranteeFullName = grant.GranteeUser?.FullName ?? string.Empty,
+            Scope = (ContractAccessScope)(int)grant.AccessScope,
+            GrantedByUserId = grant.GrantedByUserId,
+            GrantedAtUtc = grant.GrantedAtUtc,
+            RevokedAtUtc = grant.RevokedAtUtc,
         };
     }
 

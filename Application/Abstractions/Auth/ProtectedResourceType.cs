@@ -15,5 +15,6 @@ public enum ProtectedResourceType
     TransitionReminder = 11,
     TransitionEscalation = 12,
     Invoice = 13,
-    Payment = 14
+    Payment = 14,
+    Caregiver = 15
 }

@@ -105,4 +105,31 @@ public class Repository<T> : IRepository<T> where T : BaseEntity
 
         return (items, totalCount);
     }
+    /// <inheritdoc />
+    public async Task<(IReadOnlyList<T> Items, int TotalCount)> GetPagedAsync(
+        Expression<Func<T, bool>> predicate,
+        int pageNumber,
+        int pageSize,
+        CancellationToken cancellationToken = default)
+    {
+        if (pageNumber < 1)
+        {
+            throw new ArgumentOutOfRangeException(nameof(pageNumber), "Page number must be greater than zero.");
+        }
+
+        if (pageSize < 1)
+        {
+            throw new ArgumentOutOfRangeException(nameof(pageSize), "Page size must be greater than zero.");
+        }
+
+        var query = _dbSet.Where(predicate);
+        var totalCount = await query.CountAsync(cancellationToken);
+        var items = await query
+            .OrderBy(entity => entity.Id)
+            .Skip((pageNumber - 1) * pageSize)
+            .Take(pageSize)
+            .ToListAsync(cancellationToken);
+
+        return (items, totalCount);
+    }
 }

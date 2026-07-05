@@ -4,8 +4,11 @@ using CarePath.Application.Clients.Services;
 using CarePath.Application.Clients.Validators;
 using CarePath.Application.Identity.Services;
 using CarePath.Application.Identity.Validators;
+using CarePath.Application.Scheduling.Services;
+using CarePath.Application.Scheduling.Validators;
 using CarePath.Contracts.Clients;
 using CarePath.Contracts.Identity;
+using CarePath.Contracts.Scheduling;
 using FluentValidation;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
@@ -20,6 +23,7 @@ public static class DependencyInjection
         services.AddScoped<IIdorGuard, IdorGuard>();
         services.AddScoped<ICaregiverOperationsService, CaregiverOperationsService>();
         services.AddScoped<IClientOperationsService, ClientOperationsService>();
+        services.AddScoped<IShiftOperationsService, ShiftOperationsService>();
 
         services.AddScoped<IValidator<CreateCaregiverRequest>, CreateCaregiverRequestValidator>();
         services.AddScoped<IValidator<UpdateCaregiverRequest>, UpdateCaregiverRequestValidator>();
@@ -28,8 +32,11 @@ public static class DependencyInjection
         services.AddScoped<IValidator<UpdateClientRequest>, UpdateClientRequestValidator>();
         services.AddScoped<IValidator<CreateCarePlanRequest>, CreateCarePlanRequestValidator>();
         services.AddScoped<IValidator<UpdateCarePlanRequest>, UpdateCarePlanRequestValidator>();
+        services.AddScoped<IValidator<CreateShiftRequest>, CreateShiftRequestValidator>();
+        services.AddScoped<IValidator<UpdateShiftRequest>, UpdateShiftRequestValidator>();
+        services.AddScoped<IValidator<CheckInRequest>, CheckInRequestValidator>();
+        services.AddScoped<IValidator<CheckOutRequest>, CheckOutRequestValidator>();
 
         return services;
     }
 }
-

@@ -63,7 +63,6 @@ internal static class BillingContractMapper
             Description = lineItem.Description,
             ServiceDate = lineItem.ServiceDate,
             BillableHours = lineItem.BillableHours,
-            RatePerHour = lineItem.RatePerHour,
             Total = lineItem.Total,
         };
     }

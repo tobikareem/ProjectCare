@@ -1,4 +1,4 @@
-﻿using CarePath.Contracts.Clients;
+using CarePath.Contracts.Clients;
 using CarePath.Domain.Entities.Clinical;
 using CarePath.Domain.Entities.Identity;
 using ContractAccessScope = CarePath.Contracts.Enumerations.AccessScope;
@@ -44,7 +44,6 @@ internal static class ClientContractMapper
             MedicalConditions = client.MedicalConditions,
             Allergies = client.Allergies,
             ServiceType = (ContractServiceType)(int)client.ServiceType,
-            HourlyBillRate = includeOperationalFields ? client.HourlyBillRate : 0m,
             EstimatedWeeklyHours = includeOperationalFields ? client.EstimatedWeeklyHours : 0,
         };
     }

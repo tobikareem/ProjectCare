@@ -1,6 +1,6 @@
 # CarePath Health - Project Progress
 
-Last updated: 2026-07-04
+Last updated: 2026-07-06
 
 ---
 
@@ -44,6 +44,26 @@ PM agent still owns sprint board/spec close-out. Do not mark Sprint 3 complete h
 
 ---
 
+## Sprint 4 - Core Operations Backend
+
+**Status**: Exit verification complete pending PM sprint close
+
+Completed Sprint 4 slices:
+- Client access grants, infrastructure evaluator, and grant management endpoints.
+- Caregiver, client, care plan, scheduling, visit documentation, billing, invoice, and Admin margin Application workflows.
+- Authenticated WebApi controllers for Sprint 4 endpoint matrix coverage.
+- CarePath.Client typed module clients for caregivers, clients/care plans/grants, shifts/visit notes, visit photos, billing, and Admin margins.
+- Sprint 4 test suites for handler validation/auth/audit behavior, guard failures, grant behavior, billing behavior, controller role declarations, DTO boundary reflection, and PHI missing/denied 404 identity.
+
+Verification from S4-TASK-060 final slice:
+- `dotnet build CarePath.sln` passed with 0 warnings and 0 errors.
+- `dotnet test CarePath.sln` passed: Domain 257, Application 148, Infrastructure 66.
+- `dotnet-code-reviewer` reviewed the full Sprint 4 diff `d9e1749..HEAD`; findings addressed before commit.
+- HIPAA spot check completed: no `AttemptedValue` in WebApi/Application owned code; no rate/margin/compensation response DTO fields outside Admin margin DTOs; PHI missing vs denied 404 bodies remain byte-identical; logs and exception messages are PHI-free metadata only; no request-body logging is configured for provisioning routes.
+
+PM agent still owns sprint board/spec close-out. Do not mark Sprint 4 complete here.
+
+---
 ## CP-03 - CarePath Transitions
 
 **Status**: Approved for Domain slice; backend workflow planned for Sprint 5 after Infrastructure/Application prerequisites

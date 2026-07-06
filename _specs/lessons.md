@@ -40,6 +40,10 @@ This file captures recurring mistakes, corrections, and hard-won patterns discov
 - **Two new fields that must never be logged**: `DischargeDocument.RawContent` (raw OCR/FHIR text) and `TransitionInstruction.SourceText` (original discharge document excerpt). Both are PHI. Add a comment in code on both properties: `// PHI — never log this field`.
 - **Reminders must not fire before `TransitionPlan.Status == Active`** — enforce this check in the Application command handler, not only at the API layer. Belt-and-suspenders.
 
+- **Financial fields are not general response DTO fields** - Rate, margin, and compensation values must stay out of normal detail/list DTO responses. If an operational workflow needs rates as Admin/Coordinator write inputs, keep those fields on request contracts only; returned compensation metrics belong behind Admin-gated margin DTOs and endpoints.
+- **Validation responses must not use FluentValidation message text for PHI-adjacent requests** - Default FluentValidation messages can include attempted values, including GPS coordinates or clinical vitals. Middleware should return generic field errors and preserve only PHI-free property names/error codes unless a response contract explicitly proves the message is safe.
+- **PHI 404 response bodies cannot include per-request identifiers** - Missing-vs-denied PHI resources must be byte-identical in real requests, not only tests with a forced trace id. Keep TraceId in logs/audit/headers if needed, but omit it from PHI 404 JSON bodies.
+
 ## Spec Workflow
 
 - **User corrections from code review must update task status immediately** - If review shows a task was over-marked complete or scope was wrong, correct the board/spec in the same turn before continuing implementation.

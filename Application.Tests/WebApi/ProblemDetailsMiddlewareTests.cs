@@ -40,7 +40,7 @@ public sealed class ProblemDetailsMiddlewareTests
         problem.Title.Should().Be("Resource not found.");
         problem.Status.Should().Be(StatusCodes.Status404NotFound);
         problem.Detail.Should().BeNull();
-        problem.TraceId.Should().Be("trace-denial-test");
+        problem.TraceId.Should().BeNull();
         var response = JsonSerializer.Deserialize<ProblemDetailsResponse>(missingBody, JsonOptions())
             ?? throw new InvalidOperationException("Problem details response could not be deserialized.");
         response.Errors.Should().ContainSingle(error =>
@@ -52,12 +52,12 @@ public sealed class ProblemDetailsMiddlewareTests
     public async Task InvokeAsync_WhenValidationFails_DoesNotEchoSubmittedValues()
     {
         // Arrange
-        const string attemptedValue = "Submitted Sensitive Value";
+        const string attemptedValue = "Latitude 999.123";
         using var server = CreateServer(_ => throw new ValidationException(new[]
         {
-            new ValidationFailure("StartAt", "Start time is required.")
+            new ValidationFailure("Latitude", $"The value {attemptedValue} is not valid for Latitude.")
             {
-                ErrorCode = "shift.start_required",
+                ErrorCode = "gps.invalid",
             },
         }));
 
@@ -72,9 +72,9 @@ public sealed class ProblemDetailsMiddlewareTests
         var problem = DeserializeProblem(body);
         problem.Title.Should().Be("Validation failed.");
         problem.ValidationErrors.Should().ContainSingle(error =>
-            error.PropertyName == "StartAt" &&
-            error.ErrorMessage == "Start time is required." &&
-            error.ErrorCode == "shift.start_required");
+            error.PropertyName == "Latitude" &&
+            error.ErrorMessage == "The request is invalid." &&
+            error.ErrorCode == "gps.invalid");
     }
 
     [Fact]
@@ -157,7 +157,7 @@ public sealed class ProblemDetailsMiddlewareTests
                 app.UseCarePathProblemDetails();
                 app.Run(context =>
                 {
-                    context.TraceIdentifier = "trace-denial-test";
+                    context.TraceIdentifier = Guid.NewGuid().ToString("N");
                     endpoint(context);
                     return Task.CompletedTask;
                 });

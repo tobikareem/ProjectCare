@@ -153,7 +153,6 @@ public class Sprint4OperationsServiceTests
 
         // Assert
         dto.Id.Should().Be(client.Id);
-        dto.HourlyBillRate.Should().Be(0m);
         dto.EstimatedWeeklyHours.Should().Be(0);
         auditLogger.Verify(logger => logger.LogAsync(
             It.Is<PhiAuditEntry>(entry => entry.Action == AuditAction.Read && entry.EntityType == ProtectedResourceType.Client && entry.EntityId == client.Id),

@@ -20,8 +20,6 @@ public class InvoiceLineItemDto
     /// <summary>Billable hours for this line.</summary>
     public decimal BillableHours { get; init; }
 
-    /// <summary>Hourly rate billed.</summary>
-    public decimal RatePerHour { get; init; }
 
     /// <summary>Line total, computed server-side.</summary>
     public decimal Total { get; init; }

@@ -44,7 +44,6 @@ internal static class IdentityContractMapper
             Email = caregiver.User?.Email ?? string.Empty,
             PhoneNumber = caregiver.User?.PhoneNumber ?? string.Empty,
             EmploymentType = (ContractEmploymentType)(int)caregiver.EmploymentType,
-            HourlyPayRate = caregiver.HourlyPayRate,
             HireDate = caregiver.HireDate,
             TerminationDate = caregiver.TerminationDate,
             HasDementiaCare = caregiver.HasDementiaCare,

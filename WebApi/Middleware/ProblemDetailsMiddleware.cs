@@ -74,7 +74,8 @@ public sealed class ProblemDetailsMiddleware
             "Resource not found.",
             detail: null,
             validationErrors: [],
-            errors: [new ApiError(ResourceNotFoundCode, "Resource not found.")]);
+            errors: [new ApiError(ResourceNotFoundCode, "Resource not found.")],
+            includeTraceId: false);
     }
 
 
@@ -93,7 +94,7 @@ public sealed class ProblemDetailsMiddleware
         var validationErrors = exception.Errors
             .Select(error => new ValidationError(
                 error.PropertyName,
-                error.ErrorMessage,
+                "The request is invalid.",
                 string.IsNullOrWhiteSpace(error.ErrorCode) ? null : error.ErrorCode))
             .ToArray();
 
@@ -112,7 +113,8 @@ public sealed class ProblemDetailsMiddleware
         string title,
         string? detail,
         IReadOnlyList<ValidationError> validationErrors,
-        IReadOnlyList<ApiError> errors)
+        IReadOnlyList<ApiError> errors,
+        bool includeTraceId = true)
     {
         if (context.Response.HasStarted)
         {
@@ -130,7 +132,7 @@ public sealed class ProblemDetailsMiddleware
             Status = statusCode,
             Detail = detail,
             Instance = null,
-            TraceId = GetTraceId(context),
+            TraceId = includeTraceId ? GetTraceId(context) : null,
             ValidationErrors = validationErrors,
             Errors = errors,
         };

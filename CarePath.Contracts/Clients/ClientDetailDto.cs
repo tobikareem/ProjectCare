@@ -62,8 +62,6 @@ public class ClientDetailDto
     /// <summary>In-home care or facility staffing.</summary>
     public ServiceType ServiceType { get; init; }
 
-    /// <summary>Hourly bill rate. Admin/Coordinator visibility.</summary>
-    public decimal HourlyBillRate { get; init; }
 
     /// <summary>Estimated weekly service hours.</summary>
     public int EstimatedWeeklyHours { get; init; }

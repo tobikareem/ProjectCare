@@ -66,10 +66,16 @@ public sealed class Sprint4ObjectAuthorizationService : IObjectAuthorizationServ
 
         if (HasRole(request.User, ApplicationRoles.Caregiver) && request.User.UserId.HasValue)
         {
+            var now = DateTime.UtcNow;
             var caregivers = await unitOfWork.Caregivers.FindAsync(caregiver => caregiver.UserId == request.User.UserId.Value, cancellationToken);
             var caregiverIds = caregivers.Select(caregiver => caregiver.Id).ToArray();
             var assigned = caregiverIds.Length > 0 && await unitOfWork.Shifts.ExistsAsync(
-                shift => shift.ClientId == clientId && shift.CaregiverId.HasValue && caregiverIds.Contains(shift.CaregiverId.Value),
+                shift => shift.ClientId == clientId
+                    && shift.CaregiverId.HasValue
+                    && caregiverIds.Contains(shift.CaregiverId.Value)
+                    && shift.ScheduledStartTime <= now
+                    && shift.ScheduledEndTime >= now
+                    && (shift.Status == ShiftStatus.Scheduled || shift.Status == ShiftStatus.InProgress),
                 cancellationToken);
             return assigned ? ObjectAuthorizationResult.Authorized() : ObjectAuthorizationResult.Denied(NotAssigned);
         }

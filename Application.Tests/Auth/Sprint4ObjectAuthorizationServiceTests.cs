@@ -113,6 +113,53 @@ public sealed class Sprint4ObjectAuthorizationServiceTests
         result.DenialCode.Should().Be("NoGrant");
     }
 
+    [Theory]
+    [InlineData(-1, 1, ShiftStatus.Scheduled, true)]
+    [InlineData(-1, 1, ShiftStatus.InProgress, true)]
+    [InlineData(-3, -2, ShiftStatus.Scheduled, false)]
+    [InlineData(2, 3, ShiftStatus.Scheduled, false)]
+    [InlineData(-1, 1, ShiftStatus.Cancelled, false)]
+    public async Task AuthorizeAsync_WhenCaregiverRequestsClientRead_RequiresCurrentScheduledOrInProgressAssignment(
+        int startOffsetHours,
+        int endOffsetHours,
+        ShiftStatus shiftStatus,
+        bool expectedAuthorized)
+    {
+        // Arrange
+        var userId = Guid.NewGuid();
+        var clientId = Guid.NewGuid();
+        var caregiverId = Guid.NewGuid();
+        var now = DateTime.UtcNow;
+        var shift = new Shift
+        {
+            Id = Guid.NewGuid(),
+            ClientId = clientId,
+            CaregiverId = caregiverId,
+            ScheduledStartTime = now.AddHours(startOffsetHours),
+            ScheduledEndTime = now.AddHours(endOffsetHours),
+            Status = shiftStatus,
+        };
+        var unitOfWork = new MockUnitOfWork();
+        unitOfWork.Caregivers.Setup(repository => repository.FindAsync(It.IsAny<Expression<Func<Caregiver, bool>>>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new[] { new Caregiver { Id = caregiverId, UserId = userId } });
+        unitOfWork.Shifts.Setup(repository => repository.ExistsAsync(
+                It.Is<Expression<Func<Shift, bool>>>(expression => expression.Compile()(shift) == expectedAuthorized),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(expectedAuthorized);
+        var service = new Sprint4ObjectAuthorizationService(unitOfWork.Object, Mock.Of<IClientAccessEvaluator>());
+
+        // Act
+        var result = await service.AuthorizeAsync(new ObjectAccessRequest(
+            new TestCurrentUserContext(userId, new HashSet<string>(StringComparer.Ordinal) { ApplicationRoles.Caregiver }),
+            ProtectedResourceType.Client,
+            clientId,
+            ObjectAccessAction.Read,
+            "test-correlation"));
+
+        // Assert
+        result.IsAuthorized.Should().Be(expectedAuthorized);
+    }
+
     [Fact]
     public async Task AuthorizeAsync_WhenClinicianRequestsTransitionInstruction_AuthorizesRead()
     {

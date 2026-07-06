@@ -689,6 +689,78 @@ public sealed class TransitionsServiceTests
             .Where(exception => exception.Code == "transition.plan_not_active");
     }
 
+    [Theory]
+    [InlineData(TransitionPlanStatus.PendingVerification)]
+    [InlineData(TransitionPlanStatus.Active)]
+    public async Task CreateCheckInAsync_WhenCallerHasNoGrant_DeniesBeforePlanStateDisclosure(TransitionPlanStatus status)
+    {
+        // Arrange
+        var callerUserId = Guid.NewGuid();
+        var plan = status == TransitionPlanStatus.Active
+            ? CreateActivePlan()
+            : CreatePlan(status);
+        if (status == TransitionPlanStatus.Active)
+        {
+            plan.TransitionWindowEnd = DateTime.SpecifyKind(DateTime.UtcNow.Date.AddDays(-1), DateTimeKind.Utc);
+        }
+
+        var unitOfWork = CreateUnitOfWork();
+        unitOfWork.TransitionPlans.Setup(repository => repository.GetByIdAsync(plan.Id, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(plan);
+        var accessEvaluator = new Mock<IClientAccessEvaluator>();
+        accessEvaluator.Setup(evaluator => evaluator.EvaluateAsync(callerUserId, plan.ClientId, AccessScope.PatientFacing, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(ClientAccessEvaluationResult.Denied(ClientAccessEvaluationResult.NoGrant));
+        var service = CreateService(
+            unitOfWork,
+            callerUserId,
+            clientAccessEvaluator: accessEvaluator.Object,
+            roles: new HashSet<string>(StringComparer.Ordinal) { ApplicationRoles.Client });
+
+        // Act
+        var act = async () => await service.CreateCheckInAsync(plan.Id, new CreateCheckInRequest
+        {
+            Channel = ContractReminderChannel.App,
+            ResponsesJson = """{"symptom":"none"}""",
+        });
+
+        // Assert
+        await act.Should().ThrowAsync<ResourceAccessDeniedException>();
+    }
+
+    [Theory]
+    [InlineData(TransitionPlanStatus.PendingVerification)]
+    [InlineData(TransitionPlanStatus.Active)]
+    public async Task GetPatientPlanAsync_WhenCallerHasNoGrant_DeniesBeforePlanStateDisclosure(TransitionPlanStatus status)
+    {
+        // Arrange
+        var callerUserId = Guid.NewGuid();
+        var plan = status == TransitionPlanStatus.Active
+            ? CreateActivePlan()
+            : CreatePlan(status);
+        if (status == TransitionPlanStatus.Active)
+        {
+            plan.TransitionWindowEnd = DateTime.SpecifyKind(DateTime.UtcNow.Date.AddDays(-1), DateTimeKind.Utc);
+        }
+
+        var unitOfWork = CreateUnitOfWork();
+        unitOfWork.TransitionPlans.Setup(repository => repository.GetByIdAsync(plan.Id, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(plan);
+        var accessEvaluator = new Mock<IClientAccessEvaluator>();
+        accessEvaluator.Setup(evaluator => evaluator.EvaluateAsync(callerUserId, plan.ClientId, AccessScope.PatientFacing, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(ClientAccessEvaluationResult.Denied(ClientAccessEvaluationResult.NoGrant));
+        var service = CreateService(
+            unitOfWork,
+            callerUserId,
+            clientAccessEvaluator: accessEvaluator.Object,
+            roles: new HashSet<string>(StringComparer.Ordinal) { ApplicationRoles.Client });
+
+        // Act
+        var act = async () => await service.GetPatientPlanAsync(plan.Id);
+
+        // Assert
+        await act.Should().ThrowAsync<ResourceAccessDeniedException>();
+    }
+
     [Fact]
     public async Task CreateCheckInAsync_WhenActivePlanWindowExpired_RejectsWithStableCode()
     {
@@ -782,6 +854,50 @@ public sealed class TransitionsServiceTests
             It.IsAny<CancellationToken>()), Times.Once);
     }
 
+    [Theory]
+    [InlineData(-3, -2, ShiftStatus.Scheduled)]
+    [InlineData(2, 3, ShiftStatus.Scheduled)]
+    [InlineData(-1, 1, ShiftStatus.Cancelled)]
+    public async Task GetPlanForClientAsync_WhenCaregiverShiftIsNotCurrentScheduledOrInProgress_DeniesAtApplicationBoundary(
+        int startOffsetHours,
+        int endOffsetHours,
+        ShiftStatus shiftStatus)
+    {
+        // Arrange
+        var callerUserId = Guid.NewGuid();
+        var caregiverId = Guid.NewGuid();
+        var plan = CreateActivePlan();
+        var now = DateTime.UtcNow;
+        var shift = new Shift
+        {
+            Id = Guid.NewGuid(),
+            ClientId = plan.ClientId,
+            CaregiverId = caregiverId,
+            ScheduledStartTime = now.AddHours(startOffsetHours),
+            ScheduledEndTime = now.AddHours(endOffsetHours),
+            Status = shiftStatus,
+        };
+        var unitOfWork = CreateUnitOfWork();
+        unitOfWork.TransitionPlans.Setup(repository => repository.FindAsync(It.IsAny<Expression<Func<TransitionPlan, bool>>>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new[] { plan });
+        unitOfWork.Caregivers.Setup(repository => repository.FindAsync(It.IsAny<Expression<Func<Caregiver, bool>>>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new[] { new Caregiver { Id = caregiverId, UserId = callerUserId } });
+        unitOfWork.Shifts.Setup(repository => repository.ExistsAsync(
+                It.Is<Expression<Func<Shift, bool>>>(expression => !expression.Compile()(shift)),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(false);
+        var service = CreateService(
+            unitOfWork,
+            callerUserId,
+            roles: new HashSet<string>(StringComparer.Ordinal) { ApplicationRoles.Caregiver });
+
+        // Act
+        var act = async () => await service.GetPlanForClientAsync(plan.ClientId);
+
+        // Assert
+        await act.Should().ThrowAsync<ResourceAccessDeniedException>();
+    }
+
     private static TransitionsService CreateService(
         MockUnitOfWork unitOfWork,
         Guid? userId = null,
@@ -797,7 +913,19 @@ public sealed class TransitionsServiceTests
                 roles ?? new HashSet<string>(StringComparer.Ordinal) { ApplicationRoles.Coordinator }),
             auditLogger ?? Mock.Of<IPhiAuditLogger>(),
             extraction ?? Mock.Of<IDischargeExtractionService>(),
-            clientAccessEvaluator ?? Mock.Of<IClientAccessEvaluator>());
+            clientAccessEvaluator ?? CreateAuthorizedClientAccessEvaluator());
+    }
+
+    private static IClientAccessEvaluator CreateAuthorizedClientAccessEvaluator()
+    {
+        var evaluator = new Mock<IClientAccessEvaluator>();
+        evaluator.Setup(service => service.EvaluateAsync(
+                It.IsAny<Guid>(),
+                It.IsAny<Guid>(),
+                It.IsAny<AccessScope>(),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(ClientAccessEvaluationResult.Authorized());
+        return evaluator.Object;
     }
 
     private static MockUnitOfWork CreateUnitOfWork() => new();

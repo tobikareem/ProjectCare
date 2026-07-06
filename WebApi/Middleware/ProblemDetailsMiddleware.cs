@@ -1,12 +1,19 @@
 using CarePath.Application.Common.Exceptions;
 using CarePath.Contracts.Common;
 using FluentValidation;
+using System.Text.Json;
+using System.Text.Json.Serialization;
 
 namespace CarePath.WebApi.Middleware;
 
 public sealed class ProblemDetailsMiddleware
 {
     private const string ResourceNotFoundCode = "resource.not_found";
+    private static readonly JsonSerializerOptions ProblemJsonOptions = new(JsonSerializerDefaults.Web)
+    {
+        DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
+    };
+
     private readonly RequestDelegate next;
     private readonly ILogger<ProblemDetailsMiddleware> logger;
 
@@ -137,7 +144,7 @@ public sealed class ProblemDetailsMiddleware
             Errors = errors,
         };
 
-        await context.Response.WriteAsJsonAsync(problem);
+        await context.Response.WriteAsJsonAsync(problem, ProblemJsonOptions);
     }
 
     private static string GetTraceId(HttpContext context) => context.TraceIdentifier;

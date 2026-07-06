@@ -13,9 +13,14 @@ public sealed class TransitionsControllerTests
     [Theory]
     [InlineData(nameof(TransitionsController.GetDischargeDocument), ProtectedResourceType.DischargeDocument)]
     [InlineData(nameof(TransitionsController.GetDischargeDocumentContent), ProtectedResourceType.DischargeDocument)]
+    [InlineData(nameof(TransitionsController.ExtractDischargeDocument), ProtectedResourceType.DischargeDocument)]
     [InlineData(nameof(TransitionsController.GetPlan), ProtectedResourceType.TransitionPlan)]
+    [InlineData(nameof(TransitionsController.ReviewInstruction), ProtectedResourceType.TransitionPlan)]
+    [InlineData(nameof(TransitionsController.ActivatePlan), ProtectedResourceType.TransitionPlan)]
+    [InlineData(nameof(TransitionsController.ScheduleReminder), ProtectedResourceType.TransitionPlan)]
     [InlineData(nameof(TransitionsController.GetEscalations), ProtectedResourceType.TransitionPlan)]
     [InlineData(nameof(TransitionsController.AcknowledgeEscalation), ProtectedResourceType.TransitionEscalation)]
+    [InlineData(nameof(TransitionsController.GetPlanForClient), ProtectedResourceType.Client)]
     public async Task ClinicalIdRoutes_WhenIdorDenies_ThrowPhiAccessDeniedBeforeServiceCall(
         string actionName,
         ProtectedResourceType expectedResourceType)
@@ -37,9 +42,14 @@ public sealed class TransitionsControllerTests
         {
             nameof(TransitionsController.GetDischargeDocument) => async () => await controller.GetDischargeDocument(id, CancellationToken.None),
             nameof(TransitionsController.GetDischargeDocumentContent) => async () => await controller.GetDischargeDocumentContent(id, CancellationToken.None),
+            nameof(TransitionsController.ExtractDischargeDocument) => async () => await controller.ExtractDischargeDocument(id, CancellationToken.None),
             nameof(TransitionsController.GetPlan) => async () => await controller.GetPlan(id, CancellationToken.None),
+            nameof(TransitionsController.ReviewInstruction) => async () => await controller.ReviewInstruction(id, Guid.NewGuid(), new ReviewInstructionRequest(), CancellationToken.None),
+            nameof(TransitionsController.ActivatePlan) => async () => await controller.ActivatePlan(id, new ActivatePlanRequest { ConfirmESignature = true }, CancellationToken.None),
+            nameof(TransitionsController.ScheduleReminder) => async () => await controller.ScheduleReminder(id, new ScheduleReminderRequest(), CancellationToken.None),
             nameof(TransitionsController.GetEscalations) => async () => await controller.GetEscalations(id, CancellationToken.None),
             nameof(TransitionsController.AcknowledgeEscalation) => async () => await controller.AcknowledgeEscalation(id, new AcknowledgeEscalationRequest { ResolutionNote = "Reviewed.", EscalationLevel = CarePath.Contracts.Enumerations.EscalationLevel.CoordinatorAlert }, CancellationToken.None),
+            nameof(TransitionsController.GetPlanForClient) => async () => await controller.GetPlanForClient(id, CancellationToken.None),
             _ => throw new InvalidOperationException("Unsupported action."),
         };
 

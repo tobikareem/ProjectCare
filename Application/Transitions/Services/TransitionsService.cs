@@ -300,8 +300,8 @@ public sealed class TransitionsService : ITransitionsService
         CancellationToken cancellationToken = default)
     {
         var plan = await GetPlanEntityAsync(planId, cancellationToken);
-        EnsurePlanCanReceiveCheckIn(plan);
         await EnsureCanSubmitCheckInAsync(plan, cancellationToken);
+        EnsurePlanCanReceiveCheckIn(plan);
         await AuditAsync(ProtectedResourceType.TransitionPlan, plan.Id, AuditAction.Read, cancellationToken);
         var instructions = await GetInstructionsAsync(plan.Id, cancellationToken);
         foreach (var instruction in instructions.Where(IsPatientVisible))
@@ -515,8 +515,8 @@ public sealed class TransitionsService : ITransitionsService
     {
         await createCheckInValidator.ValidateAndThrowAsync(request, cancellationToken);
         var plan = await GetPlanEntityAsync(planId, cancellationToken);
-        EnsurePlanCanReceiveCheckIn(plan);
         await EnsureCanSubmitCheckInAsync(plan, cancellationToken);
+        EnsurePlanCanReceiveCheckIn(plan);
 
         var checkIn = new TransitionCheckIn
         {
@@ -707,8 +707,14 @@ public sealed class TransitionsService : ITransitionsService
             caregiver => caregiver.UserId == currentUser.UserId.Value,
             cancellationToken);
         var caregiverIds = caregivers.Select(caregiver => caregiver.Id).ToArray();
+        var now = DateTime.UtcNow;
         var assigned = caregiverIds.Length > 0 && await unitOfWork.Shifts.ExistsAsync(
-            shift => shift.ClientId == clientId && shift.CaregiverId.HasValue && caregiverIds.Contains(shift.CaregiverId.Value),
+            shift => shift.ClientId == clientId
+                && shift.CaregiverId.HasValue
+                && caregiverIds.Contains(shift.CaregiverId.Value)
+                && shift.ScheduledStartTime <= now
+                && shift.ScheduledEndTime >= now
+                && (shift.Status == ShiftStatus.Scheduled || shift.Status == ShiftStatus.InProgress),
             cancellationToken);
         if (!assigned)
         {

@@ -599,6 +599,33 @@ public sealed class TransitionsService : ITransitionsService
             .ToArray();
     }
 
+    public async Task<PagedResult<TransitionEscalationDto>> GetEscalationQueueAsync(
+        PagedRequest request,
+        bool openOnly = true,
+        CancellationToken cancellationToken = default)
+    {
+        EnsureCoordinator();
+
+        var (escalations, totalCount) = await unitOfWork.TransitionEscalations.GetPagedAsync(
+            escalation => !openOnly || escalation.AcknowledgedAt == null,
+            request.PageNumber,
+            request.PageSize,
+            cancellationToken);
+
+        foreach (var escalation in escalations)
+        {
+            await AuditAsync(ProtectedResourceType.TransitionEscalation, escalation.Id, AuditAction.Read, cancellationToken);
+        }
+
+        return new PagedResult<TransitionEscalationDto>
+        {
+            Items = escalations.Select(escalation => escalation.ToDto()).ToArray(),
+            PageNumber = request.PageNumber,
+            PageSize = request.PageSize,
+            TotalCount = totalCount,
+        };
+    }
+
     public async Task<TransitionEscalationDto> AcknowledgeEscalationAsync(
         Guid escalationId,
         AcknowledgeEscalationRequest request,

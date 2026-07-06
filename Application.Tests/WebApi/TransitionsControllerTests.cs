@@ -1,9 +1,11 @@
 using CarePath.Application.Abstractions.Auth;
 using CarePath.Application.Common.Exceptions;
 using CarePath.Application.Transitions.Services;
+using CarePath.Contracts.Common;
 using CarePath.Contracts.Transitions;
 using CarePath.WebApi.Controllers;
 using FluentAssertions;
+using Microsoft.AspNetCore.Mvc;
 using Moq;
 
 namespace CarePath.Application.Tests.WebApi;
@@ -77,6 +79,34 @@ public sealed class TransitionsControllerTests
 
         // Assert
         idorGuard.VerifyNoOtherCalls();
+    }
+
+    [Fact]
+    public async Task GetEscalationQueue_UsesServicePagingWithoutGenericIdorGuard()
+    {
+        // Arrange
+        var request = new PagedRequest { PageNumber = 2, PageSize = 5 };
+        var expected = new PagedResult<TransitionEscalationDto>
+        {
+            Items = new[] { new TransitionEscalationDto { Id = Guid.NewGuid(), TransitionPlanId = Guid.NewGuid() } },
+            PageNumber = 2,
+            PageSize = 5,
+            TotalCount = 6,
+        };
+        var service = new Mock<ITransitionsService>(MockBehavior.Strict);
+        service.Setup(transitions => transitions.GetEscalationQueueAsync(request, true, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(expected);
+        var idorGuard = new Mock<IIdorGuard>(MockBehavior.Strict);
+        var controller = new TransitionsController(service.Object, idorGuard.Object);
+
+        // Act
+        var response = await controller.GetEscalationQueue(request, openOnly: true, CancellationToken.None);
+
+        // Assert
+        var ok = response.Result.Should().BeOfType<OkObjectResult>().Subject;
+        ok.Value.Should().BeSameAs(expected);
+        idorGuard.VerifyNoOtherCalls();
+        service.Verify(transitions => transitions.GetEscalationQueueAsync(request, true, It.IsAny<CancellationToken>()), Times.Once);
     }
 
     [Fact]

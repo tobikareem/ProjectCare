@@ -305,6 +305,86 @@ public sealed class TransitionsServiceTests
     }
 
     [Fact]
+    public async Task GetEscalationQueueAsync_WhenOpenOnly_ReturnsPagedOpenEscalationsAndAuditsReads()
+    {
+        // Arrange
+        var openEscalation = new TransitionEscalation
+        {
+            Id = Guid.NewGuid(),
+            TransitionPlanId = Guid.NewGuid(),
+            TriggerType = EscalationTriggerType.WarningSymptomsReported,
+            TriggerDetails = "Warning symptom check-in recorded.",
+            EscalationLevel = EscalationLevel.CoordinatorAlert,
+            EscalatedAt = DateTime.UtcNow,
+        };
+        var acknowledgedEscalation = new TransitionEscalation
+        {
+            Id = Guid.NewGuid(),
+            TransitionPlanId = Guid.NewGuid(),
+            TriggerType = EscalationTriggerType.CaregiverAlert,
+            TriggerDetails = "Caregiver alert recorded.",
+            EscalationLevel = EscalationLevel.CoordinatorAlert,
+            EscalatedAt = DateTime.UtcNow,
+            AcknowledgedAt = DateTime.UtcNow,
+        };
+        Expression<Func<TransitionEscalation, bool>>? capturedPredicate = null;
+        var unitOfWork = CreateUnitOfWork();
+        unitOfWork.TransitionEscalations.Setup(repository => repository.GetPagedAsync(
+                It.IsAny<Expression<Func<TransitionEscalation, bool>>>(),
+                2,
+                1,
+                It.IsAny<CancellationToken>()))
+            .Callback<Expression<Func<TransitionEscalation, bool>>, int, int, CancellationToken>((predicate, _, _, _) => capturedPredicate = predicate)
+            .ReturnsAsync((new[] { openEscalation }, 3));
+        var auditLogger = new Mock<IPhiAuditLogger>();
+        auditLogger.Setup(logger => logger.LogAsync(It.IsAny<PhiAuditEntry>(), It.IsAny<CancellationToken>()))
+            .Returns(Task.CompletedTask);
+        var service = CreateService(unitOfWork, auditLogger: auditLogger.Object);
+
+        // Act
+        var result = await service.GetEscalationQueueAsync(new PagedRequest { PageNumber = 2, PageSize = 1 }, openOnly: true);
+
+        // Assert
+        result.PageNumber.Should().Be(2);
+        result.PageSize.Should().Be(1);
+        result.TotalCount.Should().Be(3);
+        result.Items.Should().ContainSingle(item => item.Id == openEscalation.Id);
+        capturedPredicate.Should().NotBeNull();
+        var predicate = capturedPredicate!.Compile();
+        predicate(openEscalation).Should().BeTrue();
+        predicate(acknowledgedEscalation).Should().BeFalse();
+        unitOfWork.TransitionEscalations.Verify(repository => repository.GetPagedAsync(
+            It.IsAny<Expression<Func<TransitionEscalation, bool>>>(),
+            2,
+            1,
+            It.IsAny<CancellationToken>()), Times.Once);
+        auditLogger.Verify(logger => logger.LogAsync(
+            It.Is<PhiAuditEntry>(entry => entry.EntityType == ProtectedResourceType.TransitionEscalation && entry.EntityId == openEscalation.Id && entry.Action == AuditAction.Read),
+            It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task GetEscalationQueueAsync_WhenCallerIsNotCoordinator_DeniesBeforeRepositoryQuery()
+    {
+        // Arrange
+        var unitOfWork = CreateUnitOfWork();
+        var service = CreateService(
+            unitOfWork,
+            roles: new HashSet<string>(StringComparer.Ordinal) { ApplicationRoles.Clinician });
+
+        // Act
+        var act = async () => await service.GetEscalationQueueAsync(new PagedRequest());
+
+        // Assert
+        await act.Should().ThrowAsync<ResourceAccessDeniedException>();
+        unitOfWork.TransitionEscalations.Verify(repository => repository.GetPagedAsync(
+            It.IsAny<Expression<Func<TransitionEscalation, bool>>>(),
+            It.IsAny<int>(),
+            It.IsAny<int>(),
+            It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    [Fact]
     public async Task ReviewInstructionAsync_WhenModified_UpdatesInstructionAndAuditsWrite()
     {
         // Arrange

@@ -128,6 +128,14 @@ public sealed class TransitionsController : ControllerBase
         return Ok(await service.GetEscalationsAsync(id, cancellationToken));
     }
 
+    [HttpGet("escalations")]
+    [Authorize(Roles = "Coordinator")]
+    public async Task<ActionResult<PagedResult<TransitionEscalationDto>>> GetEscalationQueue(
+        [FromQuery] PagedRequest request,
+        [FromQuery] bool openOnly = true,
+        CancellationToken cancellationToken = default)
+        => Ok(await service.GetEscalationQueueAsync(request, openOnly, cancellationToken));
+
     [HttpPost("escalations/{id:guid}/acknowledge")]
     [Authorize(Roles = "Coordinator")]
     public async Task<ActionResult<TransitionEscalationDto>> AcknowledgeEscalation(

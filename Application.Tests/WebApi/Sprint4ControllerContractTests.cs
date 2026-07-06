@@ -55,6 +55,7 @@ public sealed class Sprint4ControllerContractTests
     [InlineData(typeof(TransitionsController), "ScheduleReminder", "Coordinator")]
     [InlineData(typeof(TransitionsController), "CreateCheckIn", "Client")]
     [InlineData(typeof(TransitionsController), "GetEscalations", "Coordinator")]
+    [InlineData(typeof(TransitionsController), "GetEscalationQueue", "Coordinator")]
     [InlineData(typeof(TransitionsController), "AcknowledgeEscalation", "Coordinator")]
     [InlineData(typeof(TransitionsController), "GetPlanForClient", "Coordinator,Clinician,Caregiver")]
     public void ControllerAction_WhenEndpointTouchesSprint4Operations_DeclaresExpectedRoles(Type controllerType, string actionName, string expectedRoles)
@@ -132,6 +133,7 @@ public sealed class Sprint4ControllerContractTests
     [InlineData(typeof(TransitionsController), "ScheduleReminder", typeof(HttpPostAttribute), "plans/{id:guid}/reminders")]
     [InlineData(typeof(TransitionsController), "CreateCheckIn", typeof(HttpPostAttribute), "plans/{id:guid}/check-ins")]
     [InlineData(typeof(TransitionsController), "GetEscalations", typeof(HttpGetAttribute), "plans/{id:guid}/escalations")]
+    [InlineData(typeof(TransitionsController), "GetEscalationQueue", typeof(HttpGetAttribute), "escalations")]
     [InlineData(typeof(TransitionsController), "AcknowledgeEscalation", typeof(HttpPostAttribute), "escalations/{id:guid}/acknowledge")]
     [InlineData(typeof(TransitionsController), "GetPlanForClient", typeof(HttpGetAttribute), "plans/client/{clientId:guid}")]
     public void ControllerAction_WhenEndpointIsInSprint4Matrix_DeclaresExpectedHttpMethodAndTemplate(

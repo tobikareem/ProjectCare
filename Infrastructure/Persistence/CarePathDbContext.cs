@@ -4,6 +4,7 @@ using CarePath.Domain.Entities.Clinical;
 using CarePath.Domain.Entities.Common;
 using CarePath.Domain.Entities.Identity;
 using CarePath.Domain.Entities.Scheduling;
+using CarePath.Domain.Entities.Transitions;
 using CarePath.Infrastructure.Identity;
 using CarePath.Infrastructure.Persistence.Converters;
 using CarePath.Infrastructure.Persistence.Interceptors;
@@ -70,10 +71,23 @@ public class CarePathDbContext : IdentityDbContext<ApplicationUser, IdentityRole
     /// <summary>Payments.</summary>
     public DbSet<Payment> Payments => Set<Payment>();
 
-    // CP-03 Transitions entities (DischargeDocument, TransitionPlan, etc.) are intentionally
-    // not mapped here yet. They are out of CP-02 scope and have no entity configurations, so
-    // mapping them now would emit an incomplete, HIPAA-unsafe schema (cascade deletes on PHI,
-    // unbounded PHI columns). They will be added with their configurations during CP-03.
+    /// <summary>Discharge documents.</summary>
+    public DbSet<DischargeDocument> DischargeDocuments => Set<DischargeDocument>();
+
+    /// <summary>Transition plans.</summary>
+    public DbSet<TransitionPlan> TransitionPlans => Set<TransitionPlan>();
+
+    /// <summary>Transition instructions.</summary>
+    public DbSet<TransitionInstruction> TransitionInstructions => Set<TransitionInstruction>();
+
+    /// <summary>Transition reminders.</summary>
+    public DbSet<TransitionReminder> TransitionReminders => Set<TransitionReminder>();
+
+    /// <summary>Transition check-ins.</summary>
+    public DbSet<TransitionCheckIn> TransitionCheckIns => Set<TransitionCheckIn>();
+
+    /// <summary>Transition escalations.</summary>
+    public DbSet<TransitionEscalation> TransitionEscalations => Set<TransitionEscalation>();
 
     /// <inheritdoc />
     protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)

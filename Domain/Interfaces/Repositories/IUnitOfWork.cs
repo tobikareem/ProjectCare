@@ -2,6 +2,7 @@ using CarePath.Domain.Entities.Billing;
 using CarePath.Domain.Entities.Clinical;
 using CarePath.Domain.Entities.Identity;
 using CarePath.Domain.Entities.Scheduling;
+using CarePath.Domain.Entities.Transitions;
 
 namespace CarePath.Domain.Interfaces.Repositories;
 
@@ -74,6 +75,24 @@ public interface IUnitOfWork : IDisposable, IAsyncDisposable
 
     /// <summary>Repository for <see cref="Payment"/> entities.</summary>
     IRepository<Payment> Payments { get; }
+
+    /// <summary>Repository for <see cref="DischargeDocument"/> entities.</summary>
+    IRepository<DischargeDocument> DischargeDocuments { get; }
+
+    /// <summary>Repository for <see cref="TransitionPlan"/> entities.</summary>
+    IRepository<TransitionPlan> TransitionPlans { get; }
+
+    /// <summary>Repository for <see cref="TransitionInstruction"/> entities.</summary>
+    IRepository<TransitionInstruction> TransitionInstructions { get; }
+
+    /// <summary>Repository for <see cref="TransitionReminder"/> entities.</summary>
+    IRepository<TransitionReminder> TransitionReminders { get; }
+
+    /// <summary>Repository for <see cref="TransitionCheckIn"/> entities.</summary>
+    IRepository<TransitionCheckIn> TransitionCheckIns { get; }
+
+    /// <summary>Repository for <see cref="TransitionEscalation"/> entities.</summary>
+    IRepository<TransitionEscalation> TransitionEscalations { get; }
 
     // â”€â”€ Persistence â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 

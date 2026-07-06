@@ -49,6 +49,28 @@ public sealed class ProblemDetailsMiddlewareTests
     }
 
     [Fact]
+    public async Task InvokeAsync_WhenTransitionsPhiMissingOrDenied_ReturnsByteIdenticalNotFoundBodiesWithoutTraceId()
+    {
+        // Arrange
+        using var missingServer = CreateServer(_ => throw new ResourceNotFoundException(isPhiResource: true));
+        using var deniedServer = CreateServer(_ => throw new ResourceAccessDeniedException("ResourceUnavailable", isPhiResource: true));
+
+        // Act
+        var missingResponse = await missingServer.CreateClient().GetAsync($"/api/transitions/plans/{Guid.NewGuid():D}");
+        var deniedResponse = await deniedServer.CreateClient().GetAsync($"/api/transitions/plans/{Guid.NewGuid():D}");
+        var missingBody = await missingResponse.Content.ReadAsByteArrayAsync();
+        var deniedBody = await deniedResponse.Content.ReadAsByteArrayAsync();
+        var bodyText = System.Text.Encoding.UTF8.GetString(missingBody);
+
+        // Assert
+        missingResponse.StatusCode.Should().Be(HttpStatusCode.NotFound);
+        deniedResponse.StatusCode.Should().Be(HttpStatusCode.NotFound);
+        missingBody.Should().Equal(deniedBody);
+        bodyText.Contains("TraceId", StringComparison.OrdinalIgnoreCase).Should().BeFalse();
+        bodyText.Contains("ResourceUnavailable", StringComparison.OrdinalIgnoreCase).Should().BeFalse();
+    }
+
+    [Fact]
     public async Task InvokeAsync_WhenValidationFails_DoesNotEchoSubmittedValues()
     {
         // Arrange

@@ -419,6 +419,17 @@ public sealed class ClientOperationsService : IClientOperationsService
                 : await unitOfWork.Clients.FindAsync(client => clientIds.Contains(client.Id), cancellationToken);
         }
 
+        if (HasRole(ApplicationRoles.Clinician))
+        {
+            var transitionPlans = await unitOfWork.TransitionPlans.FindAsync(
+                plan => plan.Status != TransitionPlanStatus.Cancelled,
+                cancellationToken);
+            var clientIds = transitionPlans.Select(plan => plan.ClientId).Distinct().ToArray();
+            return clientIds.Length == 0
+                ? Array.Empty<Client>()
+                : await unitOfWork.Clients.FindAsync(client => clientIds.Contains(client.Id), cancellationToken);
+        }
+
         return Array.Empty<Client>();
     }
 
@@ -446,6 +457,14 @@ public sealed class ClientOperationsService : IClientOperationsService
         }
 
         if (HasRole(ApplicationRoles.Caregiver) && await IsCurrentCaregiverAssignedToClientAsync(client.Id, cancellationToken))
+        {
+            return;
+        }
+
+        if (HasRole(ApplicationRoles.Clinician)
+            && await unitOfWork.TransitionPlans.ExistsAsync(
+                plan => plan.ClientId == client.Id && plan.Status != TransitionPlanStatus.Cancelled,
+                cancellationToken))
         {
             return;
         }

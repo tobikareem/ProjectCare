@@ -1,4 +1,5 @@
 using CarePath.Domain.Entities.Scheduling;
+using CarePath.Domain.Entities.Transitions;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 
@@ -26,8 +27,6 @@ public sealed class VisitNoteConfiguration : IEntityTypeConfiguration<VisitNote>
         builder.Property(note => note.CreatedBy).HasMaxLength(100);
         builder.Property(note => note.UpdatedBy).HasMaxLength(100);
 
-        builder.Ignore(note => note.TransitionPlanId);
-
         builder
             .HasOne(note => note.Shift)
             .WithMany(shift => shift.VisitNotes)
@@ -46,8 +45,15 @@ public sealed class VisitNoteConfiguration : IEntityTypeConfiguration<VisitNote>
             .HasForeignKey(photo => photo.VisitNoteId)
             .OnDelete(DeleteBehavior.Restrict);
 
+        builder
+            .HasOne<TransitionPlan>()
+            .WithMany()
+            .HasForeignKey(note => note.TransitionPlanId)
+            .OnDelete(DeleteBehavior.Restrict);
+
         builder.HasIndex(note => note.ShiftId).HasDatabaseName("IX_VisitNotes_ShiftId");
         builder.HasIndex(note => note.CaregiverId).HasDatabaseName("IX_VisitNotes_CaregiverId");
+        builder.HasIndex(note => note.TransitionPlanId).HasDatabaseName("IX_VisitNotes_TransitionPlanId");
         builder.HasIndex(note => note.VisitDateTime).HasDatabaseName("IX_VisitNotes_VisitDateTime");
         builder.HasIndex(note => note.IsDeleted).HasDatabaseName("IX_VisitNotes_IsDeleted");
     }

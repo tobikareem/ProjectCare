@@ -7,6 +7,7 @@ using CarePath.Application.Common.Paging;
 using CarePath.Contracts.Common;
 using CarePath.Contracts.Scheduling;
 using CarePath.Domain.Entities.Scheduling;
+using CarePath.Domain.Entities.Transitions;
 using CarePath.Domain.Enumerations;
 using CarePath.Domain.Interfaces.Repositories;
 using FluentValidation;
@@ -66,6 +67,11 @@ public sealed class VisitDocumentationService : IVisitDocumentationService
             Temperature = request.Temperature,
             HeartRate = request.HeartRate,
         };
+        var transitionPlan = await GetActiveTransitionPlanAsync(shift.ClientId, request.VisitDateTime, cancellationToken);
+        if (transitionPlan is not null)
+        {
+            note.TransitionPlanId = transitionPlan.Id;
+        }
 
         await unitOfWork.BeginTransactionAsync(cancellationToken);
         try
@@ -237,6 +243,23 @@ public sealed class VisitDocumentationService : IVisitDocumentationService
     {
         return await unitOfWork.VisitNotes.GetByIdAsync(visitNoteId, cancellationToken)
             ?? throw new ResourceNotFoundException(isPhiResource: true);
+    }
+
+    private async Task<TransitionPlan?> GetActiveTransitionPlanAsync(
+        Guid clientId,
+        DateTime visitDateTime,
+        CancellationToken cancellationToken)
+    {
+        var plans = await unitOfWork.TransitionPlans.FindAsync(
+            plan => plan.ClientId == clientId
+                && plan.Status == TransitionPlanStatus.Active
+                && plan.DischargeDate <= visitDateTime
+                && plan.TransitionWindowEnd >= visitDateTime,
+            cancellationToken);
+
+        return plans
+            .OrderByDescending(plan => plan.ActivatedAt ?? plan.CreatedAt)
+            .FirstOrDefault();
     }
 
     private bool HasAnyRole(params string[] roles) => roles.Any(HasRole);

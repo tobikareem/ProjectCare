@@ -66,17 +66,24 @@ PM agent still owns sprint board/spec close-out. Do not mark Sprint 4 complete h
 ---
 ## CP-03 - CarePath Transitions
 
-**Status**: Approved for Domain slice; backend workflow planned for Sprint 5 after Infrastructure/Application prerequisites
+**Status**: Sprint 5 exit verification complete pending PM review
 
 30-day post-discharge care management: Intake -> Verify -> Guide -> Escalate.
 
-Domain layer complete:
-- 6 Transitions entities in `Domain/Entities/Transitions/`.
-- 11 Transitions enumerations.
-- `VisitNote.TransitionPlanId` placeholder for future integration.
-- Repository interfaces and pure Domain tests.
+Completed through Sprint 5:
+- Domain layer: 6 Transitions entities, 11 enumerations, repository surfaces, pure Domain tests.
+- Persistence: explicit EF configurations, `AddTransitions` migration, `VisitNote.TransitionPlanId` FK with `Restrict`, metadata and migration-shape tests.
+- Application: discharge intake, deterministic extraction stub, clinician review, activation/e-signature, reminder guard, check-ins, escalation records only, VisitNote linkage, clinician scoping, and dashboard summary query.
+- WebApi: `TransitionsController` endpoint matrix, role policies, IDOR guards, patient-view/check-in self/grant evaluation, care-team-safe client-plan route, and PHI 404 hardening.
+- Client: `TransitionsClient` typed client committed in `c7880fb`.
 
-Backend implementation waits for Sprint 5.
+Verification from S5-TASK-060:
+- `dotnet build CarePath.sln` passed with 0 warnings and 0 errors.
+- `dotnet test CarePath.sln` passed: Domain 268, Application 237, Infrastructure 74.
+- `dotnet-code-reviewer` reviewed the full Sprint 5 Transitions diff `39f84ff..HEAD`; findings addressed before exit commit.
+- HIPAA spot check completed: sensitive Transitions payload fields are not present in logs, exception messages, or validation error messages; binary intake is rejected with a stable code; patient/care-team DTO exposure guards pass; Transitions PHI 404 missing-vs-denied bodies are byte-identical and omit `traceId`; safety tests cover inactive-plan reminder blocking, records-only escalation, stub output requiring clinician review, and the exact +30-day UTC window boundary.
+
+PM agent still owns sprint board/spec close-out. Do not mark Sprint 5 complete here.
 
 ---
 

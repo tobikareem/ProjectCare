@@ -922,6 +922,9 @@ namespace CarePath.Infrastructure.Migrations
                         .HasPrecision(5, 2)
                         .HasColumnType("decimal(5,2)");
 
+                    b.Property<Guid?>("TransitionPlanId")
+                        .HasColumnType("uniqueidentifier");
+
                     b.Property<bool>("Transportation")
                         .HasColumnType("bit");
 
@@ -945,6 +948,9 @@ namespace CarePath.Infrastructure.Migrations
 
                     b.HasIndex("ShiftId")
                         .HasDatabaseName("IX_VisitNotes_ShiftId");
+
+                    b.HasIndex("TransitionPlanId")
+                        .HasDatabaseName("IX_VisitNotes_TransitionPlanId");
 
                     b.HasIndex("VisitDateTime")
                         .HasDatabaseName("IX_VisitNotes_VisitDateTime");
@@ -1002,6 +1008,388 @@ namespace CarePath.Infrastructure.Migrations
                         .HasDatabaseName("IX_VisitPhotos_VisitNoteId");
 
                     b.ToTable("VisitPhotos", (string)null);
+                });
+
+            modelBuilder.Entity("CarePath.Domain.Entities.Transitions.DischargeDocument", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("ClientId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("CreatedBy")
+                        .HasMaxLength(256)
+                        .HasColumnType("nvarchar(256)");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("RawContent")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("SourceReference")
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<int>("SourceType")
+                        .HasColumnType("int");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("UpdatedBy")
+                        .HasMaxLength(256)
+                        .HasColumnType("nvarchar(256)");
+
+                    b.Property<DateTime>("UploadedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<Guid>("UploadedBy")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ClientId")
+                        .HasDatabaseName("IX_DischargeDocuments_ClientId");
+
+                    b.HasIndex("IsDeleted")
+                        .HasDatabaseName("IX_DischargeDocuments_IsDeleted");
+
+                    b.HasIndex("Status")
+                        .HasDatabaseName("IX_DischargeDocuments_Status");
+
+                    b.ToTable("DischargeDocuments", (string)null);
+                });
+
+            modelBuilder.Entity("CarePath.Domain.Entities.Transitions.TransitionCheckIn", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<int>("Channel")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime>("CheckInDate")
+                        .HasColumnType("datetime2");
+
+                    b.Property<bool>("ContainsWarningSymptom")
+                        .HasColumnType("bit");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("CreatedBy")
+                        .HasMaxLength(256)
+                        .HasColumnType("nvarchar(256)");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("ResponsesJson")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<DateTime?>("ReviewedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<Guid?>("ReviewedBy")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("TransitionPlanId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("UpdatedBy")
+                        .HasMaxLength(256)
+                        .HasColumnType("nvarchar(256)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("IsDeleted")
+                        .HasDatabaseName("IX_TransitionCheckIns_IsDeleted");
+
+                    b.HasIndex("TransitionPlanId")
+                        .HasDatabaseName("IX_TransitionCheckIns_TransitionPlanId");
+
+                    b.ToTable("TransitionCheckIns", (string)null);
+                });
+
+            modelBuilder.Entity("CarePath.Domain.Entities.Transitions.TransitionEscalation", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime?>("AcknowledgedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<Guid?>("AcknowledgedBy")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("CreatedBy")
+                        .HasMaxLength(256)
+                        .HasColumnType("nvarchar(256)");
+
+                    b.Property<DateTime>("EscalatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("EscalationLevel")
+                        .HasColumnType("int");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("ResolutionNote")
+                        .HasMaxLength(2000)
+                        .HasColumnType("nvarchar(2000)");
+
+                    b.Property<Guid>("TransitionPlanId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("TriggerDetails")
+                        .IsRequired()
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
+
+                    b.Property<int>("TriggerType")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("UpdatedBy")
+                        .HasMaxLength(256)
+                        .HasColumnType("nvarchar(256)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("IsDeleted")
+                        .HasDatabaseName("IX_TransitionEscalations_IsDeleted");
+
+                    b.HasIndex("TransitionPlanId")
+                        .HasDatabaseName("IX_TransitionEscalations_TransitionPlanId");
+
+                    b.ToTable("TransitionEscalations", (string)null);
+                });
+
+            modelBuilder.Entity("CarePath.Domain.Entities.Transitions.TransitionInstruction", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<int>("Category")
+                        .HasColumnType("int");
+
+                    b.Property<string>("ClinicalNote")
+                        .HasMaxLength(2000)
+                        .HasColumnType("nvarchar(2000)");
+
+                    b.Property<decimal>("ConfidenceScore")
+                        .HasPrecision(5, 4)
+                        .HasColumnType("decimal(5,4)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("CreatedBy")
+                        .HasMaxLength(256)
+                        .HasColumnType("nvarchar(256)");
+
+                    b.Property<string>("InstructionText")
+                        .IsRequired()
+                        .HasMaxLength(2000)
+                        .HasColumnType("nvarchar(2000)");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("NeedsPharmacistReview")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("SourceText")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("int");
+
+                    b.Property<Guid>("TransitionPlanId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("UpdatedBy")
+                        .HasMaxLength(256)
+                        .HasColumnType("nvarchar(256)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("IsDeleted")
+                        .HasDatabaseName("IX_TransitionInstructions_IsDeleted");
+
+                    b.HasIndex("Status")
+                        .HasDatabaseName("IX_TransitionInstructions_Status");
+
+                    b.HasIndex("TransitionPlanId")
+                        .HasDatabaseName("IX_TransitionInstructions_TransitionPlanId");
+
+                    b.ToTable("TransitionInstructions", (string)null);
+                });
+
+            modelBuilder.Entity("CarePath.Domain.Entities.Transitions.TransitionPlan", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime?>("ActivatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<Guid>("ClientId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("CreatedBy")
+                        .HasMaxLength(256)
+                        .HasColumnType("nvarchar(256)");
+
+                    b.Property<DateTime>("DischargeDate")
+                        .HasColumnType("datetime2");
+
+                    b.Property<Guid>("DischargeDocumentId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("HospitalName")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("bit");
+
+                    b.Property<int>("RiskLevel")
+                        .HasColumnType("int");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime>("TransitionWindowEnd")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("UpdatedBy")
+                        .HasMaxLength(256)
+                        .HasColumnType("nvarchar(256)");
+
+                    b.Property<DateTime?>("VerifiedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<Guid?>("VerifiedBy")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ClientId")
+                        .HasDatabaseName("IX_TransitionPlans_ClientId");
+
+                    b.HasIndex("DischargeDocumentId")
+                        .HasDatabaseName("IX_TransitionPlans_DischargeDocumentId");
+
+                    b.HasIndex("IsDeleted")
+                        .HasDatabaseName("IX_TransitionPlans_IsDeleted");
+
+                    b.HasIndex("Status")
+                        .HasDatabaseName("IX_TransitionPlans_Status");
+
+                    b.ToTable("TransitionPlans", (string)null);
+                });
+
+            modelBuilder.Entity("CarePath.Domain.Entities.Transitions.TransitionReminder", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime?>("AcknowledgedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("Channel")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("CreatedBy")
+                        .HasMaxLength(256)
+                        .HasColumnType("nvarchar(256)");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("bit");
+
+                    b.Property<int>("ReminderType")
+                        .HasColumnType("int");
+
+                    b.Property<int>("RetryCount")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime>("ScheduledAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime?>("SentAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("int");
+
+                    b.Property<Guid?>("TransitionInstructionId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("TransitionPlanId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("UpdatedBy")
+                        .HasMaxLength(256)
+                        .HasColumnType("nvarchar(256)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("IsDeleted")
+                        .HasDatabaseName("IX_TransitionReminders_IsDeleted");
+
+                    b.HasIndex("ScheduledAt")
+                        .HasDatabaseName("IX_TransitionReminders_ScheduledAt");
+
+                    b.HasIndex("Status")
+                        .HasDatabaseName("IX_TransitionReminders_Status");
+
+                    b.HasIndex("TransitionInstructionId")
+                        .HasDatabaseName("IX_TransitionReminders_TransitionInstructionId");
+
+                    b.HasIndex("TransitionPlanId")
+                        .HasDatabaseName("IX_TransitionReminders_TransitionPlanId");
+
+                    b.ToTable("TransitionReminders", (string)null);
                 });
 
             modelBuilder.Entity("CarePath.Infrastructure.Identity.ApplicationUser", b =>
@@ -1359,6 +1747,11 @@ namespace CarePath.Infrastructure.Migrations
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
+                    b.HasOne("CarePath.Domain.Entities.Transitions.TransitionPlan", null)
+                        .WithMany()
+                        .HasForeignKey("TransitionPlanId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
                     b.Navigation("Caregiver");
 
                     b.Navigation("Shift");
@@ -1373,6 +1766,85 @@ namespace CarePath.Infrastructure.Migrations
                         .IsRequired();
 
                     b.Navigation("VisitNote");
+                });
+
+            modelBuilder.Entity("CarePath.Domain.Entities.Transitions.DischargeDocument", b =>
+                {
+                    b.HasOne("CarePath.Domain.Entities.Identity.Client", "Client")
+                        .WithMany()
+                        .HasForeignKey("ClientId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Client");
+                });
+
+            modelBuilder.Entity("CarePath.Domain.Entities.Transitions.TransitionCheckIn", b =>
+                {
+                    b.HasOne("CarePath.Domain.Entities.Transitions.TransitionPlan", "TransitionPlan")
+                        .WithMany("CheckIns")
+                        .HasForeignKey("TransitionPlanId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("TransitionPlan");
+                });
+
+            modelBuilder.Entity("CarePath.Domain.Entities.Transitions.TransitionEscalation", b =>
+                {
+                    b.HasOne("CarePath.Domain.Entities.Transitions.TransitionPlan", "TransitionPlan")
+                        .WithMany("Escalations")
+                        .HasForeignKey("TransitionPlanId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("TransitionPlan");
+                });
+
+            modelBuilder.Entity("CarePath.Domain.Entities.Transitions.TransitionInstruction", b =>
+                {
+                    b.HasOne("CarePath.Domain.Entities.Transitions.TransitionPlan", "TransitionPlan")
+                        .WithMany("Instructions")
+                        .HasForeignKey("TransitionPlanId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("TransitionPlan");
+                });
+
+            modelBuilder.Entity("CarePath.Domain.Entities.Transitions.TransitionPlan", b =>
+                {
+                    b.HasOne("CarePath.Domain.Entities.Identity.Client", "Client")
+                        .WithMany()
+                        .HasForeignKey("ClientId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("CarePath.Domain.Entities.Transitions.DischargeDocument", "DischargeDocument")
+                        .WithMany("TransitionPlans")
+                        .HasForeignKey("DischargeDocumentId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Client");
+
+                    b.Navigation("DischargeDocument");
+                });
+
+            modelBuilder.Entity("CarePath.Domain.Entities.Transitions.TransitionReminder", b =>
+                {
+                    b.HasOne("CarePath.Domain.Entities.Transitions.TransitionInstruction", null)
+                        .WithMany()
+                        .HasForeignKey("TransitionInstructionId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("CarePath.Domain.Entities.Transitions.TransitionPlan", "TransitionPlan")
+                        .WithMany("Reminders")
+                        .HasForeignKey("TransitionPlanId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("TransitionPlan");
                 });
 
             modelBuilder.Entity("CarePath.Infrastructure.Identity.ApplicationUser", b =>
@@ -1470,6 +1942,22 @@ namespace CarePath.Infrastructure.Migrations
             modelBuilder.Entity("CarePath.Domain.Entities.Scheduling.VisitNote", b =>
                 {
                     b.Navigation("Photos");
+                });
+
+            modelBuilder.Entity("CarePath.Domain.Entities.Transitions.DischargeDocument", b =>
+                {
+                    b.Navigation("TransitionPlans");
+                });
+
+            modelBuilder.Entity("CarePath.Domain.Entities.Transitions.TransitionPlan", b =>
+                {
+                    b.Navigation("CheckIns");
+
+                    b.Navigation("Escalations");
+
+                    b.Navigation("Instructions");
+
+                    b.Navigation("Reminders");
                 });
 #pragma warning restore 612, 618
         }

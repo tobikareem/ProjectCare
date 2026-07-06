@@ -2,6 +2,7 @@ using CarePath.Domain.Entities.Billing;
 using CarePath.Domain.Entities.Clinical;
 using CarePath.Domain.Entities.Identity;
 using CarePath.Domain.Entities.Scheduling;
+using CarePath.Domain.Entities.Transitions;
 using CarePath.Domain.Interfaces.Repositories;
 using Microsoft.EntityFrameworkCore.Storage;
 
@@ -28,6 +29,12 @@ public sealed class UnitOfWork : IUnitOfWork
     private IRepository<Invoice>? _invoices;
     private IRepository<InvoiceLineItem>? _invoiceLineItems;
     private IRepository<Payment>? _payments;
+    private IRepository<DischargeDocument>? _dischargeDocuments;
+    private IRepository<TransitionPlan>? _transitionPlans;
+    private IRepository<TransitionInstruction>? _transitionInstructions;
+    private IRepository<TransitionReminder>? _transitionReminders;
+    private IRepository<TransitionCheckIn>? _transitionCheckIns;
+    private IRepository<TransitionEscalation>? _transitionEscalations;
 
     /// <summary>Initializes a new unit of work over a CarePath database context.</summary>
     /// <param name="context">CarePath database context.</param>
@@ -74,6 +81,30 @@ public sealed class UnitOfWork : IUnitOfWork
 
     /// <inheritdoc />
     public IRepository<Payment> Payments => _payments ??= new Repository<Payment>(_context);
+
+    /// <inheritdoc />
+    public IRepository<DischargeDocument> DischargeDocuments =>
+        _dischargeDocuments ??= new Repository<DischargeDocument>(_context);
+
+    /// <inheritdoc />
+    public IRepository<TransitionPlan> TransitionPlans =>
+        _transitionPlans ??= new Repository<TransitionPlan>(_context);
+
+    /// <inheritdoc />
+    public IRepository<TransitionInstruction> TransitionInstructions =>
+        _transitionInstructions ??= new Repository<TransitionInstruction>(_context);
+
+    /// <inheritdoc />
+    public IRepository<TransitionReminder> TransitionReminders =>
+        _transitionReminders ??= new Repository<TransitionReminder>(_context);
+
+    /// <inheritdoc />
+    public IRepository<TransitionCheckIn> TransitionCheckIns =>
+        _transitionCheckIns ??= new Repository<TransitionCheckIn>(_context);
+
+    /// <inheritdoc />
+    public IRepository<TransitionEscalation> TransitionEscalations =>
+        _transitionEscalations ??= new Repository<TransitionEscalation>(_context);
 
     /// <inheritdoc />
     public async Task<int> SaveChangesAsync(CancellationToken cancellationToken = default)

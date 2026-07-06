@@ -1,4 +1,5 @@
 using System.Reflection;
+using CarePath.Contracts.Transitions;
 using CarePath.WebApi.Controllers;
 using FluentAssertions;
 using Microsoft.AspNetCore.Authorization;
@@ -42,6 +43,20 @@ public sealed class Sprint4ControllerContractTests
     [InlineData(typeof(InvoicesController), "RecordPayment", "Admin,Coordinator")]
     [InlineData(typeof(BillingMarginsController), "GetMarginSummary", "Admin")]
     [InlineData(typeof(BillingMarginsController), "GetShiftMargins", "Admin")]
+    [InlineData(typeof(TransitionsController), "CreateDischargeDocument", "Coordinator")]
+    [InlineData(typeof(TransitionsController), "GetDischargeDocument", "Coordinator,Clinician")]
+    [InlineData(typeof(TransitionsController), "GetDischargeDocumentContent", "Coordinator,Clinician")]
+    [InlineData(typeof(TransitionsController), "ExtractDischargeDocument", "Coordinator")]
+    [InlineData(typeof(TransitionsController), "GetPlans", "Coordinator,Clinician")]
+    [InlineData(typeof(TransitionsController), "GetPlan", "Coordinator,Clinician")]
+    [InlineData(typeof(TransitionsController), "GetPatientPlan", "Client")]
+    [InlineData(typeof(TransitionsController), "ReviewInstruction", "Clinician")]
+    [InlineData(typeof(TransitionsController), "ActivatePlan", "Clinician")]
+    [InlineData(typeof(TransitionsController), "ScheduleReminder", "Coordinator")]
+    [InlineData(typeof(TransitionsController), "CreateCheckIn", "Client")]
+    [InlineData(typeof(TransitionsController), "GetEscalations", "Coordinator")]
+    [InlineData(typeof(TransitionsController), "AcknowledgeEscalation", "Coordinator")]
+    [InlineData(typeof(TransitionsController), "GetPlanForClient", "Coordinator,Clinician,Caregiver")]
     public void ControllerAction_WhenEndpointTouchesSprint4Operations_DeclaresExpectedRoles(Type controllerType, string actionName, string expectedRoles)
     {
         // Arrange
@@ -65,6 +80,7 @@ public sealed class Sprint4ControllerContractTests
     [InlineData(typeof(VisitNotesController), "api/visit-notes")]
     [InlineData(typeof(InvoicesController), "api/invoices")]
     [InlineData(typeof(BillingMarginsController), "api/billing/margins")]
+    [InlineData(typeof(TransitionsController), "api/transitions")]
     public void Controller_WhenSprint4EndpointSurface_HasApiControllerAndRoute(Type controllerType, string route)
     {
         controllerType.GetCustomAttribute<ApiControllerAttribute>().Should().NotBeNull();
@@ -104,6 +120,20 @@ public sealed class Sprint4ControllerContractTests
     [InlineData(typeof(InvoicesController), "RecordPayment", typeof(HttpPostAttribute), "{id:guid}/payments")]
     [InlineData(typeof(BillingMarginsController), "GetMarginSummary", typeof(HttpGetAttribute), null)]
     [InlineData(typeof(BillingMarginsController), "GetShiftMargins", typeof(HttpGetAttribute), "shifts")]
+    [InlineData(typeof(TransitionsController), "CreateDischargeDocument", typeof(HttpPostAttribute), "documents")]
+    [InlineData(typeof(TransitionsController), "GetDischargeDocument", typeof(HttpGetAttribute), "documents/{id:guid}")]
+    [InlineData(typeof(TransitionsController), "GetDischargeDocumentContent", typeof(HttpGetAttribute), "documents/{id:guid}/content")]
+    [InlineData(typeof(TransitionsController), "ExtractDischargeDocument", typeof(HttpPostAttribute), "documents/{id:guid}/extract")]
+    [InlineData(typeof(TransitionsController), "GetPlans", typeof(HttpGetAttribute), "plans")]
+    [InlineData(typeof(TransitionsController), "GetPlan", typeof(HttpGetAttribute), "plans/{id:guid}")]
+    [InlineData(typeof(TransitionsController), "GetPatientPlan", typeof(HttpGetAttribute), "plans/{id:guid}/patient-view")]
+    [InlineData(typeof(TransitionsController), "ReviewInstruction", typeof(HttpPutAttribute), "plans/{id:guid}/instructions/{instructionId:guid}")]
+    [InlineData(typeof(TransitionsController), "ActivatePlan", typeof(HttpPostAttribute), "plans/{id:guid}/activate")]
+    [InlineData(typeof(TransitionsController), "ScheduleReminder", typeof(HttpPostAttribute), "plans/{id:guid}/reminders")]
+    [InlineData(typeof(TransitionsController), "CreateCheckIn", typeof(HttpPostAttribute), "plans/{id:guid}/check-ins")]
+    [InlineData(typeof(TransitionsController), "GetEscalations", typeof(HttpGetAttribute), "plans/{id:guid}/escalations")]
+    [InlineData(typeof(TransitionsController), "AcknowledgeEscalation", typeof(HttpPostAttribute), "escalations/{id:guid}/acknowledge")]
+    [InlineData(typeof(TransitionsController), "GetPlanForClient", typeof(HttpGetAttribute), "plans/client/{clientId:guid}")]
     public void ControllerAction_WhenEndpointIsInSprint4Matrix_DeclaresExpectedHttpMethodAndTemplate(
         Type controllerType,
         string actionName,
@@ -136,6 +166,7 @@ public sealed class Sprint4ControllerContractTests
             typeof(VisitNotesController),
             typeof(InvoicesController),
             typeof(BillingMarginsController),
+            typeof(TransitionsController),
         };
 
         // Act
@@ -146,5 +177,23 @@ public sealed class Sprint4ControllerContractTests
 
         // Assert
         returnTypes.Should().NotContain(typeName => typeName.Contains("CarePath.Domain.", StringComparison.Ordinal));
+    }
+
+    [Theory]
+    [InlineData(typeof(TransitionPlanPatientFacingDto))]
+    [InlineData(typeof(TransitionPlanCareTeamDto))]
+    [InlineData(typeof(TransitionInstructionPatientFacingDto))]
+    [InlineData(typeof(TransitionCheckInDto))]
+    public void TransitionsPatientAndCareTeamDtos_DoNotExposeClinicalSourceOrRawPayloadFields(Type dtoType)
+    {
+        var propertyNames = dtoType.GetProperties().Select(property => property.Name).ToArray();
+
+        propertyNames.Should().NotContain("RawContent");
+        propertyNames.Should().NotContain("SourceText");
+        propertyNames.Should().NotContain("ResponsesJson");
+        propertyNames.Should().NotContain("ConfidenceScore");
+        propertyNames.Should().NotContain("ClinicalNote");
+        propertyNames.Should().NotContain("VerifiedBy");
+        propertyNames.Should().NotContain("VerifiedAt");
     }
 }

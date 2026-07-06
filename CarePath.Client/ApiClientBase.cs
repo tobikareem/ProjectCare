@@ -87,6 +87,27 @@ public abstract class ApiClientBase
         return new ApiResponse { Success = false, Errors = errors, TraceId = traceId };
     }
 
+    /// <summary>Sends a body-less POST for trigger-style operations (e.g., starting extraction).</summary>
+    /// <param name="requestUri">Relative request URI. Must never embed PHI values.</param>
+    /// <param name="cancellationToken">Token to cancel the operation.</param>
+    /// <returns>The mapped response envelope.</returns>
+    protected async Task<ApiResponse> PostAsync(
+        string requestUri,
+        CancellationToken cancellationToken = default)
+    {
+        using var response = await Http
+            .PostAsync(requestUri, content: null, cancellationToken)
+            .ConfigureAwait(false);
+
+        if (response.IsSuccessStatusCode)
+        {
+            return new ApiResponse { Success = true };
+        }
+
+        var (errors, traceId) = await MapErrorsAsync(response, cancellationToken).ConfigureAwait(false);
+        return new ApiResponse { Success = false, Errors = errors, TraceId = traceId };
+    }
+
     /// <summary>Sends a DELETE for operations that return no payload (e.g., soft revoke).</summary>
     /// <param name="requestUri">Relative request URI. Must never embed PHI values.</param>
     /// <param name="cancellationToken">Token to cancel the operation.</param>

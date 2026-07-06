@@ -12,6 +12,7 @@ using ContractReminderStatus = CarePath.Contracts.Enumerations.ReminderStatus;
 using ContractReminderType = CarePath.Contracts.Enumerations.ReminderType;
 using ContractEscalationLevel = CarePath.Contracts.Enumerations.EscalationLevel;
 using ContractEscalationTriggerType = CarePath.Contracts.Enumerations.EscalationTriggerType;
+using DomainTransitionInstructionStatus = CarePath.Domain.Enumerations.TransitionInstructionStatus;
 
 namespace CarePath.Application.Common.Mapping;
 
@@ -77,6 +78,41 @@ internal static class TransitionContractMapper
         OpenEscalationCount = openEscalationCount,
     };
 
+    internal static TransitionPlanPatientFacingDto ToPatientFacingDto(
+        this TransitionPlan plan,
+        IReadOnlyList<TransitionInstruction> instructions) => new()
+    {
+        Id = plan.Id,
+        HospitalName = plan.HospitalName,
+        DischargeDate = plan.DischargeDate,
+        TransitionWindowEnd = plan.TransitionWindowEnd,
+        IsActive = plan.IsActive,
+        DaysRemaining = plan.DaysRemaining,
+        Instructions = instructions
+            .Where(IsPatientVisible)
+            .Select(instruction => instruction.ToPatientFacingDto())
+            .ToArray(),
+    };
+
+    internal static TransitionPlanCareTeamDto ToCareTeamDto(
+        this TransitionPlan plan,
+        IReadOnlyList<TransitionInstruction> instructions) => new()
+    {
+        Id = plan.Id,
+        ClientId = plan.ClientId,
+        HospitalName = plan.HospitalName,
+        DischargeDate = plan.DischargeDate,
+        TransitionWindowEnd = plan.TransitionWindowEnd,
+        Status = (ContractTransitionPlanStatus)(int)plan.Status,
+        RiskLevel = (ContractTransitionRiskLevel)(int)plan.RiskLevel,
+        IsActive = plan.IsActive,
+        DaysRemaining = plan.DaysRemaining,
+        Instructions = instructions
+            .Where(IsPatientVisible)
+            .Select(instruction => instruction.ToPatientFacingDto())
+            .ToArray(),
+    };
+
     internal static TransitionInstructionClinicalDto ToClinicalDto(this TransitionInstruction instruction) => new()
     {
         Id = instruction.Id,
@@ -89,6 +125,13 @@ internal static class TransitionContractMapper
         ClinicalNote = instruction.ClinicalNote,
         NeedsPharmacistReview = instruction.NeedsPharmacistReview,
         Status = (ContractTransitionInstructionStatus)(int)instruction.Status,
+    };
+
+    internal static TransitionInstructionPatientFacingDto ToPatientFacingDto(this TransitionInstruction instruction) => new()
+    {
+        Id = instruction.Id,
+        Category = (ContractTransitionInstructionCategory)(int)instruction.Category,
+        InstructionText = instruction.InstructionText,
     };
 
     internal static TransitionReminderDto ToDto(this TransitionReminder reminder) => new()
@@ -128,4 +171,7 @@ internal static class TransitionContractMapper
         AcknowledgedAt = escalation.AcknowledgedAt,
         ResolutionNote = escalation.ResolutionNote,
     };
+
+    private static bool IsPatientVisible(TransitionInstruction instruction) =>
+        instruction.Status is DomainTransitionInstructionStatus.Approved or DomainTransitionInstructionStatus.Modified;
 }

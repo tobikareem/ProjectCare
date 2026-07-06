@@ -277,6 +277,80 @@ public sealed class TransitionsService : ITransitionsService
         };
     }
 
+    public async Task<TransitionPlanClinicalDto> GetPlanAsync(
+        Guid planId,
+        CancellationToken cancellationToken = default)
+    {
+        EnsureCoordinatorOrClinician();
+        var plan = await GetPlanEntityAsync(planId, cancellationToken);
+        await AuditAsync(ProtectedResourceType.TransitionPlan, plan.Id, AuditAction.Read, cancellationToken);
+        var instructions = await GetInstructionsAsync(plan.Id, cancellationToken);
+        foreach (var instruction in instructions)
+        {
+            await AuditAsync(ProtectedResourceType.TransitionInstruction, instruction.Id, AuditAction.Read, cancellationToken);
+        }
+
+        var client = await GetClientAsync(plan.ClientId, cancellationToken);
+        var user = await GetUserAsync(client.UserId, cancellationToken);
+        return plan.ToClinicalDto(client, user, instructions);
+    }
+
+    public async Task<TransitionPlanPatientFacingDto> GetPatientPlanAsync(
+        Guid planId,
+        CancellationToken cancellationToken = default)
+    {
+        var plan = await GetPlanEntityAsync(planId, cancellationToken);
+        EnsurePlanCanReceiveCheckIn(plan);
+        await EnsureCanSubmitCheckInAsync(plan, cancellationToken);
+        await AuditAsync(ProtectedResourceType.TransitionPlan, plan.Id, AuditAction.Read, cancellationToken);
+        var instructions = await GetInstructionsAsync(plan.Id, cancellationToken);
+        foreach (var instruction in instructions.Where(IsPatientVisible))
+        {
+            await AuditAsync(ProtectedResourceType.TransitionInstruction, instruction.Id, AuditAction.Read, cancellationToken);
+        }
+
+        return plan.ToPatientFacingDto(instructions);
+    }
+
+    public async Task<object> GetPlanForClientAsync(
+        Guid clientId,
+        CancellationToken cancellationToken = default)
+    {
+        var plans = await unitOfWork.TransitionPlans.FindAsync(
+            plan => plan.ClientId == clientId && plan.Status != TransitionPlanStatus.Cancelled,
+            cancellationToken);
+        var plan = plans
+            .OrderByDescending(plan => plan.Status == TransitionPlanStatus.Active)
+            .ThenByDescending(plan => plan.ActivatedAt ?? plan.CreatedAt)
+            .FirstOrDefault()
+            ?? throw new ResourceNotFoundException(isPhiResource: true);
+
+        if (HasRole(ApplicationRoles.Caregiver))
+        {
+            await EnsureAssignedCaregiverForClientAsync(plan.ClientId, cancellationToken);
+            await AuditAsync(ProtectedResourceType.TransitionPlan, plan.Id, AuditAction.Read, cancellationToken);
+            var caregiverInstructions = await GetInstructionsAsync(plan.Id, cancellationToken);
+            foreach (var instruction in caregiverInstructions.Where(IsPatientVisible))
+            {
+                await AuditAsync(ProtectedResourceType.TransitionInstruction, instruction.Id, AuditAction.Read, cancellationToken);
+            }
+
+            return plan.ToCareTeamDto(caregiverInstructions);
+        }
+
+        EnsureCoordinatorOrClinician();
+        await AuditAsync(ProtectedResourceType.TransitionPlan, plan.Id, AuditAction.Read, cancellationToken);
+        var instructions = await GetInstructionsAsync(plan.Id, cancellationToken);
+        foreach (var instruction in instructions)
+        {
+            await AuditAsync(ProtectedResourceType.TransitionInstruction, instruction.Id, AuditAction.Read, cancellationToken);
+        }
+
+        var client = await GetClientAsync(plan.ClientId, cancellationToken);
+        var user = await GetUserAsync(client.UserId, cancellationToken);
+        return plan.ToClinicalDto(client, user, instructions);
+    }
+
     public async Task<TransitionInstructionClinicalDto> ReviewInstructionAsync(
         Guid planId,
         Guid instructionId,
@@ -285,7 +359,7 @@ public sealed class TransitionsService : ITransitionsService
     {
         EnsureClinician();
         await reviewInstructionValidator.ValidateAndThrowAsync(request, cancellationToken);
-        var plan = await GetPlanAsync(planId, cancellationToken);
+        var plan = await GetPlanEntityAsync(planId, cancellationToken);
         if (plan.Status != TransitionPlanStatus.PendingVerification)
         {
             throw new ResourceConflictException("transition.plan_not_pending_verification", "transition.plan_not_pending_verification");
@@ -331,7 +405,7 @@ public sealed class TransitionsService : ITransitionsService
     {
         EnsureClinician();
         await activatePlanValidator.ValidateAndThrowAsync(request, cancellationToken);
-        var plan = await GetPlanAsync(planId, cancellationToken);
+        var plan = await GetPlanEntityAsync(planId, cancellationToken);
         if (plan.Status != TransitionPlanStatus.PendingVerification)
         {
             throw new ResourceConflictException("transition.plan_not_pending_verification", "transition.plan_not_pending_verification");
@@ -382,7 +456,7 @@ public sealed class TransitionsService : ITransitionsService
     {
         EnsureCoordinator();
         await scheduleReminderValidator.ValidateAndThrowAsync(request, cancellationToken);
-        var plan = await GetPlanAsync(planId, cancellationToken);
+        var plan = await GetPlanEntityAsync(planId, cancellationToken);
         if (plan.Status != TransitionPlanStatus.Active)
         {
             throw new ResourceConflictException("transition.plan_not_active", "transition.plan_not_active");
@@ -440,7 +514,7 @@ public sealed class TransitionsService : ITransitionsService
         CancellationToken cancellationToken = default)
     {
         await createCheckInValidator.ValidateAndThrowAsync(request, cancellationToken);
-        var plan = await GetPlanAsync(planId, cancellationToken);
+        var plan = await GetPlanEntityAsync(planId, cancellationToken);
         EnsurePlanCanReceiveCheckIn(plan);
         await EnsureCanSubmitCheckInAsync(plan, cancellationToken);
 
@@ -497,7 +571,7 @@ public sealed class TransitionsService : ITransitionsService
         CancellationToken cancellationToken = default)
     {
         EnsureCoordinator();
-        _ = await GetPlanAsync(planId, cancellationToken);
+        _ = await GetPlanEntityAsync(planId, cancellationToken);
         var escalations = await unitOfWork.TransitionEscalations.FindAsync(
             escalation => escalation.TransitionPlanId == planId,
             cancellationToken);
@@ -548,7 +622,7 @@ public sealed class TransitionsService : ITransitionsService
             ?? throw new ResourceNotFoundException(isPhiResource: true);
     }
 
-    private async Task<TransitionPlan> GetPlanAsync(Guid planId, CancellationToken cancellationToken)
+    private async Task<TransitionPlan> GetPlanEntityAsync(Guid planId, CancellationToken cancellationToken)
     {
         return await unitOfWork.TransitionPlans.GetByIdAsync(planId, cancellationToken)
             ?? throw new ResourceNotFoundException(isPhiResource: true);
@@ -621,6 +695,28 @@ public sealed class TransitionsService : ITransitionsService
         }
     }
 
+    private async Task EnsureAssignedCaregiverForClientAsync(Guid clientId, CancellationToken cancellationToken)
+    {
+        if (!currentUser.UserId.HasValue)
+        {
+            await AuditAsync(ProtectedResourceType.Client, clientId, AuditAction.AccessDenied, cancellationToken);
+            throw new ResourceAccessDeniedException("RoleInsufficient", isPhiResource: true);
+        }
+
+        var caregivers = await unitOfWork.Caregivers.FindAsync(
+            caregiver => caregiver.UserId == currentUser.UserId.Value,
+            cancellationToken);
+        var caregiverIds = caregivers.Select(caregiver => caregiver.Id).ToArray();
+        var assigned = caregiverIds.Length > 0 && await unitOfWork.Shifts.ExistsAsync(
+            shift => shift.ClientId == clientId && shift.CaregiverId.HasValue && caregiverIds.Contains(shift.CaregiverId.Value),
+            cancellationToken);
+        if (!assigned)
+        {
+            await AuditAsync(ProtectedResourceType.Client, clientId, AuditAction.AccessDenied, cancellationToken);
+            throw new ResourceAccessDeniedException("NotAssigned", isPhiResource: true);
+        }
+    }
+
     private static void EnsurePlanCanReceiveCheckIn(TransitionPlan plan)
     {
         if (plan.Status != TransitionPlanStatus.Active)
@@ -682,4 +778,7 @@ public sealed class TransitionsService : ITransitionsService
 
         return warningTerms.Any(term => responsesJson.Contains(term, StringComparison.OrdinalIgnoreCase));
     }
+
+    private static bool IsPatientVisible(TransitionInstruction instruction) =>
+        instruction.Status is TransitionInstructionStatus.Approved or TransitionInstructionStatus.Modified;
 }

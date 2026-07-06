@@ -25,6 +25,18 @@ public interface ITransitionsService
         PagedRequest request,
         CancellationToken cancellationToken = default);
 
+    Task<TransitionPlanClinicalDto> GetPlanAsync(
+        Guid planId,
+        CancellationToken cancellationToken = default);
+
+    Task<TransitionPlanPatientFacingDto> GetPatientPlanAsync(
+        Guid planId,
+        CancellationToken cancellationToken = default);
+
+    Task<object> GetPlanForClientAsync(
+        Guid clientId,
+        CancellationToken cancellationToken = default);
+
     Task<TransitionInstructionClinicalDto> ReviewInstructionAsync(
         Guid planId,
         Guid instructionId,

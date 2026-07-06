@@ -556,6 +556,29 @@ public sealed class TransitionsServiceTests
     }
 
     [Fact]
+    public async Task ScheduleReminderAsync_WhenScheduledExactlyAtWindowEnd_CreatesScheduledRecord()
+    {
+        // Arrange
+        var plan = CreateActivePlan();
+        var unitOfWork = CreateUnitOfWork();
+        unitOfWork.TransitionPlans.Setup(repository => repository.GetByIdAsync(plan.Id, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(plan);
+        TransitionReminder? addedReminder = null;
+        unitOfWork.TransitionReminders.Setup(repository => repository.AddAsync(It.IsAny<TransitionReminder>(), It.IsAny<CancellationToken>()))
+            .Callback<TransitionReminder, CancellationToken>((reminder, _) => addedReminder = reminder)
+            .ReturnsAsync((TransitionReminder reminder, CancellationToken _) => reminder);
+        var service = CreateService(unitOfWork);
+
+        // Act
+        var dto = await service.ScheduleReminderAsync(plan.Id, CreateReminderRequest(plan.TransitionWindowEnd));
+
+        // Assert
+        addedReminder.Should().NotBeNull();
+        addedReminder!.ScheduledAt.Should().Be(plan.TransitionWindowEnd);
+        dto.Status.Should().Be(CarePath.Contracts.Enumerations.ReminderStatus.Scheduled);
+    }
+
+    [Fact]
     public async Task ScheduleReminderAsync_WhenInstructionRejected_RejectsWithStableCode()
     {
         // Arrange
@@ -723,6 +746,40 @@ public sealed class TransitionsServiceTests
         escalation.EscalationLevel.Should().Be(EscalationLevel.UrgentCare);
         escalation.AcknowledgedBy.Should().Be(coordinatorUserId);
         dto.ResolutionNote.Should().Be("Coordinator documented a human decision.");
+    }
+
+    [Fact]
+    public async Task GetPlanForClientAsync_WhenCaregiverIsNotAssigned_DeniesAtApplicationBoundary()
+    {
+        // Arrange
+        var callerUserId = Guid.NewGuid();
+        var plan = CreateActivePlan();
+        var unitOfWork = CreateUnitOfWork();
+        unitOfWork.TransitionPlans.Setup(repository => repository.FindAsync(It.IsAny<Expression<Func<TransitionPlan, bool>>>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new[] { plan });
+        unitOfWork.TransitionInstructions.Setup(repository => repository.FindAsync(It.IsAny<Expression<Func<TransitionInstruction, bool>>>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(Array.Empty<TransitionInstruction>());
+        unitOfWork.Caregivers.Setup(repository => repository.FindAsync(It.IsAny<Expression<Func<Caregiver, bool>>>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new[] { new Caregiver { Id = Guid.NewGuid(), UserId = callerUserId } });
+        unitOfWork.Shifts.Setup(repository => repository.ExistsAsync(It.IsAny<Expression<Func<Shift, bool>>>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(false);
+        var auditLogger = new Mock<IPhiAuditLogger>();
+        auditLogger.Setup(logger => logger.LogAsync(It.IsAny<PhiAuditEntry>(), It.IsAny<CancellationToken>()))
+            .Returns(Task.CompletedTask);
+        var service = CreateService(
+            unitOfWork,
+            callerUserId,
+            auditLogger: auditLogger.Object,
+            roles: new HashSet<string>(StringComparer.Ordinal) { ApplicationRoles.Caregiver });
+
+        // Act
+        var act = async () => await service.GetPlanForClientAsync(plan.ClientId);
+
+        // Assert
+        await act.Should().ThrowAsync<ResourceAccessDeniedException>();
+        auditLogger.Verify(logger => logger.LogAsync(
+            It.Is<PhiAuditEntry>(entry => entry.EntityType == ProtectedResourceType.Client && entry.EntityId == plan.ClientId && entry.Action == AuditAction.AccessDenied),
+            It.IsAny<CancellationToken>()), Times.Once);
     }
 
     private static TransitionsService CreateService(

@@ -147,7 +147,9 @@ public sealed class TransitionsServiceTests
         unitOfWork.Users.Setup(repository => repository.GetByIdAsync(client.UserId, It.IsAny<CancellationToken>()))
             .ReturnsAsync(clientUser);
         var extraction = new Mock<IDischargeExtractionService>();
+        var callOrder = new List<string>();
         extraction.Setup(service => service.ExtractAsync(document.RawContent!, document.SourceType, It.IsAny<CancellationToken>()))
+            .Callback(() => callOrder.Add("extract"))
             .ReturnsAsync(new[]
             {
                 new ExtractedTransitionInstruction(
@@ -159,6 +161,13 @@ public sealed class TransitionsServiceTests
             });
         var auditLogger = new Mock<IPhiAuditLogger>();
         auditLogger.Setup(logger => logger.LogAsync(It.IsAny<PhiAuditEntry>(), It.IsAny<CancellationToken>()))
+            .Callback<PhiAuditEntry, CancellationToken>((entry, _) =>
+            {
+                if (entry.EntityType == ProtectedResourceType.DischargeDocument && entry.Action == AuditAction.Read)
+                {
+                    callOrder.Add("document-read");
+                }
+            })
             .Returns(Task.CompletedTask);
         var service = CreateService(unitOfWork, Guid.NewGuid(), extraction.Object, auditLogger.Object);
 
@@ -172,6 +181,13 @@ public sealed class TransitionsServiceTests
         addedInstruction!.Status.Should().Be(TransitionInstructionStatus.Pending);
         dto.Instructions.Should().ContainSingle(instruction => instruction.SourceText == "Medication: take synthetic tablet daily");
         unitOfWork.Mock.Verify(work => work.CommitTransactionAsync(It.IsAny<CancellationToken>()), Times.Once);
+        auditLogger.Verify(logger => logger.LogAsync(
+            It.Is<PhiAuditEntry>(entry => entry.EntityType == ProtectedResourceType.DischargeDocument && entry.EntityId == document.Id && entry.Action == AuditAction.Read),
+            It.IsAny<CancellationToken>()), Times.Once);
+        auditLogger.Verify(logger => logger.LogAsync(
+            It.Is<PhiAuditEntry>(entry => entry.EntityType == ProtectedResourceType.DischargeDocument && entry.EntityId == document.Id && entry.Action == AuditAction.Update),
+            It.IsAny<CancellationToken>()), Times.Once);
+        callOrder.Should().ContainInOrder("document-read", "extract");
     }
 
     [Fact]
@@ -896,6 +912,56 @@ public sealed class TransitionsServiceTests
 
         // Assert
         await act.Should().ThrowAsync<ResourceAccessDeniedException>();
+    }
+
+    [Theory]
+    [InlineData(TransitionPlanStatus.Draft, false)]
+    [InlineData(TransitionPlanStatus.PendingVerification, false)]
+    [InlineData(TransitionPlanStatus.Active, true)]
+    public async Task GetPlanForClientAsync_WhenCaregiverPlanIsNotActiveInWindow_ReturnsNotFound(
+        TransitionPlanStatus status,
+        bool expired)
+    {
+        // Arrange
+        var callerUserId = Guid.NewGuid();
+        var caregiverId = Guid.NewGuid();
+        var plan = status == TransitionPlanStatus.Active ? CreateActivePlan() : CreatePlan(status);
+        if (expired)
+        {
+            plan.DischargeDate = DateTime.SpecifyKind(DateTime.UtcNow.Date.AddDays(-40), DateTimeKind.Utc);
+            plan.TransitionWindowEnd = DateTime.SpecifyKind(DateTime.UtcNow.Date.AddDays(-10), DateTimeKind.Utc);
+        }
+
+        var now = DateTime.UtcNow;
+        var currentShift = new Shift
+        {
+            Id = Guid.NewGuid(),
+            ClientId = plan.ClientId,
+            CaregiverId = caregiverId,
+            ScheduledStartTime = now.AddHours(-1),
+            ScheduledEndTime = now.AddHours(1),
+            Status = ShiftStatus.InProgress,
+        };
+        var unitOfWork = CreateUnitOfWork();
+        unitOfWork.Caregivers.Setup(repository => repository.FindAsync(It.IsAny<Expression<Func<Caregiver, bool>>>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new[] { new Caregiver { Id = caregiverId, UserId = callerUserId } });
+        unitOfWork.Shifts.Setup(repository => repository.ExistsAsync(
+                It.Is<Expression<Func<Shift, bool>>>(expression => expression.Compile()(currentShift)),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(true);
+        unitOfWork.TransitionPlans.Setup(repository => repository.FindAsync(It.IsAny<Expression<Func<TransitionPlan, bool>>>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync((Expression<Func<TransitionPlan, bool>> predicate, CancellationToken _) =>
+                new[] { plan }.Where(predicate.Compile()).ToArray());
+        var service = CreateService(
+            unitOfWork,
+            callerUserId,
+            roles: new HashSet<string>(StringComparer.Ordinal) { ApplicationRoles.Caregiver });
+
+        // Act
+        var act = async () => await service.GetPlanForClientAsync(plan.ClientId);
+
+        // Assert
+        await act.Should().ThrowAsync<ResourceNotFoundException>();
     }
 
     private static TransitionsService CreateService(

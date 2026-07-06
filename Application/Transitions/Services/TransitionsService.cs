@@ -146,6 +146,7 @@ public sealed class TransitionsService : ITransitionsService
             throw new ResourceConflictException("transition.document_already_extracted", "Document has already been extracted.");
         }
 
+        await AuditAsync(ProtectedResourceType.DischargeDocument, document.Id, AuditAction.Read, cancellationToken);
         document.Status = DischargeDocumentStatus.Extracting;
         var extractedInstructions = await extractionService.ExtractAsync(
             document.RawContent ?? string.Empty,
@@ -316,6 +317,32 @@ public sealed class TransitionsService : ITransitionsService
         Guid clientId,
         CancellationToken cancellationToken = default)
     {
+        if (HasRole(ApplicationRoles.Caregiver))
+        {
+            await EnsureAssignedCaregiverForClientAsync(clientId, cancellationToken);
+            var now = DateTime.UtcNow;
+            var caregiverPlans = await unitOfWork.TransitionPlans.FindAsync(
+                plan => plan.ClientId == clientId
+                    && plan.Status == TransitionPlanStatus.Active
+                    && plan.DischargeDate <= now
+                    && plan.TransitionWindowEnd >= now,
+                cancellationToken);
+            var caregiverPlan = caregiverPlans
+                .OrderByDescending(plan => plan.ActivatedAt ?? plan.CreatedAt)
+                .FirstOrDefault()
+                ?? throw new ResourceNotFoundException(isPhiResource: true);
+
+            await AuditAsync(ProtectedResourceType.TransitionPlan, caregiverPlan.Id, AuditAction.Read, cancellationToken);
+            var caregiverInstructions = await GetInstructionsAsync(caregiverPlan.Id, cancellationToken);
+            foreach (var instruction in caregiverInstructions.Where(IsPatientVisible))
+            {
+                await AuditAsync(ProtectedResourceType.TransitionInstruction, instruction.Id, AuditAction.Read, cancellationToken);
+            }
+
+            return caregiverPlan.ToCareTeamDto(caregiverInstructions);
+        }
+
+        EnsureCoordinatorOrClinician();
         var plans = await unitOfWork.TransitionPlans.FindAsync(
             plan => plan.ClientId == clientId && plan.Status != TransitionPlanStatus.Cancelled,
             cancellationToken);
@@ -325,20 +352,6 @@ public sealed class TransitionsService : ITransitionsService
             .FirstOrDefault()
             ?? throw new ResourceNotFoundException(isPhiResource: true);
 
-        if (HasRole(ApplicationRoles.Caregiver))
-        {
-            await EnsureAssignedCaregiverForClientAsync(plan.ClientId, cancellationToken);
-            await AuditAsync(ProtectedResourceType.TransitionPlan, plan.Id, AuditAction.Read, cancellationToken);
-            var caregiverInstructions = await GetInstructionsAsync(plan.Id, cancellationToken);
-            foreach (var instruction in caregiverInstructions.Where(IsPatientVisible))
-            {
-                await AuditAsync(ProtectedResourceType.TransitionInstruction, instruction.Id, AuditAction.Read, cancellationToken);
-            }
-
-            return plan.ToCareTeamDto(caregiverInstructions);
-        }
-
-        EnsureCoordinatorOrClinician();
         await AuditAsync(ProtectedResourceType.TransitionPlan, plan.Id, AuditAction.Read, cancellationToken);
         var instructions = await GetInstructionsAsync(plan.Id, cancellationToken);
         foreach (var instruction in instructions)

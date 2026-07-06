@@ -23,12 +23,13 @@ public static class DependencyInjection
 {
     public static IServiceCollection AddApplication(this IServiceCollection services)
     {
-        services.TryAddScoped<IObjectAuthorizationService, DenyByDefaultObjectAuthorizationService>();
+        services.TryAddScoped<IObjectAuthorizationService, Sprint4ObjectAuthorizationService>();
         services.TryAddScoped<IPersistenceConflictDetector, NoOpPersistenceConflictDetector>();
         services.TryAddScoped<IShiftBillingQuery, NoOpShiftBillingQuery>();
         services.AddScoped<IIdorGuard, IdorGuard>();
         services.AddScoped<ICaregiverOperationsService, CaregiverOperationsService>();
         services.AddScoped<IClientOperationsService, ClientOperationsService>();
+        services.AddScoped<IClientAccessGrantService, ClientAccessGrantService>();
         services.AddScoped<IShiftOperationsService, ShiftOperationsService>();
         services.AddScoped<IVisitDocumentationService, VisitDocumentationService>();
         services.AddScoped<IBillingOperationsService, BillingOperationsService>();
@@ -37,6 +38,7 @@ public static class DependencyInjection
         services.AddScoped<IValidator<UpdateCaregiverRequest>, UpdateCaregiverRequestValidator>();
         services.AddScoped<IValidator<AddCertificationRequest>, AddCertificationRequestValidator>();
         services.AddScoped<IValidator<CreateClientRequest>, CreateClientRequestValidator>();
+        services.AddScoped<IValidator<CreateGrantRequest>, CreateGrantRequestValidator>();
         services.AddScoped<IValidator<UpdateClientRequest>, UpdateClientRequestValidator>();
         services.AddScoped<IValidator<CreateCarePlanRequest>, CreateCarePlanRequestValidator>();
         services.AddScoped<IValidator<UpdateCarePlanRequest>, UpdateCarePlanRequestValidator>();

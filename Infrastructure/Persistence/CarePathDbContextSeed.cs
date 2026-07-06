@@ -18,6 +18,8 @@ public static class CarePathDbContextSeed
     private static readonly Guid AdminUserId = Guid.Parse("11111111-1111-1111-1111-111111111111");
     private static readonly Guid CaregiverUserId = Guid.Parse("22222222-2222-2222-2222-222222222222");
     private static readonly Guid ClientUserId = Guid.Parse("33333333-3333-3333-3333-333333333333");
+    private static readonly Guid CoordinatorUserId = Guid.Parse("66666666-6666-6666-6666-666666666666");
+    private static readonly Guid ClinicianUserId = Guid.Parse("77777777-7777-7777-7777-777777777777");
     private static readonly Guid CaregiverProfileId = Guid.Parse("44444444-4444-4444-4444-444444444444");
     private static readonly Guid ClientProfileId = Guid.Parse("55555555-5555-5555-5555-555555555555");
 
@@ -87,9 +89,31 @@ public static class CarePathDbContextSeed
             role: UserRole.Client,
             cancellationToken);
 
+        var coordinatorUser = await EnsureDomainUserAsync(
+            context,
+            CoordinatorUserId,
+            firstName: "Jordan",
+            lastName: "Coordinator",
+            email: "coordinator@carepath.local",
+            phoneNumber: "555-0103",
+            role: UserRole.Coordinator,
+            cancellationToken);
+
+        var clinicianUser = await EnsureDomainUserAsync(
+            context,
+            ClinicianUserId,
+            firstName: "Taylor",
+            lastName: "Clinician",
+            email: "clinician@carepath.local",
+            phoneNumber: "555-0104",
+            role: UserRole.Clinician,
+            cancellationToken);
+
         await EnsureIdentityUserAsync(userManager, admin, UserRole.Admin, seedPassword);
         await EnsureIdentityUserAsync(userManager, caregiverUser, UserRole.Caregiver, seedPassword);
         await EnsureIdentityUserAsync(userManager, clientUser, UserRole.Client, seedPassword);
+        await EnsureIdentityUserAsync(userManager, coordinatorUser, UserRole.Coordinator, seedPassword);
+        await EnsureIdentityUserAsync(userManager, clinicianUser, UserRole.Clinician, seedPassword);
 
         await EnsureCaregiverAsync(context, caregiverUser.Id, cancellationToken);
         await EnsureClientAsync(context, clientUser.Id, cancellationToken);

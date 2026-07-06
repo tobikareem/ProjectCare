@@ -62,6 +62,11 @@ This file captures recurring mistakes, corrections, and hard-won patterns discov
 - **AI extraction interface lives in Application, not Infrastructure** — `IDischargeExtractionService` is defined in `CarePath.Application/Transitions/Interfaces/`. The Infrastructure implementation (wrapping OpenAI/Azure OpenAI) depends on Application, not the other way around. Never break the dependency rule.
 - **Twilio credentials go in user secrets / appsettings** — never hardcode. Never log Twilio API keys. Twilio has a HIPAA BAA available — ensure it is signed before processing any PHI via SMS.
 
+## UI / Design
+
+- **The wireframe is the UI source of truth** (`Documentation/Wireframes/carepath-wireframe.html`; spec: `_specs/02-design/ui-design-system.md`). Sprint 6 lesson: shared UI components were initially built without consulting it — always extract design tokens from the wireframe (`CarePath.Client.UI/wwwroot/carepath-ui.css`) before building any visual component, and never hard-code colors/fonts/radii in pages or components. Screens the wireframe lacks require a PM/wireframe update before implementation.
+- **CarePath.Web must consume the wireframe shell, not the Blazor template shell** - Link `_content/CarePath.Client.UI/carepath-ui.css`, use the wireframe variables (`--teal-900`, `--surface-alt`, `--line`, `--radius`, `--shadow`, `--focus`, Inter stack), and remove Bootstrap/template hard-coded colors, fonts, and radii from Web pages/layouts before considering a Web slice complete.
+
 ## Session History
 
 ### Session: 2026-06-22

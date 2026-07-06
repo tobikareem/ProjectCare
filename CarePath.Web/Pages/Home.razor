@@ -1,10 +1,69 @@
-﻿@page "/"
+@page "/"
 
-<PageTitle>Home</PageTitle>
+<PageTitle>Dashboard</PageTitle>
 
-<h1>CarePath</h1>
+<div class="page-heading">
+    <div>
+        <p class="eyebrow">Operations</p>
+        <h1>Coordinator Dashboard</h1>
+        <p class="subtle">Daily staffing, credentials, and transition follow-up signals.</p>
+    </div>
+</div>
 
-<section class="page-band">
-    <h2>Web app shell</h2>
-    <p>The Sprint 6 web client is ready for authenticated workflows.</p>
+<section class="metric-grid" aria-label="Dashboard metrics">
+    <article class="card metric-card">
+        <span class="metric-label">Open shifts</span>
+        <strong class="metric-value">12</strong>
+        <span class="subtle">Next 48 hours</span>
+    </article>
+    <article class="card metric-card">
+        <span class="metric-label">Overdue notes</span>
+        <strong class="metric-value">7</strong>
+        <span class="subtle">Require follow-up</span>
+    </article>
+    <article class="card metric-card">
+        <span class="metric-label">Expiring credentials</span>
+        <strong class="metric-value">4</strong>
+        <span class="subtle">Within 30 days</span>
+    </article>
+    <article class="card metric-card">
+        <span class="metric-label">Open escalations</span>
+        <strong class="metric-value">3</strong>
+        <span class="subtle">Coordinator queue</span>
+    </article>
+</section>
+
+<section class="dashboard-grid">
+    <article class="card">
+        <div class="section-header">
+            <h2>Today&apos;s Schedule</h2>
+            <span class="subtle">Preview</span>
+        </div>
+        <ul class="task-list">
+            <li class="alert-item">
+                <strong>7:00 AM open shift</strong>
+                <p>Personal care slot needs coordinator assignment.</p>
+            </li>
+            <li class="alert-item">
+                <strong>10:30 AM certification guard</strong>
+                <p>One caregiver requires credential review before assignment.</p>
+            </li>
+        </ul>
+    </article>
+
+    <aside class="card" aria-label="Transition alerts">
+        <div class="section-header">
+            <h2>Transition Alerts</h2>
+        </div>
+        <ul class="task-list">
+            <li class="alert-item">
+                <strong>Medication acknowledgement missed</strong>
+                <p>Escalation queue contains unacknowledged follow-up.</p>
+            </li>
+            <li class="alert-item">
+                <strong>Review queue ready</strong>
+                <p>Clinician verification items are pending.</p>
+            </li>
+        </ul>
+    </aside>
 </section>

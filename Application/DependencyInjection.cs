@@ -57,6 +57,8 @@ public static class DependencyInjection
         services.AddScoped<IValidator<ReviewInstructionRequest>, ReviewInstructionRequestValidator>();
         services.AddScoped<IValidator<ActivatePlanRequest>, ActivatePlanRequestValidator>();
         services.AddScoped<IValidator<ScheduleReminderRequest>, ScheduleReminderRequestValidator>();
+        services.AddScoped<IValidator<CreateCheckInRequest>, CreateCheckInRequestValidator>();
+        services.AddScoped<IValidator<AcknowledgeEscalationRequest>, AcknowledgeEscalationRequestValidator>();
 
         return services;
     }

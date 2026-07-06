@@ -321,6 +321,51 @@ public class Sprint4OperationsServiceTests
     }
 
     [Fact]
+    public async Task GetClientsAsync_WhenClinicianHasTransitionRelationship_ReturnsTransitionClients()
+    {
+        // Arrange
+        var clientUser = CreateUser(UserRole.Client);
+        var client = new Client
+        {
+            Id = Guid.NewGuid(),
+            UserId = clientUser.Id,
+            DateOfBirth = new DateTime(1990, 1, 1, 0, 0, 0, DateTimeKind.Utc),
+        };
+        var transitionPlan = new TransitionPlan
+        {
+            Id = Guid.NewGuid(),
+            ClientId = client.Id,
+            DischargeDocumentId = Guid.NewGuid(),
+            DischargeDate = DateTime.UtcNow.Date,
+            TransitionWindowEnd = DateTime.UtcNow.Date.AddDays(30),
+            Status = TransitionPlanStatus.PendingVerification,
+        };
+        var unitOfWork = CreateUnitOfWork();
+        unitOfWork.TransitionPlans.Setup(repository => repository.FindAsync(It.IsAny<Expression<Func<TransitionPlan, bool>>>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new[] { transitionPlan });
+        unitOfWork.Clients.Setup(repository => repository.FindAsync(It.IsAny<Expression<Func<Client, bool>>>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new[] { client });
+        unitOfWork.Users.Setup(repository => repository.GetByIdAsync(client.UserId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(clientUser);
+        var auditLogger = new Mock<IPhiAuditLogger>();
+        var service = new ClientOperationsService(
+            unitOfWork,
+            new TestCurrentUserContext(Guid.NewGuid(), new HashSet<string>(StringComparer.Ordinal) { ApplicationRoles.Clinician }),
+            Mock.Of<IIdentityProvisioningService>(),
+            Mock.Of<IClientAccessEvaluator>(),
+            auditLogger.Object);
+
+        // Act
+        var result = await service.GetClientsAsync(new CarePath.Contracts.Common.PagedRequest { PageNumber = 1, PageSize = 10 });
+
+        // Assert
+        result.Items.Should().ContainSingle(item => item.Id == client.Id);
+        auditLogger.Verify(logger => logger.LogAsync(
+            It.Is<PhiAuditEntry>(entry => entry.Action == AuditAction.Read && entry.EntityType == ProtectedResourceType.Client && entry.EntityId == client.Id),
+            It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    [Fact]
     public async Task GetClientAsync_WhenClinicianHasNoRelationshipSource_AuditsDeniedAndThrowsWithoutDisclosureException()
     {
         // Arrange
@@ -350,6 +395,36 @@ public class Sprint4OperationsServiceTests
         auditLogger.Verify(logger => logger.LogAsync(
             It.Is<PhiAuditEntry>(entry => entry.Action == AuditAction.AccessDenied && entry.EntityType == ProtectedResourceType.Client && entry.EntityId == client.Id),
             It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task GetClientAsync_WhenClinicianHasTransitionRelationship_ReturnsClientDetail()
+    {
+        // Arrange
+        var clientUser = CreateUser(UserRole.Client);
+        var client = new Client
+        {
+            Id = Guid.NewGuid(),
+            UserId = clientUser.Id,
+            DateOfBirth = new DateTime(1990, 1, 1, 0, 0, 0, DateTimeKind.Utc),
+        };
+        var unitOfWork = CreateUnitOfWork();
+        unitOfWork.Clients.Setup(repository => repository.GetByIdAsync(client.Id, It.IsAny<CancellationToken>())).ReturnsAsync(client);
+        unitOfWork.Users.Setup(repository => repository.GetByIdAsync(client.UserId, It.IsAny<CancellationToken>())).ReturnsAsync(clientUser);
+        unitOfWork.TransitionPlans.Setup(repository => repository.ExistsAsync(It.IsAny<Expression<Func<TransitionPlan, bool>>>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(true);
+        var service = new ClientOperationsService(
+            unitOfWork,
+            new TestCurrentUserContext(Guid.NewGuid(), new HashSet<string>(StringComparer.Ordinal) { ApplicationRoles.Clinician }),
+            Mock.Of<IIdentityProvisioningService>(),
+            Mock.Of<IClientAccessEvaluator>(),
+            Mock.Of<IPhiAuditLogger>());
+
+        // Act
+        var dto = await service.GetClientAsync(client.Id);
+
+        // Assert
+        dto.Id.Should().Be(client.Id);
     }
 
     [Fact]
@@ -510,6 +585,10 @@ public class Sprint4OperationsServiceTests
             Mock.Setup(work => work.CommitTransactionAsync(It.IsAny<CancellationToken>())).Returns(Task.CompletedTask);
             Mock.Setup(work => work.RollbackTransactionAsync(It.IsAny<CancellationToken>())).Returns(Task.CompletedTask);
             Mock.Setup(work => work.SaveChangesAsync(It.IsAny<CancellationToken>())).ReturnsAsync(1);
+            TransitionPlans.Setup(repository => repository.FindAsync(It.IsAny<Expression<Func<TransitionPlan, bool>>>(), It.IsAny<CancellationToken>()))
+                .ReturnsAsync(Array.Empty<TransitionPlan>());
+            TransitionPlans.Setup(repository => repository.ExistsAsync(It.IsAny<Expression<Func<TransitionPlan, bool>>>(), It.IsAny<CancellationToken>()))
+                .ReturnsAsync(false);
         }
 
         IRepository<User> IUnitOfWork.Users => Users.Object;

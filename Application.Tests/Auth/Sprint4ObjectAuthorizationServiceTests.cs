@@ -5,6 +5,7 @@ using CarePath.Domain.Entities.Billing;
 using CarePath.Domain.Entities.Clinical;
 using CarePath.Domain.Entities.Identity;
 using CarePath.Domain.Entities.Scheduling;
+using CarePath.Domain.Entities.Transitions;
 using CarePath.Domain.Enumerations;
 using CarePath.Domain.Interfaces.Repositories;
 using FluentAssertions;
@@ -67,6 +68,105 @@ public sealed class Sprint4ObjectAuthorizationServiceTests
         result.DenialCode.Should().Be("NoGrant");
     }
 
+    [Fact]
+    public async Task AuthorizeAsync_WhenClinicianHasTransitionRelationship_AuthorizesClientRead()
+    {
+        // Arrange
+        var clientId = Guid.NewGuid();
+        var unitOfWork = new MockUnitOfWork();
+        unitOfWork.TransitionPlans.Setup(repository => repository.ExistsAsync(It.IsAny<Expression<Func<TransitionPlan, bool>>>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(true);
+        var service = new Sprint4ObjectAuthorizationService(unitOfWork.Object, Mock.Of<IClientAccessEvaluator>());
+
+        // Act
+        var result = await service.AuthorizeAsync(new ObjectAccessRequest(
+            new TestCurrentUserContext(Guid.NewGuid(), new HashSet<string>(StringComparer.Ordinal) { ApplicationRoles.Clinician }),
+            ProtectedResourceType.Client,
+            clientId,
+            ObjectAccessAction.Read,
+            "test-correlation"));
+
+        // Assert
+        result.IsAuthorized.Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task AuthorizeAsync_WhenClinicianHasNoTransitionRelationship_DeniesClientRead()
+    {
+        // Arrange
+        var clientId = Guid.NewGuid();
+        var unitOfWork = new MockUnitOfWork();
+        unitOfWork.TransitionPlans.Setup(repository => repository.ExistsAsync(It.IsAny<Expression<Func<TransitionPlan, bool>>>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(false);
+        var service = new Sprint4ObjectAuthorizationService(unitOfWork.Object, Mock.Of<IClientAccessEvaluator>());
+
+        // Act
+        var result = await service.AuthorizeAsync(new ObjectAccessRequest(
+            new TestCurrentUserContext(Guid.NewGuid(), new HashSet<string>(StringComparer.Ordinal) { ApplicationRoles.Clinician }),
+            ProtectedResourceType.Client,
+            clientId,
+            ObjectAccessAction.Read,
+            "test-correlation"));
+
+        // Assert
+        result.IsAuthorized.Should().BeFalse();
+        result.DenialCode.Should().Be("NoGrant");
+    }
+
+    [Fact]
+    public async Task AuthorizeAsync_WhenClinicianRequestsTransitionInstruction_AuthorizesRead()
+    {
+        // Arrange
+        var instructionId = Guid.NewGuid();
+        var unitOfWork = new MockUnitOfWork();
+        var service = new Sprint4ObjectAuthorizationService(unitOfWork.Object, Mock.Of<IClientAccessEvaluator>());
+
+        // Act
+        var result = await service.AuthorizeAsync(new ObjectAccessRequest(
+            new TestCurrentUserContext(Guid.NewGuid(), new HashSet<string>(StringComparer.Ordinal) { ApplicationRoles.Clinician }),
+            ProtectedResourceType.TransitionInstruction,
+            instructionId,
+            ObjectAccessAction.Read,
+            "test-correlation"));
+
+        // Assert
+        result.IsAuthorized.Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task AuthorizeAsync_WhenClientHasFullGrantForTransitionPlan_AuthorizesRead()
+    {
+        // Arrange
+        var userId = Guid.NewGuid();
+        var clientId = Guid.NewGuid();
+        var planId = Guid.NewGuid();
+        var unitOfWork = new MockUnitOfWork();
+        unitOfWork.TransitionPlans.Setup(repository => repository.GetByIdAsync(planId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new TransitionPlan
+            {
+                Id = planId,
+                ClientId = clientId,
+                DischargeDocumentId = Guid.NewGuid(),
+            });
+        unitOfWork.Clients.Setup(repository => repository.ExistsAsync(It.IsAny<Expression<Func<Client, bool>>>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(false);
+        var evaluator = new Mock<IClientAccessEvaluator>(MockBehavior.Strict);
+        evaluator.Setup(service => service.EvaluateAsync(userId, clientId, AccessScope.Full, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(ClientAccessEvaluationResult.Authorized());
+        var service = new Sprint4ObjectAuthorizationService(unitOfWork.Object, evaluator.Object);
+
+        // Act
+        var result = await service.AuthorizeAsync(new ObjectAccessRequest(
+            new TestCurrentUserContext(userId, new HashSet<string>(StringComparer.Ordinal) { ApplicationRoles.Client }),
+            ProtectedResourceType.TransitionPlan,
+            planId,
+            ObjectAccessAction.Read,
+            "test-correlation"));
+
+        // Assert
+        result.IsAuthorized.Should().BeTrue();
+    }
+
     private sealed record TestCurrentUserContext(Guid? UserId, IReadOnlySet<string> Roles) : ICurrentUserContext
     {
         public string? UserName => "test-user@example.test";
@@ -89,6 +189,12 @@ public sealed class Sprint4ObjectAuthorizationServiceTests
         public Mock<IRepository<Invoice>> Invoices { get; } = new(MockBehavior.Strict);
         public Mock<IRepository<InvoiceLineItem>> InvoiceLineItems { get; } = new(MockBehavior.Strict);
         public Mock<IRepository<Payment>> Payments { get; } = new(MockBehavior.Strict);
+        public Mock<IRepository<DischargeDocument>> DischargeDocuments { get; } = new(MockBehavior.Strict);
+        public Mock<IRepository<TransitionPlan>> TransitionPlans { get; } = new(MockBehavior.Strict);
+        public Mock<IRepository<TransitionInstruction>> TransitionInstructions { get; } = new(MockBehavior.Strict);
+        public Mock<IRepository<TransitionReminder>> TransitionReminders { get; } = new(MockBehavior.Strict);
+        public Mock<IRepository<TransitionCheckIn>> TransitionCheckIns { get; } = new(MockBehavior.Strict);
+        public Mock<IRepository<TransitionEscalation>> TransitionEscalations { get; } = new(MockBehavior.Strict);
 
         public MockUnitOfWork()
         {
@@ -104,6 +210,12 @@ public sealed class Sprint4ObjectAuthorizationServiceTests
             mock.SetupGet(work => work.Invoices).Returns(Invoices.Object);
             mock.SetupGet(work => work.InvoiceLineItems).Returns(InvoiceLineItems.Object);
             mock.SetupGet(work => work.Payments).Returns(Payments.Object);
+            mock.SetupGet(work => work.DischargeDocuments).Returns(DischargeDocuments.Object);
+            mock.SetupGet(work => work.TransitionPlans).Returns(TransitionPlans.Object);
+            mock.SetupGet(work => work.TransitionInstructions).Returns(TransitionInstructions.Object);
+            mock.SetupGet(work => work.TransitionReminders).Returns(TransitionReminders.Object);
+            mock.SetupGet(work => work.TransitionCheckIns).Returns(TransitionCheckIns.Object);
+            mock.SetupGet(work => work.TransitionEscalations).Returns(TransitionEscalations.Object);
         }
 
         public IUnitOfWork Object => mock.Object;

@@ -460,6 +460,52 @@ public sealed class Sprint4SchedulingServiceTests
     }
 
     [Fact]
+    public async Task CreateVisitNoteAsync_WhenActiveTransitionPlanCoversVisitDate_LinksTransitionPlan()
+    {
+        // Arrange
+        var context = CreateContext();
+        var shift = ExistingShift(WindowStart, WindowEnd, ShiftStatus.InProgress);
+        shift.ClientId = context.Client.Id;
+        shift.CaregiverId = context.Caregiver.Id;
+        var transitionPlan = new TransitionPlan
+        {
+            Id = Guid.NewGuid(),
+            ClientId = context.Client.Id,
+            DischargeDocumentId = Guid.NewGuid(),
+            DischargeDate = WindowStart.AddDays(-1),
+            TransitionWindowEnd = WindowStart.AddDays(29),
+            Status = TransitionPlanStatus.Active,
+            ActivatedAt = WindowStart.AddHours(-1),
+        };
+        context.UnitOfWork.Shifts.Setup(repository => repository.GetByIdAsync(shift.Id, It.IsAny<CancellationToken>())).ReturnsAsync(shift);
+        context.UnitOfWork.Caregivers.Setup(repository => repository.FindAsync(It.IsAny<Expression<Func<Caregiver, bool>>>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new[] { context.Caregiver });
+        context.UnitOfWork.TransitionPlans.Setup(repository => repository.FindAsync(It.IsAny<Expression<Func<TransitionPlan, bool>>>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new[] { transitionPlan });
+        VisitNote? savedNote = null;
+        context.UnitOfWork.VisitNotes.Setup(repository => repository.AddAsync(It.IsAny<VisitNote>(), It.IsAny<CancellationToken>()))
+            .Callback<VisitNote, CancellationToken>((note, _) => savedNote = note)
+            .ReturnsAsync((VisitNote note, CancellationToken _) => note);
+        var service = new VisitDocumentationService(
+            context.UnitOfWork,
+            new TestCurrentUserContext(context.Caregiver.UserId, new HashSet<string>(StringComparer.Ordinal) { ApplicationRoles.Caregiver }),
+            Mock.Of<IClientAccessEvaluator>(),
+            context.AuditLogger.Object,
+            Mock.Of<IFileStorageService>());
+
+        // Act
+        _ = await service.CreateVisitNoteAsync(shift.Id, new CreateVisitNoteRequest
+        {
+            VisitDateTime = WindowStart,
+            PersonalCare = true,
+        });
+
+        // Assert
+        savedNote.Should().NotBeNull();
+        savedNote!.TransitionPlanId.Should().Be(transitionPlan.Id);
+    }
+
+    [Fact]
     public async Task AddVisitPhotoAsync_WhenTimestampIsNotUtc_RejectsWithoutStorageWrite()
     {
         // Arrange
@@ -681,6 +727,8 @@ public sealed class Sprint4SchedulingServiceTests
             Mock.Setup(work => work.CommitTransactionAsync(It.IsAny<CancellationToken>())).Returns(Task.CompletedTask);
             Mock.Setup(work => work.RollbackTransactionAsync(It.IsAny<CancellationToken>())).Returns(Task.CompletedTask);
             Mock.Setup(work => work.SaveChangesAsync(It.IsAny<CancellationToken>())).ReturnsAsync(1);
+            TransitionPlans.Setup(repository => repository.FindAsync(It.IsAny<Expression<Func<TransitionPlan, bool>>>(), It.IsAny<CancellationToken>()))
+                .ReturnsAsync(Array.Empty<TransitionPlan>());
         }
 
         IRepository<User> IUnitOfWork.Users => Users.Object;

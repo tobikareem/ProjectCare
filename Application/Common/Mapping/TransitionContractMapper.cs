@@ -10,6 +10,8 @@ using ContractTransitionRiskLevel = CarePath.Contracts.Enumerations.TransitionRi
 using ContractReminderChannel = CarePath.Contracts.Enumerations.ReminderChannel;
 using ContractReminderStatus = CarePath.Contracts.Enumerations.ReminderStatus;
 using ContractReminderType = CarePath.Contracts.Enumerations.ReminderType;
+using ContractEscalationLevel = CarePath.Contracts.Enumerations.EscalationLevel;
+using ContractEscalationTriggerType = CarePath.Contracts.Enumerations.EscalationTriggerType;
 
 namespace CarePath.Application.Common.Mapping;
 
@@ -55,6 +57,26 @@ internal static class TransitionContractMapper
         Instructions = instructions.Select(instruction => instruction.ToClinicalDto()).ToArray(),
     };
 
+    internal static TransitionPlanSummaryDto ToSummaryDto(
+        this TransitionPlan plan,
+        Client client,
+        User user,
+        int pendingInstructionCount,
+        int openEscalationCount) => new()
+    {
+        Id = plan.Id,
+        ClientId = plan.ClientId,
+        ClientFullName = user.FullName,
+        HospitalName = plan.HospitalName,
+        DischargeDate = plan.DischargeDate,
+        TransitionWindowEnd = plan.TransitionWindowEnd,
+        Status = (ContractTransitionPlanStatus)(int)plan.Status,
+        RiskLevel = (ContractTransitionRiskLevel)(int)plan.RiskLevel,
+        DaysRemaining = plan.DaysRemaining,
+        PendingInstructionCount = pendingInstructionCount,
+        OpenEscalationCount = openEscalationCount,
+    };
+
     internal static TransitionInstructionClinicalDto ToClinicalDto(this TransitionInstruction instruction) => new()
     {
         Id = instruction.Id,
@@ -81,5 +103,29 @@ internal static class TransitionContractMapper
         AcknowledgedAt = reminder.AcknowledgedAt,
         Status = (ContractReminderStatus)(int)reminder.Status,
         IsOverdue = reminder.IsOverdue,
+    };
+
+    internal static TransitionCheckInDto ToDto(this TransitionCheckIn checkIn) => new()
+    {
+        Id = checkIn.Id,
+        TransitionPlanId = checkIn.TransitionPlanId,
+        CheckInDate = checkIn.CheckInDate,
+        Channel = (ContractReminderChannel)(int)checkIn.Channel,
+        ContainsWarningSymptom = checkIn.ContainsWarningSymptom,
+        ReviewedBy = checkIn.ReviewedBy,
+        ReviewedAt = checkIn.ReviewedAt,
+    };
+
+    internal static TransitionEscalationDto ToDto(this TransitionEscalation escalation) => new()
+    {
+        Id = escalation.Id,
+        TransitionPlanId = escalation.TransitionPlanId,
+        TriggerType = (ContractEscalationTriggerType)(int)escalation.TriggerType,
+        TriggerDetails = escalation.TriggerDetails,
+        EscalationLevel = (ContractEscalationLevel)(int)escalation.EscalationLevel,
+        EscalatedAt = escalation.EscalatedAt,
+        AcknowledgedBy = escalation.AcknowledgedBy,
+        AcknowledgedAt = escalation.AcknowledgedAt,
+        ResolutionNote = escalation.ResolutionNote,
     };
 }

@@ -3,6 +3,7 @@ using CarePath.Domain.Entities.Billing;
 using CarePath.Domain.Entities.Clinical;
 using CarePath.Domain.Entities.Identity;
 using CarePath.Domain.Entities.Scheduling;
+using CarePath.Domain.Entities.Transitions;
 using CarePath.Domain.Enumerations;
 using CarePath.Domain.Interfaces.Repositories;
 
@@ -38,6 +39,12 @@ public sealed class Sprint4ObjectAuthorizationService : IObjectAuthorizationServ
             ProtectedResourceType.VisitNote => await AuthorizeVisitNoteAsync(request, cancellationToken),
             ProtectedResourceType.VisitPhoto => await AuthorizeVisitPhotoAsync(request, cancellationToken),
             ProtectedResourceType.Invoice => await AuthorizeInvoiceAsync(request, cancellationToken),
+            ProtectedResourceType.DischargeDocument => await AuthorizeDischargeDocumentAsync(request, cancellationToken),
+            ProtectedResourceType.TransitionPlan => await AuthorizeTransitionPlanAsync(request, request.ResourceId, cancellationToken),
+            ProtectedResourceType.TransitionInstruction => await AuthorizeTransitionInstructionAsync(request, cancellationToken),
+            ProtectedResourceType.TransitionCheckIn => await AuthorizeTransitionCheckInAsync(request, cancellationToken),
+            ProtectedResourceType.TransitionReminder => await AuthorizeTransitionReminderAsync(request, cancellationToken),
+            ProtectedResourceType.TransitionEscalation => await AuthorizeTransitionEscalationAsync(request, cancellationToken),
             ProtectedResourceType.Caregiver => await AuthorizeCaregiverAsync(request, cancellationToken),
             ProtectedResourceType.ClientAccessGrant => ObjectAuthorizationResult.Denied(RoleInsufficient),
             _ => ObjectAuthorizationResult.Denied(RoleInsufficient),
@@ -65,6 +72,16 @@ public sealed class Sprint4ObjectAuthorizationService : IObjectAuthorizationServ
                 shift => shift.ClientId == clientId && shift.CaregiverId.HasValue && caregiverIds.Contains(shift.CaregiverId.Value),
                 cancellationToken);
             return assigned ? ObjectAuthorizationResult.Authorized() : ObjectAuthorizationResult.Denied(NotAssigned);
+        }
+
+        if (HasRole(request.User, ApplicationRoles.Clinician))
+        {
+            var hasTransitionRelationship = await unitOfWork.TransitionPlans.ExistsAsync(
+                plan => plan.ClientId == clientId && plan.Status != TransitionPlanStatus.Cancelled,
+                cancellationToken);
+            return hasTransitionRelationship
+                ? ObjectAuthorizationResult.Authorized()
+                : ObjectAuthorizationResult.Denied(NoGrant);
         }
 
         return ObjectAuthorizationResult.Denied(RoleInsufficient);
@@ -128,6 +145,87 @@ public sealed class Sprint4ObjectAuthorizationService : IObjectAuthorizationServ
         return invoice is null
             ? ObjectAuthorizationResult.Denied(NoGrant)
             : await AuthorizeClientAsync(request, invoice.ClientId, cancellationToken);
+    }
+
+    private async Task<ObjectAuthorizationResult> AuthorizeDischargeDocumentAsync(ObjectAccessRequest request, CancellationToken cancellationToken)
+    {
+        if (HasRole(request.User, ApplicationRoles.Clinician))
+        {
+            return ObjectAuthorizationResult.Authorized();
+        }
+
+        var document = await unitOfWork.DischargeDocuments.GetByIdAsync(request.ResourceId, cancellationToken);
+        return document is null
+            ? ObjectAuthorizationResult.Denied(NoGrant)
+            : await AuthorizeClientAsync(request, document.ClientId, cancellationToken);
+    }
+
+    private async Task<ObjectAuthorizationResult> AuthorizeTransitionPlanAsync(
+        ObjectAccessRequest request,
+        Guid planId,
+        CancellationToken cancellationToken)
+    {
+        if (HasRole(request.User, ApplicationRoles.Clinician))
+        {
+            return ObjectAuthorizationResult.Authorized();
+        }
+
+        var plan = await unitOfWork.TransitionPlans.GetByIdAsync(planId, cancellationToken);
+        return plan is null
+            ? ObjectAuthorizationResult.Denied(NoGrant)
+            : await AuthorizeClientAsync(request, plan.ClientId, cancellationToken);
+    }
+
+    private async Task<ObjectAuthorizationResult> AuthorizeTransitionInstructionAsync(ObjectAccessRequest request, CancellationToken cancellationToken)
+    {
+        if (HasRole(request.User, ApplicationRoles.Clinician))
+        {
+            return ObjectAuthorizationResult.Authorized();
+        }
+
+        var instruction = await unitOfWork.TransitionInstructions.GetByIdAsync(request.ResourceId, cancellationToken);
+        return instruction is null
+            ? ObjectAuthorizationResult.Denied(NoGrant)
+            : await AuthorizeTransitionPlanAsync(request, instruction.TransitionPlanId, cancellationToken);
+    }
+
+    private async Task<ObjectAuthorizationResult> AuthorizeTransitionCheckInAsync(ObjectAccessRequest request, CancellationToken cancellationToken)
+    {
+        if (HasRole(request.User, ApplicationRoles.Clinician))
+        {
+            return ObjectAuthorizationResult.Authorized();
+        }
+
+        var checkIn = await unitOfWork.TransitionCheckIns.GetByIdAsync(request.ResourceId, cancellationToken);
+        return checkIn is null
+            ? ObjectAuthorizationResult.Denied(NoGrant)
+            : await AuthorizeTransitionPlanAsync(request, checkIn.TransitionPlanId, cancellationToken);
+    }
+
+    private async Task<ObjectAuthorizationResult> AuthorizeTransitionReminderAsync(ObjectAccessRequest request, CancellationToken cancellationToken)
+    {
+        if (HasRole(request.User, ApplicationRoles.Clinician))
+        {
+            return ObjectAuthorizationResult.Authorized();
+        }
+
+        var reminder = await unitOfWork.TransitionReminders.GetByIdAsync(request.ResourceId, cancellationToken);
+        return reminder is null
+            ? ObjectAuthorizationResult.Denied(NoGrant)
+            : await AuthorizeTransitionPlanAsync(request, reminder.TransitionPlanId, cancellationToken);
+    }
+
+    private async Task<ObjectAuthorizationResult> AuthorizeTransitionEscalationAsync(ObjectAccessRequest request, CancellationToken cancellationToken)
+    {
+        if (HasRole(request.User, ApplicationRoles.Clinician))
+        {
+            return ObjectAuthorizationResult.Authorized();
+        }
+
+        var escalation = await unitOfWork.TransitionEscalations.GetByIdAsync(request.ResourceId, cancellationToken);
+        return escalation is null
+            ? ObjectAuthorizationResult.Denied(NoGrant)
+            : await AuthorizeTransitionPlanAsync(request, escalation.TransitionPlanId, cancellationToken);
     }
 
     private async Task<ObjectAuthorizationResult> AuthorizeCaregiverAsync(ObjectAccessRequest request, CancellationToken cancellationToken)

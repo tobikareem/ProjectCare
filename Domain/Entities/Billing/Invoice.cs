@@ -61,6 +61,15 @@ public class Invoice : BaseEntity
     /// <summary>Current lifecycle status of the invoice. Call <see cref="RecalculateStatus"/> after payments.</summary>
     public InvoiceStatus Status { get; set; } = InvoiceStatus.Draft;
 
+    /// <summary>Service line this invoice covers.</summary>
+    public ServiceType ServiceType { get; set; }
+
+    /// <summary>UTC billing period start, inclusive.</summary>
+    public DateTime PeriodStartUtc { get; set; }
+
+    /// <summary>UTC billing period end, exclusive.</summary>
+    public DateTime PeriodEndUtc { get; set; }
+
     /// <summary>Tax amount in USD applied to the invoice. Added on top of <see cref="Subtotal"/> to produce <see cref="Total"/>.</summary>
     public decimal TaxAmount { get; set; }
 

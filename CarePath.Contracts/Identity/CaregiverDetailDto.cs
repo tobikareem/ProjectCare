@@ -4,7 +4,7 @@ namespace CarePath.Contracts.Identity;
 
 /// <summary>
 /// Full caregiver view for Admin/Coordinator screens. Endpoints returning this DTO must be
-/// role-gated; it includes compensation data (<see cref="HourlyPayRate"/>).
+/// role-gated and must not include compensation data.
 /// </summary>
 public class CaregiverDetailDto
 {
@@ -26,8 +26,6 @@ public class CaregiverDetailDto
     /// <summary>W-2 employee or 1099 contractor.</summary>
     public EmploymentType EmploymentType { get; init; }
 
-    /// <summary>Hourly pay rate. Compensation data — Admin/Coordinator only.</summary>
-    public decimal HourlyPayRate { get; init; }
 
     /// <summary>Hire date (UTC).</summary>
     public DateTime HireDate { get; init; }

@@ -35,6 +35,7 @@ public class DependencyInjectionTests
         scope.ServiceProvider.GetRequiredService<IUnitOfWork>().Should().NotBeNull();
         scope.ServiceProvider.GetRequiredService<IRepository<User>>().Should().NotBeNull();
         scope.ServiceProvider.GetRequiredService<IClientAccessEvaluator>().Should().NotBeNull();
+        scope.ServiceProvider.GetRequiredService<IIdentityProvisioningService>().Should().NotBeNull();
         scope.ServiceProvider.GetRequiredService<AuditableEntityInterceptor>().Should().NotBeNull();
         serviceProvider.GetRequiredService<IHttpContextAccessor>().Should().NotBeNull();
     }
@@ -52,6 +53,7 @@ public class DependencyInjectionTests
 
         // Assert
         scope.ServiceProvider.GetRequiredService<IClientAccessEvaluator>().Should().NotBeNull();
+        scope.ServiceProvider.GetRequiredService<IIdentityProvisioningService>().Should().NotBeNull();
     }
     [Fact]
     public void AddInfrastructure_WhenConnectionStringMissing_ThrowsInvalidOperationException()

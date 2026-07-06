@@ -18,6 +18,9 @@ public sealed class InvoiceConfiguration : IEntityTypeConfiguration<Invoice>
 
         builder.Property(invoice => invoice.InvoiceNumber).HasMaxLength(50).IsRequired();
         builder.Property(invoice => invoice.TaxAmount).HasPrecision(18, 2);
+        builder.Property(invoice => invoice.ServiceType).IsRequired();
+        builder.Property(invoice => invoice.PeriodStartUtc).IsRequired();
+        builder.Property(invoice => invoice.PeriodEndUtc).IsRequired();
         builder.Property(invoice => invoice.Notes).HasMaxLength(1000);
         builder.Property(invoice => invoice.CreatedBy).HasMaxLength(100);
         builder.Property(invoice => invoice.UpdatedBy).HasMaxLength(100);
@@ -48,6 +51,10 @@ public sealed class InvoiceConfiguration : IEntityTypeConfiguration<Invoice>
 
         builder.HasIndex(invoice => invoice.InvoiceNumber).IsUnique().HasDatabaseName("IX_Invoices_InvoiceNumber");
         builder.HasIndex(invoice => invoice.ClientId).HasDatabaseName("IX_Invoices_ClientId");
+        builder.HasIndex(invoice => new { invoice.ClientId, invoice.ServiceType, invoice.PeriodStartUtc, invoice.PeriodEndUtc })
+            .IsUnique()
+            .HasFilter("[IsDeleted] = 0")
+            .HasDatabaseName("IX_Invoices_Client_Service_Period");
         builder.HasIndex(invoice => invoice.InvoiceDate).HasDatabaseName("IX_Invoices_InvoiceDate");
         builder.HasIndex(invoice => invoice.DueDate).HasDatabaseName("IX_Invoices_DueDate");
         builder.HasIndex(invoice => invoice.Status).HasDatabaseName("IX_Invoices_Status");

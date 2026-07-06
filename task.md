@@ -1,7 +1,7 @@
 # CarePath Sprint Execution Tracker
 
-Last updated: 2026-07-04  
-Status: Sprint 3 complete - ready for Sprint 4
+Last updated: 2026-07-05  
+Status: Sprint 4 complete - ready for Sprint 5
 
 This tracker is the working checklist for moving CarePath from a Domain-only foundation into a usable backend, Blazor web app, and MAUI Blazor Hybrid mobile app. The detailed sprint specs live in `_specs/sprints/`.
 
@@ -19,7 +19,7 @@ Build one shared healthcare operations backbone for:
 | Sprint 1 | Spec Hygiene & Architecture Baseline | [x] Complete | `_specs/sprints/sprint-01-spec-hygiene.md` |
 | Sprint 2 | Infrastructure Foundation | [x] Complete | `_specs/sprints/sprint-02-infrastructure-foundation.md` |
 | Sprint 3 | Application, Auth & Shared Contracts | [x] Complete | `_specs/sprints/sprint-03-application-auth-contracts.md` |
-| Sprint 4 | Core Operations Backend | [ ] Not Started | `_specs/sprints/sprint-04-core-operations-backend.md` |
+| Sprint 4 | Core Operations Backend | [x] Complete | `_specs/sprints/sprint-04-core-operations-backend.md` |
 | Sprint 5 | CarePath Transitions Backend MVP | [ ] Not Started | `_specs/sprints/sprint-05-transitions-backend-mvp.md` |
 | Sprint 6 | Blazor Web App MVP | [ ] Not Started | `_specs/sprints/sprint-06-blazor-web-mvp.md` |
 | Sprint 7 | MAUI Mobile MVP, Notifications, AI & Hardening | [ ] Not Started | `_specs/sprints/sprint-07-mobile-notifications-ai-hardening.md` |
@@ -52,11 +52,11 @@ Build one shared healthcare operations backbone for:
 - [ ] Blazor WebAssembly app is not scaffolded.
 - [ ] MAUI Blazor Hybrid app is not scaffolded.
 - [ ] Shared contracts/client/UI libraries are not scaffolded.
-- [ ] WebApi still contains template WeatherForecast code; scheduled for Sprint 4 cleanup before core API completion.
+- [x] WeatherForecast template code removed; WebApi exposes real CarePath controllers (7 areas).
 
 ## Immediate Next Step
 
-Commit the Sprint 3 completion state on `feature/dispatch` (post-`409f095` work: mappers, client libraries, sprint closure docs), then begin Sprint 4: Core Operations Backend (`_specs/sprints/sprint-04-core-operations-backend.md`). First Sprint 4 items per decision D2: `ClientAccessGrant` Domain entity + persistence for family-proxy object-level access, and WeatherForecast template removal from WebApi. CP-03 Transitions persistence remains deferred until Sprint 5.
+Commit the Sprint 4 closure docs and push `main` to origin. Then begin Sprint 5: CarePath Transitions Backend MVP (`_specs/sprints/sprint-05-transitions-backend-mvp.md`) — PM drafts the S5-TASK board first. Carry-ins for Sprint 5: CP-03 Transitions persistence (parked since Sprint 2), Clinician relationship-source scoping (Sprint 4 board note — clinicians currently deny/empty on client data), Transitions Contracts DTOs with patient-facing vs clinical split (reserved in Sprint 3 Contracts Plan §7).
 
 
 

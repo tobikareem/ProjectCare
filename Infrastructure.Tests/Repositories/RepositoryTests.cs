@@ -127,6 +127,27 @@ public class RepositoryTests
         items.Should().HaveCount(2);
     }
 
+    [Fact]
+    public async Task GetPagedAsync_WhenPredicateProvided_ReturnsFilteredPageAndTotalCount()
+    {
+        // Arrange
+        await using var context = CreateDbContext();
+        var repository = new Repository<User>(context);
+        await repository.AddAsync(CreateUser("admin-1@example.test", UserRole.Admin));
+        await repository.AddAsync(CreateUser("caregiver-1@example.test", UserRole.Caregiver));
+        await repository.AddAsync(CreateUser("caregiver-2@example.test", UserRole.Caregiver));
+        await context.SaveChangesAsync();
+
+        // Act
+        var (items, totalCount) = await repository.GetPagedAsync(
+            user => user.Role == UserRole.Caregiver,
+            pageNumber: 1,
+            pageSize: 10);
+
+        // Assert
+        totalCount.Should().Be(2);
+        items.Should().OnlyContain(user => user.Role == UserRole.Caregiver);
+    }
     [Theory]
     [InlineData(0, 10, "pageNumber")]
     [InlineData(1, 0, "pageSize")]

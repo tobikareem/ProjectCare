@@ -87,6 +87,40 @@ public abstract class ApiClientBase
         return new ApiResponse { Success = false, Errors = errors, TraceId = traceId };
     }
 
+    /// <summary>Sends a DELETE for operations that return no payload (e.g., soft revoke).</summary>
+    /// <param name="requestUri">Relative request URI. Must never embed PHI values.</param>
+    /// <param name="cancellationToken">Token to cancel the operation.</param>
+    /// <returns>The mapped response envelope.</returns>
+    protected async Task<ApiResponse> DeleteAsync(
+        string requestUri,
+        CancellationToken cancellationToken = default)
+    {
+        using var response = await Http.DeleteAsync(requestUri, cancellationToken).ConfigureAwait(false);
+
+        if (response.IsSuccessStatusCode)
+        {
+            return new ApiResponse { Success = true };
+        }
+
+        var (errors, traceId) = await MapErrorsAsync(response, cancellationToken).ConfigureAwait(false);
+        return new ApiResponse { Success = false, Errors = errors, TraceId = traceId };
+    }
+
+    /// <summary>Sends multipart form data (file uploads) and maps the response payload.</summary>
+    /// <typeparam name="TResponse">Expected payload type.</typeparam>
+    /// <param name="requestUri">Relative request URI. Must never embed PHI values.</param>
+    /// <param name="content">The multipart content. Caller retains ownership of streams.</param>
+    /// <param name="cancellationToken">Token to cancel the operation.</param>
+    /// <returns>The mapped response envelope.</returns>
+    protected async Task<ApiResponse<TResponse>> PostMultipartAsync<TResponse>(
+        string requestUri,
+        MultipartFormDataContent content,
+        CancellationToken cancellationToken = default)
+    {
+        using var response = await Http.PostAsync(requestUri, content, cancellationToken).ConfigureAwait(false);
+        return await ReadAsync<TResponse>(response, cancellationToken).ConfigureAwait(false);
+    }
+
     /// <summary>Sends a PUT with a JSON body and maps the response payload.</summary>
     /// <typeparam name="TRequest">Request body type.</typeparam>
     /// <typeparam name="TResponse">Expected payload type.</typeparam>

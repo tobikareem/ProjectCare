@@ -282,6 +282,9 @@ public sealed class DomainToContractMapperTests
             "CheckOutLongitude",
             "BillRate",
             "PayRate",
+            "HourlyBillRate",
+            "HourlyPayRate",
+            "RatePerHour",
         };
         var dtoTypes = GetContractDtoTypes();
         var approvedMarginRateMembers = new HashSet<string>(StringComparer.Ordinal)
@@ -331,6 +334,9 @@ public sealed class DomainToContractMapperTests
             "Longitude",
             "BillRate",
             "PayRate",
+            "HourlyBillRate",
+            "HourlyPayRate",
+            "RatePerHour",
         };
         var summaryDtoTypes = GetContractDtoTypes()
             .Where(type => type.Name.EndsWith("SummaryDto", StringComparison.Ordinal))

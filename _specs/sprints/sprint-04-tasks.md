@@ -1,6 +1,6 @@
 ﻿# Sprint 4 Tasks - Core Operations Backend
 
-Status: Approved
+Status: Complete (closed 2026-07-05 by PM after exit verification `798612f`)
 Parent spec: `_specs/sprints/sprint-04-core-operations-backend.md`
 Last updated: 2026-07-04
 
@@ -240,16 +240,40 @@ Owners: **Claude** = PM/Contracts lead (Contracts, Client, Client.UI, sprint doc
 | S4-TASK-012 | ClientAccessGrant EF configuration, migration, `IClientAccessEvaluator` Infrastructure implementation + tests | Codex | S4-TASK-011 | Done 2026-07-05 (`d9e1749` — config, `AddClientAccessGrants` migration, `Infrastructure/Auth/ClientAccessEvaluator`, DI, tests) |
 | S4-TASK-020 | Contracts: command/request DTOs for caregivers, clients, care plans, shifts, visit notes, invoices, payments, and grants; VisitNote summary/detail split + VisitPhotoDto per D-S4-7 | Claude | S4-TASK-001 | Done 2026-07-04 — 15 request/DTO files + `AccessScope` mirror; `VisitNoteDto` deleted → `VisitNoteDetailDto` + `VisitNoteSummaryDto` (HasConcerns flag, no clinical text) + `VisitPhotoDto`. **⚠ Codex: the Application `SchedulingContractMapper` still references `VisitNoteDto` — include the one-line rename to `VisitNoteDetailDto` in your FIRST commit (slice 4A), not 4E, or `dotnet build CarePath.sln` stays red.** New files compile 0 warnings |
 | S4-TASK-021 | Contracts: margin DTOs (`ShiftMarginDto`, `MarginSummaryDto` with service-line split) per D-S4-2 | Claude | S4-TASK-001 | Done 2026-07-04 — + `ServiceLineMarginDto` (ShiftCount, TotalBillableHours, TotalRevenue, TotalLaborCost, TotalGrossMargin, AverageHourlyGrossMargin, GrossMarginPercentage); semantics per decision 0002 |
-| S4-TASK-030 | Application: caregiver + certification commands/queries with validators, user provisioning, authz, audit | Codex | S4-TASK-020 | Pending |
-| S4-TASK-031 | Application: client + care plan commands/queries with validators, object-level authz, grant evaluation, PHI read audit | Codex | S4-TASK-012, S4-TASK-020 | Pending |
-| S4-TASK-032 | Application: scheduling commands/queries - create/update/cancel shift, check-in/check-out, paged shift dashboard query via `GetPagedAsync` | Codex | S4-TASK-020 | Pending |
-| S4-TASK-033 | Application: double-booking guard and expired-certification assignment guard per D-S4-4, with boundary-overlap tests | Codex | S4-TASK-032 | Pending |
-| S4-TASK-034 | Application: VisitNote/VisitPhoto commands/queries + `IFileStorageService` interface + dev implementation per D-S4-3 | Codex | S4-TASK-020 | Pending |
-| S4-TASK-035 | Application: billing commands/queries - create invoice from completed shifts, record payment, status recalculation, margin queries | Codex | S4-TASK-021 | Pending |
-| S4-TASK-040 | WebApi: authenticated controllers for Caregivers, Clients, CarePlans, Shifts, VisitNotes, Invoices, ClientAccessGrants | Codex | S4-TASK-030..035 | Pending |
-| S4-TASK-041 | API integration tests for authorization matrix, IDOR, validation, guard failures, grant behavior, PHI audit emission | Codex | S4-TASK-040 | Pending |
-| S4-TASK-050 | Client: typed module clients in `CarePath.Client` over `ApiClientBase` | Claude | S4-TASK-040 stable | Pending |
-| S4-TASK-060 | Exit verification: build 0 warnings, all tests green, reviewer pass, HIPAA spot check, PROGRESS.md/lessons.md updated | Codex + Claude + Tobi | all above | Pending |
+| S4-TASK-030 | Application: caregiver + certification commands/queries with validators, user provisioning, authz, audit | Codex | S4-TASK-020 | Done 2026-07-05 (`418ade0` — incl. D-S4-5 provisioning with rollback tests) |
+| S4-TASK-031 | Application: client + care plan commands/queries with validators, object-level authz, grant evaluation, PHI read audit | Codex | S4-TASK-012, S4-TASK-020 | Done 2026-07-05 (`418ade0` — grant/self/assignment scoping; Clinician scoping conservative, see note below table) |
+| S4-TASK-032 | Application: scheduling commands/queries - create/update/cancel shift, check-in/check-out, paged shift dashboard query via `GetPagedAsync` | Codex | S4-TASK-020 | Done 2026-07-05 (`06ce99d`) |
+| S4-TASK-033 | Application: double-booking guard and expired-certification assignment guard per D-S4-4, with boundary-overlap tests | Codex | S4-TASK-032 | Done 2026-07-05 (`06ce99d`) |
+| S4-TASK-034 | Application: VisitNote/VisitPhoto commands/queries + `IFileStorageService` interface + dev implementation per D-S4-3 | Codex | S4-TASK-020 | Done 2026-07-05 (`a9ab867`) |
+| S4-TASK-035 | Application: billing commands/queries - create invoice from completed shifts, record payment, status recalculation, margin queries | Codex | S4-TASK-021 | Done 2026-07-05 (`c23a9f5`) |
+| S4-TASK-040 | WebApi: authenticated controllers for Caregivers, Clients, CarePlans, Shifts, VisitNotes, Invoices, ClientAccessGrants | Codex | S4-TASK-030..035 | Done 2026-07-05 — 7 controllers verified against endpoint matrix (grants nested in ClientsController; margins incl. /shifts route) |
+| S4-TASK-041 | API integration tests for authorization matrix, IDOR, validation, guard failures, grant behavior, PHI audit emission | Codex | S4-TASK-040 | Done 2026-07-05 (`ffdb6b4`, PM-reviewed) — role-declaration matrix contract tests + TestHost middleware/IDOR body-identity tests + Sprint4 service-level authz/guard/grant/billing suites. Note: full in-process HTTP+JWT matrix tests optional Sprint 6 hardening item |
+| S4-TASK-050 | Client: typed module clients in `CarePath.Client` over `ApiClientBase` | Claude | S4-TASK-040 stable | Done 2026-07-05 — CaregiversClient, ClientsClient (care plans + grants), ShiftsClient (check-in/out + visit notes), VisitNotesClient (multipart photo upload), BillingClient (invoices + Admin margins); `DeleteAsync`/`PostMultipartAsync` added to ApiClientBase; builds 0 warnings |
+| S4-TASK-060 | Exit verification: build 0 warnings, all tests green, reviewer pass, HIPAA spot check, PROGRESS.md/lessons.md updated | Codex + Claude + Tobi | all above | Done 2026-07-05 (`798612f`) — 471 tests green (D257/A148/I66); reviewer rerun clean; HIPAA checks all pass; see D-S4-8 exit amendments |
+
+### D-S4-8 — Exit-verification contract amendments (accepted by PM, 2026-07-05)
+
+1. **Compensation fully out of ordinary DTOs**: `CaregiverDetailDto.HourlyPayRate`,
+   `ClientDetailDto.HourlyBillRate`, and `InvoiceLineItemDto.RatePerHour` were removed during
+   S4-TASK-060 hardening. Compensation/rate data is now reachable ONLY via Admin margin
+   endpoints (extends D-S4-2 beyond shift DTOs) or as write-only request inputs on
+   Admin/Coordinator create/update commands. Supersedes the S3-TASK-013 note that detail DTOs
+   carry rates.
+2. **PHI 404 bodies carry no TraceId**: byte-identical missing/denied bodies now exclude the
+   per-request `TraceId` (a unique value per response would otherwise differentiate them).
+   Support correlation for PHI denials is server-side via audit logs; non-PHI error responses
+   keep `TraceId`. Amends §6 of the Sprint 3 Contracts Plan for PHI 404s specifically.
+3. Process note: these edits touched Claude-owned `CarePath.Contracts` files during a Codex
+   slice. Accepted on merit; going forward cross-ownership hardening edits should be proposed
+   in the slice report and applied by the owning agent.
+
+> **Clinician scoping note (4C, 2026-07-05)**: the current model has no concrete
+> clinician–client relationship source, so Clinician client/care-plan list queries return
+> empty and object reads/writes deny — conservative under-exposure rather than overexposure,
+> consistent with the list-scoping rules. **Carry-forward to Sprint 5**: Transitions gives
+> clinicians their relationship source (plans they review/activate); revisit Clinician scoping
+> when `TransitionPlan` persistence lands. Do not "fix" this by widening Clinician to
+> Coordinator-like access.
 
 ### Success Criteria
 

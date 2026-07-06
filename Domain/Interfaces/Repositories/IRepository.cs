@@ -108,4 +108,18 @@ public interface IRepository<T> where T : BaseEntity
         int pageNumber,
         int pageSize,
         CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Retrieves a one-based filtered page of non-deleted entities and the total matching row count.
+    /// </summary>
+    /// <param name="predicate">LINQ expression used to filter entities.</param>
+    /// <param name="pageNumber">One-based page number. Must be greater than zero.</param>
+    /// <param name="pageSize">Number of rows per page. Must be greater than zero.</param>
+    /// <param name="cancellationToken">Token to cancel the asynchronous operation.</param>
+    /// <returns>A tuple containing the materialized page items and total matching row count.</returns>
+    Task<(IReadOnlyList<T> Items, int TotalCount)> GetPagedAsync(
+        Expression<Func<T, bool>> predicate,
+        int pageNumber,
+        int pageSize,
+        CancellationToken cancellationToken = default);
 }

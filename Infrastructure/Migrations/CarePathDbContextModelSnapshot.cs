@@ -59,6 +59,15 @@ namespace CarePath.Infrastructure.Migrations
                     b.Property<DateTime?>("PaidDate")
                         .HasColumnType("datetime2");
 
+                    b.Property<DateTime>("PeriodEndUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime>("PeriodStartUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("ServiceType")
+                        .HasColumnType("int");
+
                     b.Property<int>("Status")
                         .HasColumnType("int");
 
@@ -93,6 +102,11 @@ namespace CarePath.Infrastructure.Migrations
 
                     b.HasIndex("Status")
                         .HasDatabaseName("IX_Invoices_Status");
+
+                    b.HasIndex("ClientId", "ServiceType", "PeriodStartUtc", "PeriodEndUtc")
+                        .IsUnique()
+                        .HasDatabaseName("IX_Invoices_Client_Service_Period")
+                        .HasFilter("[IsDeleted] = 0");
 
                     b.ToTable("Invoices", (string)null);
                 });

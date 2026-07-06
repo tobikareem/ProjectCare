@@ -34,6 +34,10 @@ public sealed class ProblemDetailsMiddleware
         {
             await WriteAccessDeniedAsync(context, exception.IsPhiResource);
         }
+        catch (ResourceConflictException exception)
+        {
+            await WriteConflictAsync(context, exception);
+        }
         catch (Exception)
         {
             var traceId = GetTraceId(context);
@@ -70,15 +74,27 @@ public sealed class ProblemDetailsMiddleware
             "Resource not found.",
             detail: null,
             validationErrors: [],
-            errors: [new ApiError(ResourceNotFoundCode, "Resource not found.")]);
+            errors: [new ApiError(ResourceNotFoundCode, "Resource not found.")],
+            includeTraceId: false);
     }
 
+
+    private static Task WriteConflictAsync(HttpContext context, ResourceConflictException exception)
+    {
+        return WriteProblemAsync(
+            context,
+            StatusCodes.Status409Conflict,
+            "Conflict.",
+            detail: null,
+            validationErrors: [],
+            errors: [new ApiError(exception.Code, exception.Message)]);
+    }
     private static Task WriteValidationFailureAsync(HttpContext context, ValidationException exception)
     {
         var validationErrors = exception.Errors
             .Select(error => new ValidationError(
                 error.PropertyName,
-                error.ErrorMessage,
+                "The request is invalid.",
                 string.IsNullOrWhiteSpace(error.ErrorCode) ? null : error.ErrorCode))
             .ToArray();
 
@@ -97,7 +113,8 @@ public sealed class ProblemDetailsMiddleware
         string title,
         string? detail,
         IReadOnlyList<ValidationError> validationErrors,
-        IReadOnlyList<ApiError> errors)
+        IReadOnlyList<ApiError> errors,
+        bool includeTraceId = true)
     {
         if (context.Response.HasStarted)
         {
@@ -115,7 +132,7 @@ public sealed class ProblemDetailsMiddleware
             Status = statusCode,
             Detail = detail,
             Instance = null,
-            TraceId = GetTraceId(context),
+            TraceId = includeTraceId ? GetTraceId(context) : null,
             ValidationErrors = validationErrors,
             Errors = errors,
         };

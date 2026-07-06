@@ -1,6 +1,6 @@
 ﻿# Sprint 4 - Core Operations Backend
 
-Status: Draft - detailed implementation contract is in `_specs/sprints/sprint-04-tasks.md`; approve the S4-TASK board before implementation
+Status: Complete (closed 2026-07-05) - implementation contract and per-task record in `_specs/sprints/sprint-04-tasks.md`; decisions D-S4-1..8 remain normative for Sprint 5+ work touching these modules
 Primary outcome: backend workflows for in-home care and staffing operations.
 
 The Sprint 4 task board is normative for endpoint shape, Application handler scope, PHI/audit rules, access-grant semantics, billing rules, implementation slices, and exit verification.

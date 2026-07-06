@@ -13,4 +13,10 @@ public class ApplicationUser : IdentityUser<Guid>
 
     /// <summary>Navigation to the associated domain user profile.</summary>
     public User DomainUser { get; set; } = null!;
+
+    /// <summary>SHA-256 hash of the currently valid opaque refresh token.</summary>
+    public string? RefreshTokenHash { get; set; }
+
+    /// <summary>UTC expiration for the currently valid refresh token.</summary>
+    public DateTime? RefreshTokenExpiresAtUtc { get; set; }
 }

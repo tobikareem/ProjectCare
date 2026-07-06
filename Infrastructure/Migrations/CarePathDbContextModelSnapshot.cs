@@ -1439,6 +1439,13 @@ namespace CarePath.Infrastructure.Migrations
                     b.Property<bool>("PhoneNumberConfirmed")
                         .HasColumnType("bit");
 
+                    b.Property<DateTime?>("RefreshTokenExpiresAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("RefreshTokenHash")
+                        .HasMaxLength(128)
+                        .HasColumnType("nvarchar(128)");
+
                     b.Property<string>("SecurityStamp")
                         .HasColumnType("nvarchar(max)");
 
@@ -1454,6 +1461,11 @@ namespace CarePath.Infrastructure.Migrations
                     b.HasIndex("DomainUserId")
                         .IsUnique()
                         .HasDatabaseName("IX_AspNetUsers_DomainUserId");
+
+                    b.HasIndex("RefreshTokenHash")
+                        .IsUnique()
+                        .HasDatabaseName("IX_AspNetUsers_RefreshTokenHash")
+                        .HasFilter("[RefreshTokenHash] IS NOT NULL");
 
                     b.HasIndex("NormalizedEmail")
                         .HasDatabaseName("EmailIndex");

@@ -17,6 +17,10 @@ using FluentAssertions;
 using FluentValidation;
 using Moq;
 using ContractDischargeDocumentSourceType = CarePath.Contracts.Enumerations.DischargeDocumentSourceType;
+using ContractReminderChannel = CarePath.Contracts.Enumerations.ReminderChannel;
+using ContractReminderType = CarePath.Contracts.Enumerations.ReminderType;
+using ContractTransitionInstructionStatus = CarePath.Contracts.Enumerations.TransitionInstructionStatus;
+using ContractTransitionRiskLevel = CarePath.Contracts.Enumerations.TransitionRiskLevel;
 
 namespace CarePath.Application.Tests.Transitions;
 
@@ -194,17 +198,223 @@ public sealed class TransitionsServiceTests
             .Where(exception => exception.Code == "transition.document_already_extracted");
     }
 
+    [Fact]
+    public async Task ReviewInstructionAsync_WhenModified_UpdatesInstructionAndAuditsWrite()
+    {
+        // Arrange
+        var plan = CreatePlan(TransitionPlanStatus.PendingVerification);
+        var instruction = new TransitionInstruction
+        {
+            Id = Guid.NewGuid(),
+            TransitionPlanId = plan.Id,
+            Category = TransitionInstructionCategory.Medication,
+            InstructionText = "Original instruction",
+            SourceText = "Original source text",
+            ConfidenceScore = 0.7000m,
+            Status = TransitionInstructionStatus.Pending,
+        };
+        var unitOfWork = CreateUnitOfWork();
+        unitOfWork.TransitionPlans.Setup(repository => repository.GetByIdAsync(plan.Id, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(plan);
+        unitOfWork.TransitionInstructions.Setup(repository => repository.GetByIdAsync(instruction.Id, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(instruction);
+        unitOfWork.TransitionInstructions.Setup(repository => repository.UpdateAsync(instruction, It.IsAny<CancellationToken>()))
+            .Returns(Task.CompletedTask);
+        var auditLogger = new Mock<IPhiAuditLogger>();
+        auditLogger.Setup(logger => logger.LogAsync(It.IsAny<PhiAuditEntry>(), It.IsAny<CancellationToken>()))
+            .Returns(Task.CompletedTask);
+        var service = CreateService(
+            unitOfWork,
+            roles: new HashSet<string>(StringComparer.Ordinal) { ApplicationRoles.Clinician },
+            auditLogger: auditLogger.Object);
+
+        // Act
+        var dto = await service.ReviewInstructionAsync(
+            plan.Id,
+            instruction.Id,
+            new ReviewInstructionRequest
+            {
+                Status = ContractTransitionInstructionStatus.Modified,
+                ModifiedInstructionText = "Take updated synthetic medication daily.",
+                ClinicalNote = "Synthetic clinical note.",
+                NeedsPharmacistReview = true,
+            });
+
+        // Assert
+        instruction.Status.Should().Be(TransitionInstructionStatus.Modified);
+        instruction.InstructionText.Should().Be("Take updated synthetic medication daily.");
+        dto.SourceText.Should().Be("Original source text");
+        auditLogger.Verify(logger => logger.LogAsync(
+            It.Is<PhiAuditEntry>(entry => entry.EntityType == ProtectedResourceType.TransitionInstruction && entry.Action == AuditAction.Update),
+            It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task ActivatePlanAsync_WhenInstructionPending_RejectsWithoutActivation()
+    {
+        // Arrange
+        var plan = CreatePlan(TransitionPlanStatus.PendingVerification);
+        var unitOfWork = CreateUnitOfWork();
+        unitOfWork.TransitionPlans.Setup(repository => repository.GetByIdAsync(plan.Id, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(plan);
+        unitOfWork.TransitionInstructions.Setup(repository => repository.FindAsync(It.IsAny<Expression<Func<TransitionInstruction, bool>>>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new[]
+            {
+                CreateInstruction(plan.Id, TransitionInstructionStatus.Pending)
+            });
+        var service = CreateService(
+            unitOfWork,
+            roles: new HashSet<string>(StringComparer.Ordinal) { ApplicationRoles.Clinician });
+
+        // Act
+        var act = async () => await service.ActivatePlanAsync(plan.Id, new ActivatePlanRequest
+        {
+            RiskLevel = ContractTransitionRiskLevel.High,
+            ConfirmESignature = true,
+        });
+
+        // Assert
+        await act.Should().ThrowAsync<ResourceConflictException>()
+            .Where(exception => exception.Code == "transition.instructions_pending_review");
+        plan.Status.Should().Be(TransitionPlanStatus.PendingVerification);
+        unitOfWork.TransitionPlans.Verify(repository => repository.UpdateAsync(It.IsAny<TransitionPlan>(), It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task ActivatePlanAsync_WhenReady_SetsESignatureFieldsAndComputesWindow()
+    {
+        // Arrange
+        var clinicianUserId = Guid.NewGuid();
+        var plan = CreatePlan(TransitionPlanStatus.PendingVerification);
+        var instruction = CreateInstruction(plan.Id, TransitionInstructionStatus.Approved);
+        var clientUser = new User
+        {
+            Id = Guid.NewGuid(),
+            FirstName = "Synthetic",
+            LastName = "Client",
+            Email = "client@example.test",
+            PhoneNumber = "555-0100",
+            Role = UserRole.Client,
+        };
+        var client = new Client { Id = plan.ClientId, UserId = clientUser.Id, DateOfBirth = UtcDate(1940, 1, 1) };
+        var unitOfWork = CreateUnitOfWork();
+        unitOfWork.TransitionPlans.Setup(repository => repository.GetByIdAsync(plan.Id, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(plan);
+        unitOfWork.TransitionPlans.Setup(repository => repository.UpdateAsync(plan, It.IsAny<CancellationToken>()))
+            .Returns(Task.CompletedTask);
+        unitOfWork.TransitionInstructions.Setup(repository => repository.FindAsync(It.IsAny<Expression<Func<TransitionInstruction, bool>>>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new[] { instruction });
+        unitOfWork.Clients.Setup(repository => repository.GetByIdAsync(plan.ClientId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(client);
+        unitOfWork.Users.Setup(repository => repository.GetByIdAsync(client.UserId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(clientUser);
+        var auditLogger = new Mock<IPhiAuditLogger>();
+        auditLogger.Setup(logger => logger.LogAsync(It.IsAny<PhiAuditEntry>(), It.IsAny<CancellationToken>()))
+            .Returns(Task.CompletedTask);
+        var service = CreateService(
+            unitOfWork,
+            clinicianUserId,
+            roles: new HashSet<string>(StringComparer.Ordinal) { ApplicationRoles.Clinician },
+            auditLogger: auditLogger.Object);
+
+        // Act
+        var dto = await service.ActivatePlanAsync(plan.Id, new ActivatePlanRequest
+        {
+            RiskLevel = ContractTransitionRiskLevel.High,
+            ConfirmESignature = true,
+        });
+
+        // Assert
+        plan.Status.Should().Be(TransitionPlanStatus.Active);
+        plan.RiskLevel.Should().Be(TransitionRiskLevel.High);
+        plan.VerifiedBy.Should().Be(clinicianUserId);
+        plan.VerifiedAt.Should().NotBeNull();
+        plan.ActivatedAt.Should().NotBeNull();
+        plan.TransitionWindowEnd.Should().Be(plan.DischargeDate.AddDays(30));
+        dto.Instructions.Should().ContainSingle();
+        auditLogger.Verify(logger => logger.LogAsync(
+            It.Is<PhiAuditEntry>(entry => entry.EntityType == ProtectedResourceType.TransitionPlan && entry.Action == AuditAction.Update),
+            It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task ScheduleReminderAsync_WhenPlanIsNotActive_RejectsWithStableCodeAndCreatesNoRecord()
+    {
+        // Arrange
+        var plan = CreatePlan(TransitionPlanStatus.PendingVerification);
+        var unitOfWork = CreateUnitOfWork();
+        unitOfWork.TransitionPlans.Setup(repository => repository.GetByIdAsync(plan.Id, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(plan);
+        var service = CreateService(unitOfWork);
+
+        // Act
+        var act = async () => await service.ScheduleReminderAsync(plan.Id, CreateReminderRequest(DateTime.UtcNow.AddDays(1)));
+
+        // Assert
+        await act.Should().ThrowAsync<ResourceConflictException>()
+            .Where(exception => exception.Code == "transition.plan_not_active");
+        unitOfWork.TransitionReminders.Verify(repository => repository.AddAsync(It.IsAny<TransitionReminder>(), It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task ScheduleReminderAsync_WhenOutsideWindow_RejectsWithStableCode()
+    {
+        // Arrange
+        var plan = CreateActivePlan();
+        var unitOfWork = CreateUnitOfWork();
+        unitOfWork.TransitionPlans.Setup(repository => repository.GetByIdAsync(plan.Id, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(plan);
+        var service = CreateService(unitOfWork);
+
+        // Act
+        var act = async () => await service.ScheduleReminderAsync(plan.Id, CreateReminderRequest(plan.TransitionWindowEnd.AddSeconds(1)));
+
+        // Assert
+        await act.Should().ThrowAsync<ResourceConflictException>()
+            .Where(exception => exception.Code == "transition.outside_window");
+    }
+
+    [Fact]
+    public async Task ScheduleReminderAsync_WhenInsideActiveWindow_CreatesScheduledRecordOnly()
+    {
+        // Arrange
+        var plan = CreateActivePlan();
+        var instruction = CreateInstruction(plan.Id, TransitionInstructionStatus.Approved);
+        var unitOfWork = CreateUnitOfWork();
+        unitOfWork.TransitionPlans.Setup(repository => repository.GetByIdAsync(plan.Id, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(plan);
+        unitOfWork.TransitionInstructions.Setup(repository => repository.GetByIdAsync(instruction.Id, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(instruction);
+        TransitionReminder? addedReminder = null;
+        unitOfWork.TransitionReminders.Setup(repository => repository.AddAsync(It.IsAny<TransitionReminder>(), It.IsAny<CancellationToken>()))
+            .Callback<TransitionReminder, CancellationToken>((reminder, _) => addedReminder = reminder)
+            .ReturnsAsync((TransitionReminder reminder, CancellationToken _) => reminder);
+        var service = CreateService(unitOfWork);
+
+        // Act
+        var dto = await service.ScheduleReminderAsync(plan.Id, CreateReminderRequest(DateTime.UtcNow.AddDays(1), instruction.Id));
+
+        // Assert
+        addedReminder.Should().NotBeNull();
+        addedReminder!.Status.Should().Be(ReminderStatus.Scheduled);
+        addedReminder.SentAt.Should().BeNull();
+        dto.Id.Should().Be(addedReminder.Id);
+        dto.TransitionInstructionId.Should().Be(instruction.Id);
+        unitOfWork.Mock.Verify(work => work.CommitTransactionAsync(It.IsAny<CancellationToken>()), Times.Once);
+    }
+
     private static TransitionsService CreateService(
         MockUnitOfWork unitOfWork,
         Guid? userId = null,
         IDischargeExtractionService? extraction = null,
-        IPhiAuditLogger? auditLogger = null)
+        IPhiAuditLogger? auditLogger = null,
+        IReadOnlySet<string>? roles = null)
     {
         return new TransitionsService(
             unitOfWork,
             new TestCurrentUserContext(
                 userId ?? Guid.NewGuid(),
-                new HashSet<string>(StringComparer.Ordinal) { ApplicationRoles.Coordinator }),
+                roles ?? new HashSet<string>(StringComparer.Ordinal) { ApplicationRoles.Coordinator }),
             auditLogger ?? Mock.Of<IPhiAuditLogger>(),
             extraction ?? Mock.Of<IDischargeExtractionService>());
     }
@@ -219,6 +429,49 @@ public sealed class TransitionsServiceTests
         SourceReference = "DOC-123",
         HospitalName = "Synthetic Hospital",
         DischargeDate = UtcDate(2026, 7, 1),
+    };
+
+    private static ScheduleReminderRequest CreateReminderRequest(DateTime scheduledAt, Guid? instructionId = null) => new()
+    {
+        TransitionInstructionId = instructionId,
+        ReminderType = ContractReminderType.Medication,
+        Channel = ContractReminderChannel.App,
+        ScheduledAt = scheduledAt,
+    };
+
+    private static TransitionPlan CreatePlan(TransitionPlanStatus status) => new()
+    {
+        Id = Guid.NewGuid(),
+        ClientId = Guid.NewGuid(),
+        DischargeDocumentId = Guid.NewGuid(),
+        DischargeDate = UtcDate(2026, 7, 1),
+        TransitionWindowEnd = UtcDate(2026, 7, 1),
+        Status = status,
+    };
+
+    private static TransitionPlan CreateActivePlan()
+    {
+        var now = DateTime.UtcNow;
+        return new TransitionPlan
+        {
+            Id = Guid.NewGuid(),
+            ClientId = Guid.NewGuid(),
+            DischargeDocumentId = Guid.NewGuid(),
+            DischargeDate = DateTime.SpecifyKind(now.Date.AddDays(-1), DateTimeKind.Utc),
+            TransitionWindowEnd = DateTime.SpecifyKind(now.Date.AddDays(29), DateTimeKind.Utc),
+            Status = TransitionPlanStatus.Active,
+        };
+    }
+
+    private static TransitionInstruction CreateInstruction(Guid planId, TransitionInstructionStatus status) => new()
+    {
+        Id = Guid.NewGuid(),
+        TransitionPlanId = planId,
+        Category = TransitionInstructionCategory.Medication,
+        InstructionText = "Take synthetic medication daily.",
+        SourceText = "Medication: take synthetic medication daily.",
+        ConfidenceScore = 0.8500m,
+        Status = status,
     };
 
     private static DateTime UtcDate(int year, int month, int day) =>

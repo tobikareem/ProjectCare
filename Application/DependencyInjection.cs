@@ -54,6 +54,9 @@ public static class DependencyInjection
         services.AddScoped<IValidator<CreateInvoiceRequest>, CreateInvoiceRequestValidator>();
         services.AddScoped<IValidator<RecordPaymentRequest>, RecordPaymentRequestValidator>();
         services.AddScoped<IValidator<CreateDischargeDocumentRequest>, CreateDischargeDocumentRequestValidator>();
+        services.AddScoped<IValidator<ReviewInstructionRequest>, ReviewInstructionRequestValidator>();
+        services.AddScoped<IValidator<ActivatePlanRequest>, ActivatePlanRequestValidator>();
+        services.AddScoped<IValidator<ScheduleReminderRequest>, ScheduleReminderRequestValidator>();
 
         return services;
     }

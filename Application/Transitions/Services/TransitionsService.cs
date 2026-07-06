@@ -20,19 +20,28 @@ public sealed class TransitionsService : ITransitionsService
     private readonly IPhiAuditLogger auditLogger;
     private readonly IDischargeExtractionService extractionService;
     private readonly IValidator<CreateDischargeDocumentRequest> createDocumentValidator;
+    private readonly IValidator<ReviewInstructionRequest> reviewInstructionValidator;
+    private readonly IValidator<ActivatePlanRequest> activatePlanValidator;
+    private readonly IValidator<ScheduleReminderRequest> scheduleReminderValidator;
 
     public TransitionsService(
         IUnitOfWork unitOfWork,
         ICurrentUserContext currentUser,
         IPhiAuditLogger auditLogger,
         IDischargeExtractionService extractionService,
-        IValidator<CreateDischargeDocumentRequest>? createDocumentValidator = null)
+        IValidator<CreateDischargeDocumentRequest>? createDocumentValidator = null,
+        IValidator<ReviewInstructionRequest>? reviewInstructionValidator = null,
+        IValidator<ActivatePlanRequest>? activatePlanValidator = null,
+        IValidator<ScheduleReminderRequest>? scheduleReminderValidator = null)
     {
         this.unitOfWork = unitOfWork;
         this.currentUser = currentUser;
         this.auditLogger = auditLogger;
         this.extractionService = extractionService;
         this.createDocumentValidator = createDocumentValidator ?? new CreateDischargeDocumentRequestValidator();
+        this.reviewInstructionValidator = reviewInstructionValidator ?? new ReviewInstructionRequestValidator();
+        this.activatePlanValidator = activatePlanValidator ?? new ActivatePlanRequestValidator();
+        this.scheduleReminderValidator = scheduleReminderValidator ?? new ScheduleReminderRequestValidator();
     }
 
     public async Task<DischargeDocumentDto> CreateDischargeDocumentAsync(
@@ -181,10 +190,170 @@ public sealed class TransitionsService : ITransitionsService
         }
     }
 
+    public async Task<TransitionInstructionClinicalDto> ReviewInstructionAsync(
+        Guid planId,
+        Guid instructionId,
+        ReviewInstructionRequest request,
+        CancellationToken cancellationToken = default)
+    {
+        EnsureClinician();
+        await reviewInstructionValidator.ValidateAndThrowAsync(request, cancellationToken);
+        _ = await GetPlanAsync(planId, cancellationToken);
+        var instruction = await GetInstructionAsync(instructionId, cancellationToken);
+        if (instruction.TransitionPlanId != planId)
+        {
+            throw new ResourceNotFoundException(isPhiResource: true);
+        }
+
+        instruction.Status = (TransitionInstructionStatus)(int)request.Status;
+        if (instruction.Status == TransitionInstructionStatus.Modified)
+        {
+            instruction.InstructionText = request.ModifiedInstructionText!.Trim();
+        }
+
+        instruction.ClinicalNote = TrimToNull(request.ClinicalNote);
+        instruction.NeedsPharmacistReview = request.NeedsPharmacistReview;
+
+        await unitOfWork.BeginTransactionAsync(cancellationToken);
+        try
+        {
+            await unitOfWork.TransitionInstructions.UpdateAsync(instruction, cancellationToken);
+            await unitOfWork.SaveChangesAsync(cancellationToken);
+            await AuditAsync(ProtectedResourceType.TransitionInstruction, instruction.Id, AuditAction.Update, cancellationToken);
+            await unitOfWork.CommitTransactionAsync(cancellationToken);
+        }
+        catch
+        {
+            await unitOfWork.RollbackTransactionAsync(cancellationToken);
+            throw;
+        }
+
+        return instruction.ToClinicalDto();
+    }
+
+    public async Task<TransitionPlanClinicalDto> ActivatePlanAsync(
+        Guid planId,
+        ActivatePlanRequest request,
+        CancellationToken cancellationToken = default)
+    {
+        EnsureClinician();
+        await activatePlanValidator.ValidateAndThrowAsync(request, cancellationToken);
+        var plan = await GetPlanAsync(planId, cancellationToken);
+        if (plan.Status != TransitionPlanStatus.PendingVerification)
+        {
+            throw new ResourceConflictException("transition.plan_not_pending_verification", "transition.plan_not_pending_verification");
+        }
+
+        var instructions = await GetInstructionsAsync(plan.Id, cancellationToken);
+        if (instructions.Count == 0 || instructions.Any(instruction => instruction.Status == TransitionInstructionStatus.Pending))
+        {
+            throw new ResourceConflictException("transition.instructions_pending_review", "transition.instructions_pending_review");
+        }
+
+        var now = DateTime.UtcNow;
+        plan.Status = TransitionPlanStatus.Active;
+        plan.RiskLevel = (TransitionRiskLevel)(int)request.RiskLevel;
+        plan.VerifiedBy = currentUser.UserId ?? throw new ResourceAccessDeniedException("Unauthenticated", isPhiResource: true);
+        plan.VerifiedAt = now;
+        plan.ActivatedAt = now;
+        plan.TransitionWindowEnd = DateTime.SpecifyKind(plan.DischargeDate, DateTimeKind.Utc).AddDays(30);
+
+        await unitOfWork.BeginTransactionAsync(cancellationToken);
+        try
+        {
+            await unitOfWork.TransitionPlans.UpdateAsync(plan, cancellationToken);
+            await unitOfWork.SaveChangesAsync(cancellationToken);
+            await AuditAsync(ProtectedResourceType.TransitionPlan, plan.Id, AuditAction.Update, cancellationToken);
+            await unitOfWork.CommitTransactionAsync(cancellationToken);
+        }
+        catch
+        {
+            await unitOfWork.RollbackTransactionAsync(cancellationToken);
+            throw;
+        }
+
+        var client = await GetClientAsync(plan.ClientId, cancellationToken);
+        var user = await GetUserAsync(client.UserId, cancellationToken);
+        return plan.ToClinicalDto(client, user, instructions);
+    }
+
+    public async Task<TransitionReminderDto> ScheduleReminderAsync(
+        Guid planId,
+        ScheduleReminderRequest request,
+        CancellationToken cancellationToken = default)
+    {
+        EnsureCoordinator();
+        await scheduleReminderValidator.ValidateAndThrowAsync(request, cancellationToken);
+        var plan = await GetPlanAsync(planId, cancellationToken);
+        if (!plan.IsActive)
+        {
+            throw new ResourceConflictException("transition.plan_not_active", "transition.plan_not_active");
+        }
+
+        if (request.ScheduledAt < plan.DischargeDate || request.ScheduledAt > plan.TransitionWindowEnd)
+        {
+            throw new ResourceConflictException("transition.outside_window", "transition.outside_window");
+        }
+
+        if (request.TransitionInstructionId.HasValue)
+        {
+            var instruction = await GetInstructionAsync(request.TransitionInstructionId.Value, cancellationToken);
+            if (instruction.TransitionPlanId != plan.Id)
+            {
+                throw new ResourceNotFoundException(isPhiResource: true);
+            }
+        }
+
+        var reminder = new TransitionReminder
+        {
+            TransitionPlanId = plan.Id,
+            TransitionInstructionId = request.TransitionInstructionId,
+            ReminderType = (ReminderType)(int)request.ReminderType,
+            Channel = (ReminderChannel)(int)request.Channel,
+            ScheduledAt = request.ScheduledAt,
+            Status = ReminderStatus.Scheduled,
+        };
+
+        await unitOfWork.BeginTransactionAsync(cancellationToken);
+        try
+        {
+            await unitOfWork.TransitionReminders.AddAsync(reminder, cancellationToken);
+            await unitOfWork.SaveChangesAsync(cancellationToken);
+            await AuditAsync(ProtectedResourceType.TransitionReminder, reminder.Id, AuditAction.Create, cancellationToken);
+            await unitOfWork.CommitTransactionAsync(cancellationToken);
+        }
+        catch
+        {
+            await unitOfWork.RollbackTransactionAsync(cancellationToken);
+            throw;
+        }
+
+        return reminder.ToDto();
+    }
+
     private async Task<DischargeDocument> GetDocumentAsync(Guid documentId, CancellationToken cancellationToken)
     {
         return await unitOfWork.DischargeDocuments.GetByIdAsync(documentId, cancellationToken)
             ?? throw new ResourceNotFoundException(isPhiResource: true);
+    }
+
+    private async Task<TransitionPlan> GetPlanAsync(Guid planId, CancellationToken cancellationToken)
+    {
+        return await unitOfWork.TransitionPlans.GetByIdAsync(planId, cancellationToken)
+            ?? throw new ResourceNotFoundException(isPhiResource: true);
+    }
+
+    private async Task<TransitionInstruction> GetInstructionAsync(Guid instructionId, CancellationToken cancellationToken)
+    {
+        return await unitOfWork.TransitionInstructions.GetByIdAsync(instructionId, cancellationToken)
+            ?? throw new ResourceNotFoundException(isPhiResource: true);
+    }
+
+    private async Task<IReadOnlyList<TransitionInstruction>> GetInstructionsAsync(Guid planId, CancellationToken cancellationToken)
+    {
+        return await unitOfWork.TransitionInstructions.FindAsync(
+            instruction => instruction.TransitionPlanId == planId,
+            cancellationToken);
     }
 
     private async Task<Client> GetClientAsync(Guid clientId, CancellationToken cancellationToken)
@@ -202,6 +371,14 @@ public sealed class TransitionsService : ITransitionsService
     private void EnsureCoordinator()
     {
         if (!HasRole(ApplicationRoles.Coordinator))
+        {
+            throw new ResourceAccessDeniedException("RoleInsufficient", isPhiResource: true);
+        }
+    }
+
+    private void EnsureClinician()
+    {
+        if (!HasRole(ApplicationRoles.Clinician))
         {
             throw new ResourceAccessDeniedException("RoleInsufficient", isPhiResource: true);
         }

@@ -7,6 +7,9 @@ using ContractTransitionInstructionCategory = CarePath.Contracts.Enumerations.Tr
 using ContractTransitionInstructionStatus = CarePath.Contracts.Enumerations.TransitionInstructionStatus;
 using ContractTransitionPlanStatus = CarePath.Contracts.Enumerations.TransitionPlanStatus;
 using ContractTransitionRiskLevel = CarePath.Contracts.Enumerations.TransitionRiskLevel;
+using ContractReminderChannel = CarePath.Contracts.Enumerations.ReminderChannel;
+using ContractReminderStatus = CarePath.Contracts.Enumerations.ReminderStatus;
+using ContractReminderType = CarePath.Contracts.Enumerations.ReminderType;
 
 namespace CarePath.Application.Common.Mapping;
 
@@ -64,5 +67,19 @@ internal static class TransitionContractMapper
         ClinicalNote = instruction.ClinicalNote,
         NeedsPharmacistReview = instruction.NeedsPharmacistReview,
         Status = (ContractTransitionInstructionStatus)(int)instruction.Status,
+    };
+
+    internal static TransitionReminderDto ToDto(this TransitionReminder reminder) => new()
+    {
+        Id = reminder.Id,
+        TransitionPlanId = reminder.TransitionPlanId,
+        TransitionInstructionId = reminder.TransitionInstructionId,
+        ReminderType = (ContractReminderType)(int)reminder.ReminderType,
+        Channel = (ContractReminderChannel)(int)reminder.Channel,
+        ScheduledAt = reminder.ScheduledAt,
+        SentAt = reminder.SentAt,
+        AcknowledgedAt = reminder.AcknowledgedAt,
+        Status = (ContractReminderStatus)(int)reminder.Status,
+        IsOverdue = reminder.IsOverdue,
     };
 }

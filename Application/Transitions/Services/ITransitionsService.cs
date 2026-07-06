@@ -19,4 +19,20 @@ public interface ITransitionsService
     Task<TransitionPlanClinicalDto> ExtractDischargeDocumentAsync(
         Guid documentId,
         CancellationToken cancellationToken = default);
+
+    Task<TransitionInstructionClinicalDto> ReviewInstructionAsync(
+        Guid planId,
+        Guid instructionId,
+        ReviewInstructionRequest request,
+        CancellationToken cancellationToken = default);
+
+    Task<TransitionPlanClinicalDto> ActivatePlanAsync(
+        Guid planId,
+        ActivatePlanRequest request,
+        CancellationToken cancellationToken = default);
+
+    Task<TransitionReminderDto> ScheduleReminderAsync(
+        Guid planId,
+        ScheduleReminderRequest request,
+        CancellationToken cancellationToken = default);
 }

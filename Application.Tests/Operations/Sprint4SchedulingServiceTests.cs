@@ -1,6 +1,7 @@
 using System.Linq.Expressions;
 using CarePath.Application.Abstractions.Audit;
 using CarePath.Application.Abstractions.Auth;
+using CarePath.Application.Abstractions.Storage;
 using CarePath.Application.Common.Exceptions;
 using CarePath.Application.Scheduling.Services;
 using CarePath.Contracts.Scheduling;
@@ -318,6 +319,209 @@ public sealed class Sprint4SchedulingServiceTests
             It.IsAny<CancellationToken>()), Times.Once);
     }
 
+    [Fact]
+    public async Task CreateVisitNoteAsync_WhenCaregiverAssigned_CreatesAuditedDetail()
+    {
+        // Arrange
+        var context = CreateContext();
+        var shift = ExistingShift(WindowStart, WindowEnd, ShiftStatus.InProgress);
+        shift.ClientId = context.Client.Id;
+        shift.CaregiverId = context.Caregiver.Id;
+        shift.ActualStartTime = WindowStart;
+        context.UnitOfWork.Shifts.Setup(repository => repository.GetByIdAsync(shift.Id, It.IsAny<CancellationToken>())).ReturnsAsync(shift);
+        context.UnitOfWork.Caregivers.Setup(repository => repository.FindAsync(It.IsAny<Expression<Func<Caregiver, bool>>>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new[] { context.Caregiver });
+        context.UnitOfWork.VisitNotes.Setup(repository => repository.AddAsync(It.IsAny<VisitNote>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync((VisitNote note, CancellationToken _) => note);
+        var service = new VisitDocumentationService(
+            context.UnitOfWork,
+            new TestCurrentUserContext(context.Caregiver.UserId, new HashSet<string>(StringComparer.Ordinal) { ApplicationRoles.Caregiver }),
+            Mock.Of<IClientAccessEvaluator>(),
+            context.AuditLogger.Object,
+            Mock.Of<IFileStorageService>());
+
+        // Act
+        var result = await service.CreateVisitNoteAsync(shift.Id, new CreateVisitNoteRequest
+        {
+            VisitDateTime = WindowStart,
+            PersonalCare = true,
+            Activities = "Test activity note",
+        });
+
+        // Assert
+        result.ShiftId.Should().Be(shift.Id);
+        result.VisitDateTime.Should().Be(WindowStart);
+        context.AuditLogger.Verify(logger => logger.LogAsync(
+            It.Is<PhiAuditEntry>(entry => entry.Action == AuditAction.Create && entry.EntityType == ProtectedResourceType.VisitNote && entry.EntityId == result.Id),
+            It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task AddVisitPhotoAsync_WhenStorageSucceeds_ReturnsMetadataWithoutUrl()
+    {
+        // Arrange
+        var context = CreateContext();
+        var shift = ExistingShift(WindowStart, WindowEnd, ShiftStatus.InProgress);
+        shift.ClientId = context.Client.Id;
+        shift.CaregiverId = context.Caregiver.Id;
+        var note = new VisitNote
+        {
+            Id = Guid.NewGuid(),
+            ShiftId = shift.Id,
+            CaregiverId = context.Caregiver.Id,
+            VisitDateTime = WindowStart,
+        };
+        context.UnitOfWork.VisitNotes.Setup(repository => repository.GetByIdAsync(note.Id, It.IsAny<CancellationToken>())).ReturnsAsync(note);
+        context.UnitOfWork.Shifts.Setup(repository => repository.GetByIdAsync(shift.Id, It.IsAny<CancellationToken>())).ReturnsAsync(shift);
+        context.UnitOfWork.Caregivers.Setup(repository => repository.FindAsync(It.IsAny<Expression<Func<Caregiver, bool>>>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new[] { context.Caregiver });
+        context.UnitOfWork.VisitPhotos.Setup(repository => repository.AddAsync(It.IsAny<VisitPhoto>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync((VisitPhoto photo, CancellationToken _) => photo);
+        var storage = new Mock<IFileStorageService>();
+        storage.Setup(service => service.SaveAsync(It.IsAny<FileStorageWriteRequest>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync("opaque-object-id");
+        var service = new VisitDocumentationService(
+            context.UnitOfWork,
+            new TestCurrentUserContext(context.Caregiver.UserId, new HashSet<string>(StringComparer.Ordinal) { ApplicationRoles.Caregiver }),
+            Mock.Of<IClientAccessEvaluator>(),
+            context.AuditLogger.Object,
+            storage.Object);
+        await using var content = new MemoryStream(new byte[] { 1, 2, 3 });
+
+        // Act
+        var result = await service.AddVisitPhotoAsync(note.Id, "test-photo.jpg", "image/jpeg", content, "Test caption", WindowStart);
+
+        // Assert
+        result.VisitNoteId.Should().Be(note.Id);
+        result.Url.Should().BeNull();
+        storage.Verify(service => service.SaveAsync(It.IsAny<FileStorageWriteRequest>(), It.IsAny<CancellationToken>()), Times.Once);
+    }
+    [Fact]
+    public async Task GetVisitNotesAsync_WhenCallerOutOfScope_ReturnsEmptyPage()
+    {
+        // Arrange
+        var context = CreateContext();
+        var shift = ExistingShift(WindowStart, WindowEnd, ShiftStatus.Completed);
+        shift.ClientId = context.Client.Id;
+        shift.CaregiverId = context.Caregiver.Id;
+        context.UnitOfWork.Shifts.Setup(repository => repository.GetByIdAsync(shift.Id, It.IsAny<CancellationToken>())).ReturnsAsync(shift);
+        context.UnitOfWork.Caregivers.Setup(repository => repository.FindAsync(It.IsAny<Expression<Func<Caregiver, bool>>>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(Array.Empty<Caregiver>());
+        var service = new VisitDocumentationService(
+            context.UnitOfWork,
+            new TestCurrentUserContext(Guid.NewGuid(), new HashSet<string>(StringComparer.Ordinal) { ApplicationRoles.Caregiver }),
+            Mock.Of<IClientAccessEvaluator>(),
+            context.AuditLogger.Object,
+            Mock.Of<IFileStorageService>());
+
+        // Act
+        var result = await service.GetVisitNotesAsync(shift.Id, new CarePath.Contracts.Common.PagedRequest { PageNumber = 1, PageSize = 10 });
+
+        // Assert
+        result.Items.Should().BeEmpty();
+        result.TotalCount.Should().Be(0);
+        context.UnitOfWork.VisitNotes.Verify(repository => repository.GetPagedAsync(It.IsAny<Expression<Func<VisitNote, bool>>>(), It.IsAny<int>(), It.IsAny<int>(), It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task CreateVisitNoteAsync_WhenVisitDateProvided_PreservesUtcTimestamp()
+    {
+        // Arrange
+        var context = CreateContext();
+        var shift = ExistingShift(WindowStart, WindowEnd, ShiftStatus.InProgress);
+        shift.ClientId = context.Client.Id;
+        shift.CaregiverId = context.Caregiver.Id;
+        context.UnitOfWork.Shifts.Setup(repository => repository.GetByIdAsync(shift.Id, It.IsAny<CancellationToken>())).ReturnsAsync(shift);
+        context.UnitOfWork.Caregivers.Setup(repository => repository.FindAsync(It.IsAny<Expression<Func<Caregiver, bool>>>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new[] { context.Caregiver });
+        VisitNote? savedNote = null;
+        context.UnitOfWork.VisitNotes.Setup(repository => repository.AddAsync(It.IsAny<VisitNote>(), It.IsAny<CancellationToken>()))
+            .Callback<VisitNote, CancellationToken>((note, _) => savedNote = note)
+            .ReturnsAsync((VisitNote note, CancellationToken _) => note);
+        var service = new VisitDocumentationService(
+            context.UnitOfWork,
+            new TestCurrentUserContext(context.Caregiver.UserId, new HashSet<string>(StringComparer.Ordinal) { ApplicationRoles.Caregiver }),
+            Mock.Of<IClientAccessEvaluator>(),
+            context.AuditLogger.Object,
+            Mock.Of<IFileStorageService>());
+        var documentedAt = WindowStart.AddMinutes(15);
+
+        // Act
+        _ = await service.CreateVisitNoteAsync(shift.Id, new CreateVisitNoteRequest
+        {
+            VisitDateTime = documentedAt,
+            PersonalCare = true,
+        });
+
+        // Assert
+        savedNote.Should().NotBeNull();
+        savedNote!.VisitDateTime.Should().Be(documentedAt);
+    }
+
+    [Fact]
+    public async Task AddVisitPhotoAsync_WhenTimestampIsNotUtc_RejectsWithoutStorageWrite()
+    {
+        // Arrange
+        var context = CreateContext();
+        var shift = ExistingShift(WindowStart, WindowEnd, ShiftStatus.InProgress);
+        shift.ClientId = context.Client.Id;
+        shift.CaregiverId = context.Caregiver.Id;
+        var note = new VisitNote { Id = Guid.NewGuid(), ShiftId = shift.Id, CaregiverId = context.Caregiver.Id, VisitDateTime = WindowStart };
+        context.UnitOfWork.VisitNotes.Setup(repository => repository.GetByIdAsync(note.Id, It.IsAny<CancellationToken>())).ReturnsAsync(note);
+        context.UnitOfWork.Shifts.Setup(repository => repository.GetByIdAsync(shift.Id, It.IsAny<CancellationToken>())).ReturnsAsync(shift);
+        context.UnitOfWork.Caregivers.Setup(repository => repository.FindAsync(It.IsAny<Expression<Func<Caregiver, bool>>>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new[] { context.Caregiver });
+        var storage = new Mock<IFileStorageService>();
+        var service = new VisitDocumentationService(
+            context.UnitOfWork,
+            new TestCurrentUserContext(context.Caregiver.UserId, new HashSet<string>(StringComparer.Ordinal) { ApplicationRoles.Caregiver }),
+            Mock.Of<IClientAccessEvaluator>(),
+            context.AuditLogger.Object,
+            storage.Object);
+        await using var content = new MemoryStream(new byte[] { 1, 2, 3 });
+
+        // Act
+        var act = async () => await service.AddVisitPhotoAsync(note.Id, "test.jpg", "image/jpeg", content, null, DateTime.SpecifyKind(WindowStart, DateTimeKind.Local));
+
+        // Assert
+        await act.Should().ThrowAsync<ValidationException>();
+        storage.Verify(service => service.SaveAsync(It.IsAny<FileStorageWriteRequest>(), It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task AddVisitPhotoAsync_WhenMetadataSaveFails_DeletesStoredObject()
+    {
+        // Arrange
+        var context = CreateContext();
+        var shift = ExistingShift(WindowStart, WindowEnd, ShiftStatus.InProgress);
+        shift.ClientId = context.Client.Id;
+        shift.CaregiverId = context.Caregiver.Id;
+        var note = new VisitNote { Id = Guid.NewGuid(), ShiftId = shift.Id, CaregiverId = context.Caregiver.Id, VisitDateTime = WindowStart };
+        context.UnitOfWork.VisitNotes.Setup(repository => repository.GetByIdAsync(note.Id, It.IsAny<CancellationToken>())).ReturnsAsync(note);
+        context.UnitOfWork.Shifts.Setup(repository => repository.GetByIdAsync(shift.Id, It.IsAny<CancellationToken>())).ReturnsAsync(shift);
+        context.UnitOfWork.Caregivers.Setup(repository => repository.FindAsync(It.IsAny<Expression<Func<Caregiver, bool>>>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new[] { context.Caregiver });
+        context.UnitOfWork.VisitPhotos.Setup(repository => repository.AddAsync(It.IsAny<VisitPhoto>(), It.IsAny<CancellationToken>()))
+            .ThrowsAsync(new InvalidOperationException("metadata failed"));
+        var storage = new Mock<IFileStorageService>();
+        storage.Setup(service => service.SaveAsync(It.IsAny<FileStorageWriteRequest>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync("opaque-object-id");
+        storage.Setup(service => service.DeleteAsync("opaque-object-id", It.IsAny<CancellationToken>())).Returns(Task.CompletedTask);
+        var service = new VisitDocumentationService(
+            context.UnitOfWork,
+            new TestCurrentUserContext(context.Caregiver.UserId, new HashSet<string>(StringComparer.Ordinal) { ApplicationRoles.Caregiver }),
+            Mock.Of<IClientAccessEvaluator>(),
+            context.AuditLogger.Object,
+            storage.Object);
+        await using var content = new MemoryStream(new byte[] { 1, 2, 3 });
+
+        // Act
+        var act = async () => await service.AddVisitPhotoAsync(note.Id, "test.jpg", "image/jpeg", content, null, WindowStart);
+
+        // Assert
+        await act.Should().ThrowAsync<InvalidOperationException>();
+        storage.Verify(service => service.DeleteAsync("opaque-object-id", It.IsAny<CancellationToken>()), Times.Once);
+    }
     private static TestContext CreateContext(
         IReadOnlyList<Shift>? existingShifts = null,
         IReadOnlyList<CaregiverCertification>? certifications = null)
@@ -511,9 +715,5 @@ public sealed class Sprint4SchedulingServiceTests
         public ValueTask DisposeAsync() => ValueTask.CompletedTask;
     }
 }
-
-
-
-
 
 

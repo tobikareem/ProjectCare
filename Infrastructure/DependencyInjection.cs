@@ -1,5 +1,6 @@
 using CarePath.Application.Abstractions.Audit;
 using CarePath.Application.Abstractions.Auth;
+using CarePath.Application.Abstractions.Storage;
 using CarePath.Domain.Interfaces.Repositories;
 using CarePath.Infrastructure.Audit;
 using CarePath.Infrastructure.Auth;
@@ -7,6 +8,7 @@ using CarePath.Infrastructure.Identity;
 using CarePath.Infrastructure.Persistence;
 using CarePath.Infrastructure.Persistence.Interceptors;
 using CarePath.Infrastructure.Persistence.Repositories;
+using CarePath.Infrastructure.Storage;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
@@ -37,6 +39,11 @@ public static class DependencyInjection
 
         services.AddInfrastructure(connectionString);
         services.AddSingleton(configuration);
+        if (configuration.GetValue<bool>("Storage:EnableLocalPrivateStorage"))
+        {
+            services.AddScoped<IFileStorageService, LocalFileStorageService>();
+        }
+
         services.AddScoped<IJwtTokenService, JwtTokenService>();
         services.AddScoped<IIdentityService, IdentityService>();
 
@@ -93,6 +100,7 @@ public static class DependencyInjection
         services.AddScoped<IClientAccessEvaluator, ClientAccessEvaluator>();
         services.AddScoped<IIdentityProvisioningService, IdentityProvisioningService>();
         services.AddScoped<IPhiAuditLogger, LoggingPhiAuditLogger>();
+        services.AddScoped<IFileStorageService, DisabledFileStorageService>();
 
         return services;
     }

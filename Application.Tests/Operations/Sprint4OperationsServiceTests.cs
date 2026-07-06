@@ -2,6 +2,7 @@ using System.Linq.Expressions;
 using CarePath.Application;
 using CarePath.Application.Abstractions.Audit;
 using CarePath.Application.Abstractions.Auth;
+using CarePath.Application.Abstractions.Storage;
 using CarePath.Application.Clients.Services;
 using CarePath.Application.Clients.Validators;
 using CarePath.Application.Common.Exceptions;
@@ -389,6 +390,7 @@ public class Sprint4OperationsServiceTests
         services.AddSingleton(Mock.Of<IClientAccessEvaluator>());
         services.AddSingleton(Mock.Of<IObjectAuthorizationService>());
         services.AddSingleton(Mock.Of<IPhiAuditLogger>());
+        services.AddSingleton(Mock.Of<IFileStorageService>());
 
         // Act
         using var provider = services.AddApplication().BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true, ValidateOnBuild = true });
@@ -539,17 +541,3 @@ public class Sprint4OperationsServiceTests
         public ValueTask DisposeAsync() => ValueTask.CompletedTask;
     }
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-

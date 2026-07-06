@@ -24,6 +24,7 @@ public static class DependencyInjection
         services.AddScoped<ICaregiverOperationsService, CaregiverOperationsService>();
         services.AddScoped<IClientOperationsService, ClientOperationsService>();
         services.AddScoped<IShiftOperationsService, ShiftOperationsService>();
+        services.AddScoped<IVisitDocumentationService, VisitDocumentationService>();
 
         services.AddScoped<IValidator<CreateCaregiverRequest>, CreateCaregiverRequestValidator>();
         services.AddScoped<IValidator<UpdateCaregiverRequest>, UpdateCaregiverRequestValidator>();
@@ -36,6 +37,7 @@ public static class DependencyInjection
         services.AddScoped<IValidator<UpdateShiftRequest>, UpdateShiftRequestValidator>();
         services.AddScoped<IValidator<CheckInRequest>, CheckInRequestValidator>();
         services.AddScoped<IValidator<CheckOutRequest>, CheckOutRequestValidator>();
+        services.AddScoped<IValidator<CreateVisitNoteRequest>, CreateVisitNoteRequestValidator>();
 
         return services;
     }

@@ -30,24 +30,23 @@ namespace CarePath.Infrastructure.Migrations
                 nullable: true);
 
             migrationBuilder.Sql(@"
-;WITH InvoiceBackfill AS (
-    SELECT
-        i.[Id],
-        MIN(li.[ServiceDate]) AS [PeriodStartUtc],
-        DATEADD(day, 1, MAX(li.[ServiceDate])) AS [PeriodEndUtc],
-        MIN(s.[ServiceType]) AS [MinServiceType],
-        MAX(s.[ServiceType]) AS [MaxServiceType],
-        SUM(CASE WHEN li.[ShiftId] IS NULL OR s.[Id] IS NULL THEN 1 ELSE 0 END) AS [MissingShiftCount]
-    FROM [Invoices] i
-    INNER JOIN [InvoiceLineItems] li ON li.[InvoiceId] = i.[Id] AND li.[IsDeleted] = 0
-    LEFT JOIN [Shifts] s ON s.[Id] = li.[ShiftId] AND s.[IsDeleted] = 0
-    WHERE i.[IsDeleted] = 0
-    GROUP BY i.[Id]
-)
 IF EXISTS (
     SELECT 1
     FROM [Invoices] i
-    LEFT JOIN InvoiceBackfill b ON b.[Id] = i.[Id]
+    LEFT JOIN (
+        SELECT
+            sourceInvoice.[Id],
+            MIN(lineItem.[ServiceDate]) AS [PeriodStartUtc],
+            DATEADD(day, 1, MAX(lineItem.[ServiceDate])) AS [PeriodEndUtc],
+            MIN(shift.[ServiceType]) AS [MinServiceType],
+            MAX(shift.[ServiceType]) AS [MaxServiceType],
+            SUM(CASE WHEN lineItem.[ShiftId] IS NULL OR shift.[Id] IS NULL THEN 1 ELSE 0 END) AS [MissingShiftCount]
+        FROM [Invoices] sourceInvoice
+        INNER JOIN [InvoiceLineItems] lineItem ON lineItem.[InvoiceId] = sourceInvoice.[Id] AND lineItem.[IsDeleted] = 0
+        LEFT JOIN [Shifts] shift ON shift.[Id] = lineItem.[ShiftId] AND shift.[IsDeleted] = 0
+        WHERE sourceInvoice.[IsDeleted] = 0
+        GROUP BY sourceInvoice.[Id]
+    ) b ON b.[Id] = i.[Id]
     WHERE i.[IsDeleted] = 0
       AND (b.[Id] IS NULL OR b.[MissingShiftCount] > 0 OR b.[MinServiceType] <> b.[MaxServiceType])
 )

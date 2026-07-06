@@ -18,15 +18,15 @@ public class EntityConfigurationTests
     private readonly IModel _model = CreateModel();
 
     [Fact]
-    public void Model_WhenBuilt_DoesNotIncludeTransitionsEntities()
+    public void Model_WhenBuilt_IncludesTransitionsEntities()
     {
         // Assert
-        _model.FindEntityType(typeof(DischargeDocument)).Should().BeNull();
-        _model.FindEntityType(typeof(TransitionPlan)).Should().BeNull();
-        _model.FindEntityType(typeof(TransitionInstruction)).Should().BeNull();
-        _model.FindEntityType(typeof(TransitionReminder)).Should().BeNull();
-        _model.FindEntityType(typeof(TransitionCheckIn)).Should().BeNull();
-        _model.FindEntityType(typeof(TransitionEscalation)).Should().BeNull();
+        _model.FindEntityType(typeof(DischargeDocument)).Should().NotBeNull();
+        _model.FindEntityType(typeof(TransitionPlan)).Should().NotBeNull();
+        _model.FindEntityType(typeof(TransitionInstruction)).Should().NotBeNull();
+        _model.FindEntityType(typeof(TransitionReminder)).Should().NotBeNull();
+        _model.FindEntityType(typeof(TransitionCheckIn)).Should().NotBeNull();
+        _model.FindEntityType(typeof(TransitionEscalation)).Should().NotBeNull();
     }
 
     [Fact]
@@ -50,6 +50,15 @@ public class EntityConfigurationTests
         GetDeleteBehavior<InvoiceLineItem>(nameof(InvoiceLineItem.InvoiceId)).Should().Be(DeleteBehavior.Restrict);
         GetDeleteBehavior<InvoiceLineItem>(nameof(InvoiceLineItem.ShiftId)).Should().Be(DeleteBehavior.Restrict);
         GetDeleteBehavior<Payment>(nameof(Payment.InvoiceId)).Should().Be(DeleteBehavior.Restrict);
+        GetDeleteBehavior<DischargeDocument>(nameof(DischargeDocument.ClientId)).Should().Be(DeleteBehavior.Restrict);
+        GetDeleteBehavior<TransitionPlan>(nameof(TransitionPlan.ClientId)).Should().Be(DeleteBehavior.Restrict);
+        GetDeleteBehavior<TransitionPlan>(nameof(TransitionPlan.DischargeDocumentId)).Should().Be(DeleteBehavior.Restrict);
+        GetDeleteBehavior<TransitionInstruction>(nameof(TransitionInstruction.TransitionPlanId)).Should().Be(DeleteBehavior.Restrict);
+        GetDeleteBehavior<TransitionReminder>(nameof(TransitionReminder.TransitionPlanId)).Should().Be(DeleteBehavior.Restrict);
+        GetDeleteBehavior<TransitionReminder>(nameof(TransitionReminder.TransitionInstructionId)).Should().Be(DeleteBehavior.Restrict);
+        GetDeleteBehavior<TransitionCheckIn>(nameof(TransitionCheckIn.TransitionPlanId)).Should().Be(DeleteBehavior.Restrict);
+        GetDeleteBehavior<TransitionEscalation>(nameof(TransitionEscalation.TransitionPlanId)).Should().Be(DeleteBehavior.Restrict);
+        GetDeleteBehavior<VisitNote>(nameof(VisitNote.TransitionPlanId)).Should().Be(DeleteBehavior.Restrict);
     }
 
     [Fact]
@@ -75,6 +84,21 @@ public class EntityConfigurationTests
         GetProperty<Invoice>(nameof(Invoice.InvoiceNumber)).GetMaxLength().Should().Be(50);
         GetProperty<InvoiceLineItem>(nameof(InvoiceLineItem.Description)).GetMaxLength().Should().Be(500);
         GetProperty<Payment>(nameof(Payment.ReferenceNumber)).GetMaxLength().Should().Be(100);
+        GetProperty<DischargeDocument>(nameof(DischargeDocument.SourceReference)).GetMaxLength().Should().Be(200);
+        GetProperty<TransitionPlan>(nameof(TransitionPlan.HospitalName)).GetMaxLength().Should().Be(100);
+        GetProperty<TransitionInstruction>(nameof(TransitionInstruction.InstructionText)).GetMaxLength().Should().Be(2000);
+        GetProperty<TransitionInstruction>(nameof(TransitionInstruction.ClinicalNote)).GetMaxLength().Should().Be(2000);
+        GetProperty<TransitionEscalation>(nameof(TransitionEscalation.TriggerDetails)).GetMaxLength().Should().Be(1000);
+        GetProperty<TransitionEscalation>(nameof(TransitionEscalation.ResolutionNote)).GetMaxLength().Should().Be(2000);
+    }
+
+    [Fact]
+    public void TransitionPhiContentColumns_WhenConfigured_UseOnlyApprovedUnboundedStorage()
+    {
+        // Assert
+        GetProperty<DischargeDocument>(nameof(DischargeDocument.RawContent)).GetColumnType().Should().Be("nvarchar(max)");
+        GetProperty<TransitionInstruction>(nameof(TransitionInstruction.SourceText)).GetColumnType().Should().Be("nvarchar(max)");
+        GetProperty<TransitionCheckIn>(nameof(TransitionCheckIn.ResponsesJson)).GetColumnType().Should().Be("nvarchar(max)");
     }
 
     [Fact]
@@ -89,6 +113,7 @@ public class EntityConfigurationTests
         AssertPrecision<InvoiceLineItem>(nameof(InvoiceLineItem.BillableHours), 18, 2);
         AssertPrecision<InvoiceLineItem>(nameof(InvoiceLineItem.RatePerHour), 18, 2);
         AssertPrecision<Payment>(nameof(Payment.Amount), 18, 2);
+        AssertPrecision<TransitionInstruction>(nameof(TransitionInstruction.ConfidenceScore), 5, 4);
     }
 
     [Fact]
@@ -111,7 +136,10 @@ public class EntityConfigurationTests
         AssertPropertyNotMapped<InvoiceLineItem>(nameof(InvoiceLineItem.TotalCost));
         AssertPropertyNotMapped<InvoiceLineItem>(nameof(InvoiceLineItem.GrossProfit));
         AssertPropertyNotMapped<InvoiceLineItem>(nameof(InvoiceLineItem.GrossMarginPercentage));
-        AssertPropertyNotMapped<VisitNote>(nameof(VisitNote.TransitionPlanId));
+        AssertPropertyNotMapped<TransitionPlan>(nameof(TransitionPlan.IsActive));
+        AssertPropertyNotMapped<TransitionPlan>(nameof(TransitionPlan.DaysRemaining));
+        AssertPropertyNotMapped<TransitionInstruction>(nameof(TransitionInstruction.IsLowConfidence));
+        AssertPropertyNotMapped<TransitionReminder>(nameof(TransitionReminder.IsOverdue));
     }
 
 
@@ -131,6 +159,12 @@ public class EntityConfigurationTests
         AssertTableName<Invoice>("Invoices");
         AssertTableName<InvoiceLineItem>("InvoiceLineItems");
         AssertTableName<Payment>("Payments");
+        AssertTableName<DischargeDocument>("DischargeDocuments");
+        AssertTableName<TransitionPlan>("TransitionPlans");
+        AssertTableName<TransitionInstruction>("TransitionInstructions");
+        AssertTableName<TransitionReminder>("TransitionReminders");
+        AssertTableName<TransitionCheckIn>("TransitionCheckIns");
+        AssertTableName<TransitionEscalation>("TransitionEscalations");
     }
 
     [Fact]
@@ -149,6 +183,14 @@ public class EntityConfigurationTests
         AssertHasIndex<Invoice>(nameof(Invoice.InvoiceNumber));
         AssertHasIndex<InvoiceLineItem>(nameof(InvoiceLineItem.ServiceDate));
         AssertHasIndex<Payment>(nameof(Payment.PaymentDate));
+        AssertHasIndex<DischargeDocument>(nameof(DischargeDocument.ClientId));
+        AssertHasIndex<DischargeDocument>(nameof(DischargeDocument.Status));
+        AssertHasIndex<TransitionPlan>(nameof(TransitionPlan.ClientId));
+        AssertHasIndex<TransitionPlan>(nameof(TransitionPlan.Status));
+        AssertHasIndex<TransitionInstruction>(nameof(TransitionInstruction.Status));
+        AssertHasIndex<TransitionReminder>(nameof(TransitionReminder.Status));
+        AssertHasIndex<TransitionReminder>(nameof(TransitionReminder.ScheduledAt));
+        AssertHasIndex<VisitNote>(nameof(VisitNote.TransitionPlanId));
     }
 
     [Fact]
@@ -165,6 +207,12 @@ public class EntityConfigurationTests
         AssertDateTimeConfigured<VisitNote>(nameof(VisitNote.VisitDateTime));
         AssertDateTimeConfigured<Invoice>(nameof(Invoice.InvoiceDate));
         AssertDateTimeConfigured<Payment>(nameof(Payment.PaymentDate));
+        AssertDateTimeConfigured<DischargeDocument>(nameof(DischargeDocument.UploadedAt));
+        AssertDateTimeConfigured<TransitionPlan>(nameof(TransitionPlan.DischargeDate));
+        AssertDateTimeConfigured<TransitionPlan>(nameof(TransitionPlan.TransitionWindowEnd));
+        AssertDateTimeConfigured<TransitionReminder>(nameof(TransitionReminder.ScheduledAt));
+        AssertDateTimeConfigured<TransitionCheckIn>(nameof(TransitionCheckIn.CheckInDate));
+        AssertDateTimeConfigured<TransitionEscalation>(nameof(TransitionEscalation.EscalatedAt));
     }
 
     [Fact]
@@ -184,7 +232,13 @@ public class EntityConfigurationTests
             typeof(VisitPhoto),
             typeof(Invoice),
             typeof(InvoiceLineItem),
-            typeof(Payment)
+            typeof(Payment),
+            typeof(DischargeDocument),
+            typeof(TransitionPlan),
+            typeof(TransitionInstruction),
+            typeof(TransitionReminder),
+            typeof(TransitionCheckIn),
+            typeof(TransitionEscalation)
         };
 
         foreach (var entityType in entityTypes)
@@ -203,6 +257,24 @@ public class EntityConfigurationTests
             .Should()
             .NotBeNull();
     }
+
+    [Fact]
+    public void TransitionPlanNavigationCollections_WhenConfigured_UseFieldAccess()
+    {
+        // Arrange
+        var entityType = _model.FindEntityType(typeof(TransitionPlan))!;
+
+        // Assert
+        entityType.FindNavigation(nameof(TransitionPlan.Instructions))!.GetPropertyAccessMode()
+            .Should().Be(PropertyAccessMode.Field);
+        entityType.FindNavigation(nameof(TransitionPlan.Reminders))!.GetPropertyAccessMode()
+            .Should().Be(PropertyAccessMode.Field);
+        entityType.FindNavigation(nameof(TransitionPlan.CheckIns))!.GetPropertyAccessMode()
+            .Should().Be(PropertyAccessMode.Field);
+        entityType.FindNavigation(nameof(TransitionPlan.Escalations))!.GetPropertyAccessMode()
+            .Should().Be(PropertyAccessMode.Field);
+    }
+
     private DeleteBehavior GetDeleteBehavior<TEntity>(string foreignKeyPropertyName)
     {
         var entityType = _model.FindEntityType(typeof(TEntity))!;

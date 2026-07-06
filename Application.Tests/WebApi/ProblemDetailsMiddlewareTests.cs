@@ -99,6 +99,30 @@ public sealed class ProblemDetailsMiddlewareTests
     }
 
 
+
+    [Fact]
+    public async Task InvokeAsync_WhenResourceConflictOccurs_ReturnsPhiFreeConflictProblem()
+    {
+        // Arrange
+        using var server = CreateServer(_ => throw new ResourceConflictException("invoice.duplicate", "An invoice already exists for the requested billing period."));
+
+        // Act
+        var response = await server.CreateClient().PostAsync("/invoices", null);
+        var body = await response.Content.ReadAsStringAsync();
+
+        // Assert
+        response.StatusCode.Should().Be(HttpStatusCode.Conflict);
+        body.Should().NotContain("Test Client A");
+
+        var problem = JsonSerializer.Deserialize<ProblemDetailsResponse>(body, JsonOptions())
+            ?? throw new InvalidOperationException("Problem details response could not be deserialized.");
+        problem.Title.Should().Be("Conflict.");
+        problem.Status.Should().Be(StatusCodes.Status409Conflict);
+        problem.Detail.Should().BeNull();
+        problem.Errors.Should().ContainSingle(error =>
+            error.Code == "invoice.duplicate" &&
+            error.Message == "An invoice already exists for the requested billing period.");
+    }
     [Fact]
     public void Create_WhenModelStateContainsSensitiveValue_ReturnsGenericValidationMessage()
     {

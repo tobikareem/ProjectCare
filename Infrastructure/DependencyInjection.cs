@@ -1,9 +1,11 @@
 using CarePath.Application.Abstractions.Audit;
 using CarePath.Application.Abstractions.Auth;
+using CarePath.Application.Abstractions.Billing;
 using CarePath.Application.Abstractions.Storage;
 using CarePath.Domain.Interfaces.Repositories;
 using CarePath.Infrastructure.Audit;
 using CarePath.Infrastructure.Auth;
+using CarePath.Infrastructure.Billing;
 using CarePath.Infrastructure.Identity;
 using CarePath.Infrastructure.Persistence;
 using CarePath.Infrastructure.Persistence.Interceptors;
@@ -101,6 +103,8 @@ public static class DependencyInjection
         services.AddScoped<IIdentityProvisioningService, IdentityProvisioningService>();
         services.AddScoped<IPhiAuditLogger, LoggingPhiAuditLogger>();
         services.AddScoped<IFileStorageService, DisabledFileStorageService>();
+        services.AddScoped<IShiftBillingQuery, ShiftBillingQuery>();
+        services.AddScoped<IPersistenceConflictDetector, SqlServerPersistenceConflictDetector>();
 
         return services;
     }

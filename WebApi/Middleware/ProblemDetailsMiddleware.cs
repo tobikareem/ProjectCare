@@ -34,6 +34,10 @@ public sealed class ProblemDetailsMiddleware
         {
             await WriteAccessDeniedAsync(context, exception.IsPhiResource);
         }
+        catch (ResourceConflictException exception)
+        {
+            await WriteConflictAsync(context, exception);
+        }
         catch (Exception)
         {
             var traceId = GetTraceId(context);
@@ -73,6 +77,17 @@ public sealed class ProblemDetailsMiddleware
             errors: [new ApiError(ResourceNotFoundCode, "Resource not found.")]);
     }
 
+
+    private static Task WriteConflictAsync(HttpContext context, ResourceConflictException exception)
+    {
+        return WriteProblemAsync(
+            context,
+            StatusCodes.Status409Conflict,
+            "Conflict.",
+            detail: null,
+            validationErrors: [],
+            errors: [new ApiError(exception.Code, exception.Message)]);
+    }
     private static Task WriteValidationFailureAsync(HttpContext context, ValidationException exception)
     {
         var validationErrors = exception.Errors

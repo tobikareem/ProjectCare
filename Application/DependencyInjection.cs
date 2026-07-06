@@ -9,10 +9,13 @@ using CarePath.Application.Identity.Services;
 using CarePath.Application.Identity.Validators;
 using CarePath.Application.Scheduling.Services;
 using CarePath.Application.Scheduling.Validators;
+using CarePath.Application.Transitions.Services;
+using CarePath.Application.Transitions.Validators;
 using CarePath.Contracts.Clients;
 using CarePath.Contracts.Identity;
 using CarePath.Contracts.Billing;
 using CarePath.Contracts.Scheduling;
+using CarePath.Contracts.Transitions;
 using FluentValidation;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
@@ -33,6 +36,7 @@ public static class DependencyInjection
         services.AddScoped<IShiftOperationsService, ShiftOperationsService>();
         services.AddScoped<IVisitDocumentationService, VisitDocumentationService>();
         services.AddScoped<IBillingOperationsService, BillingOperationsService>();
+        services.AddScoped<ITransitionsService, TransitionsService>();
 
         services.AddScoped<IValidator<CreateCaregiverRequest>, CreateCaregiverRequestValidator>();
         services.AddScoped<IValidator<UpdateCaregiverRequest>, UpdateCaregiverRequestValidator>();
@@ -49,6 +53,7 @@ public static class DependencyInjection
         services.AddScoped<IValidator<CreateVisitNoteRequest>, CreateVisitNoteRequestValidator>();
         services.AddScoped<IValidator<CreateInvoiceRequest>, CreateInvoiceRequestValidator>();
         services.AddScoped<IValidator<RecordPaymentRequest>, RecordPaymentRequestValidator>();
+        services.AddScoped<IValidator<CreateDischargeDocumentRequest>, CreateDischargeDocumentRequestValidator>();
 
         return services;
     }

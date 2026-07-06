@@ -322,35 +322,8 @@ namespace CarePath.Infrastructure.Migrations
         /// <inheritdoc />
         protected override void Down(MigrationBuilder migrationBuilder)
         {
-            migrationBuilder.DropForeignKey(
-                name: "FK_VisitNotes_TransitionPlans_TransitionPlanId",
-                table: "VisitNotes");
-
-            migrationBuilder.DropTable(
-                name: "TransitionCheckIns");
-
-            migrationBuilder.DropTable(
-                name: "TransitionEscalations");
-
-            migrationBuilder.DropTable(
-                name: "TransitionReminders");
-
-            migrationBuilder.DropTable(
-                name: "TransitionInstructions");
-
-            migrationBuilder.DropTable(
-                name: "TransitionPlans");
-
-            migrationBuilder.DropTable(
-                name: "DischargeDocuments");
-
-            migrationBuilder.DropIndex(
-                name: "IX_VisitNotes_TransitionPlanId",
-                table: "VisitNotes");
-
-            migrationBuilder.DropColumn(
-                name: "TransitionPlanId",
-                table: "VisitNotes");
+            migrationBuilder.Sql(
+                "THROW 51002, 'AddTransitions is forward-only because rollback would destroy clinical PHI and VisitNote transition links.', 1;");
         }
     }
 }

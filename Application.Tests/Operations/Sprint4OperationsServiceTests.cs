@@ -8,12 +8,15 @@ using CarePath.Application.Clients.Validators;
 using CarePath.Application.Common.Exceptions;
 using CarePath.Application.Identity.Services;
 using CarePath.Application.Identity.Validators;
+using CarePath.Application.Transitions.Interfaces;
+using CarePath.Application.Transitions.Services;
 using CarePath.Contracts.Clients;
 using CarePath.Contracts.Identity;
 using CarePath.Domain.Entities.Billing;
 using CarePath.Domain.Entities.Clinical;
 using CarePath.Domain.Entities.Identity;
 using CarePath.Domain.Entities.Scheduling;
+using CarePath.Domain.Entities.Transitions;
 using CarePath.Domain.Enumerations;
 using CarePath.Domain.Interfaces.Repositories;
 using FluentAssertions;
@@ -390,6 +393,7 @@ public class Sprint4OperationsServiceTests
         services.AddSingleton(Mock.Of<IObjectAuthorizationService>());
         services.AddSingleton(Mock.Of<IPhiAuditLogger>());
         services.AddSingleton(Mock.Of<IFileStorageService>());
+        services.AddSingleton(Mock.Of<IDischargeExtractionService>());
 
         // Act
         using var provider = services.AddApplication().BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true, ValidateOnBuild = true });
@@ -398,6 +402,7 @@ public class Sprint4OperationsServiceTests
         // Assert
         scope.ServiceProvider.GetRequiredService<ICaregiverOperationsService>().Should().BeOfType<CaregiverOperationsService>();
         scope.ServiceProvider.GetRequiredService<IClientOperationsService>().Should().BeOfType<ClientOperationsService>();
+        scope.ServiceProvider.GetRequiredService<ITransitionsService>().Should().BeOfType<TransitionsService>();
         scope.ServiceProvider.GetRequiredService<IIdorGuard>().Should().NotBeNull();
         scope.ServiceProvider.GetRequiredService<IValidator<CreateClientRequest>>().Should().BeOfType<CreateClientRequestValidator>();
     }
@@ -492,6 +497,12 @@ public class Sprint4OperationsServiceTests
         public Mock<IRepository<InvoiceLineItem>> InvoiceLineItems { get; } = new(MockBehavior.Strict);
 
         public Mock<IRepository<Payment>> Payments { get; } = new(MockBehavior.Strict);
+        public Mock<IRepository<DischargeDocument>> DischargeDocuments { get; } = new(MockBehavior.Strict);
+        public Mock<IRepository<TransitionPlan>> TransitionPlans { get; } = new(MockBehavior.Strict);
+        public Mock<IRepository<TransitionInstruction>> TransitionInstructions { get; } = new(MockBehavior.Strict);
+        public Mock<IRepository<TransitionReminder>> TransitionReminders { get; } = new(MockBehavior.Strict);
+        public Mock<IRepository<TransitionCheckIn>> TransitionCheckIns { get; } = new(MockBehavior.Strict);
+        public Mock<IRepository<TransitionEscalation>> TransitionEscalations { get; } = new(MockBehavior.Strict);
 
         public MockUnitOfWork()
         {
@@ -524,6 +535,18 @@ public class Sprint4OperationsServiceTests
         IRepository<InvoiceLineItem> IUnitOfWork.InvoiceLineItems => InvoiceLineItems.Object;
 
         IRepository<Payment> IUnitOfWork.Payments => Payments.Object;
+
+        IRepository<DischargeDocument> IUnitOfWork.DischargeDocuments => DischargeDocuments.Object;
+
+        IRepository<TransitionPlan> IUnitOfWork.TransitionPlans => TransitionPlans.Object;
+
+        IRepository<TransitionInstruction> IUnitOfWork.TransitionInstructions => TransitionInstructions.Object;
+
+        IRepository<TransitionReminder> IUnitOfWork.TransitionReminders => TransitionReminders.Object;
+
+        IRepository<TransitionCheckIn> IUnitOfWork.TransitionCheckIns => TransitionCheckIns.Object;
+
+        IRepository<TransitionEscalation> IUnitOfWork.TransitionEscalations => TransitionEscalations.Object;
 
         public Task<int> SaveChangesAsync(CancellationToken cancellationToken = default) => Mock.Object.SaveChangesAsync(cancellationToken);
 

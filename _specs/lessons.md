@@ -30,6 +30,7 @@ This file captures recurring mistakes, corrections, and hard-won patterns discov
 
 - **Development seed credentials must never be hard-coded** - Even development-only seed users become dangerous if an environment is accidentally marked Development. Read temporary passwords from user secrets, environment variables, or other uncommitted configuration and fail closed when missing.
 - **Save resurrected soft-deleted principal rows before Identity lookups** - If `ApplicationUser` has a query filter through `DomainUser.IsDeleted`, undeleting the domain user only in memory can hide the existing Identity row and cause duplicate-key failures. Persist the undelete before `UserManager` lookup.
+- **PHI migrations must fail closed on destructive rollback** - A migration that introduces clinical PHI tables or PHI linkage columns must not let `Down` drop those records after real use. Make the rollback forward-only or guard it so populated PHI tables/links are preserved.
 
 ## Testing
 

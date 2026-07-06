@@ -9,6 +9,7 @@ using CarePath.Domain.Entities.Billing;
 using CarePath.Domain.Entities.Clinical;
 using CarePath.Domain.Entities.Identity;
 using CarePath.Domain.Entities.Scheduling;
+using CarePath.Domain.Entities.Transitions;
 using CarePath.Domain.Enumerations;
 using CarePath.Domain.Interfaces.Repositories;
 using FluentAssertions;
@@ -667,6 +668,12 @@ public sealed class Sprint4SchedulingServiceTests
         public Mock<IRepository<InvoiceLineItem>> InvoiceLineItems { get; } = new(MockBehavior.Strict);
 
         public Mock<IRepository<Payment>> Payments { get; } = new(MockBehavior.Strict);
+        public Mock<IRepository<DischargeDocument>> DischargeDocuments { get; } = new(MockBehavior.Strict);
+        public Mock<IRepository<TransitionPlan>> TransitionPlans { get; } = new(MockBehavior.Strict);
+        public Mock<IRepository<TransitionInstruction>> TransitionInstructions { get; } = new(MockBehavior.Strict);
+        public Mock<IRepository<TransitionReminder>> TransitionReminders { get; } = new(MockBehavior.Strict);
+        public Mock<IRepository<TransitionCheckIn>> TransitionCheckIns { get; } = new(MockBehavior.Strict);
+        public Mock<IRepository<TransitionEscalation>> TransitionEscalations { get; } = new(MockBehavior.Strict);
 
         public MockUnitOfWork()
         {
@@ -699,6 +706,18 @@ public sealed class Sprint4SchedulingServiceTests
         IRepository<InvoiceLineItem> IUnitOfWork.InvoiceLineItems => InvoiceLineItems.Object;
 
         IRepository<Payment> IUnitOfWork.Payments => Payments.Object;
+
+        IRepository<DischargeDocument> IUnitOfWork.DischargeDocuments => DischargeDocuments.Object;
+
+        IRepository<TransitionPlan> IUnitOfWork.TransitionPlans => TransitionPlans.Object;
+
+        IRepository<TransitionInstruction> IUnitOfWork.TransitionInstructions => TransitionInstructions.Object;
+
+        IRepository<TransitionReminder> IUnitOfWork.TransitionReminders => TransitionReminders.Object;
+
+        IRepository<TransitionCheckIn> IUnitOfWork.TransitionCheckIns => TransitionCheckIns.Object;
+
+        IRepository<TransitionEscalation> IUnitOfWork.TransitionEscalations => TransitionEscalations.Object;
 
         public Task<int> SaveChangesAsync(CancellationToken cancellationToken = default) => Mock.Object.SaveChangesAsync(cancellationToken);
 

@@ -2,6 +2,7 @@ using CarePath.Application.Abstractions.Audit;
 using CarePath.Application.Abstractions.Auth;
 using CarePath.Application.Abstractions.Billing;
 using CarePath.Application.Abstractions.Storage;
+using CarePath.Application.Transitions.Interfaces;
 using CarePath.Domain.Interfaces.Repositories;
 using CarePath.Infrastructure.Audit;
 using CarePath.Infrastructure.Auth;
@@ -11,6 +12,7 @@ using CarePath.Infrastructure.Persistence;
 using CarePath.Infrastructure.Persistence.Interceptors;
 using CarePath.Infrastructure.Persistence.Repositories;
 using CarePath.Infrastructure.Storage;
+using CarePath.Infrastructure.Transitions.Services;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
@@ -105,6 +107,7 @@ public static class DependencyInjection
         services.AddScoped<IFileStorageService, DisabledFileStorageService>();
         services.AddScoped<IShiftBillingQuery, ShiftBillingQuery>();
         services.AddScoped<IPersistenceConflictDetector, SqlServerPersistenceConflictDetector>();
+        services.AddScoped<IDischargeExtractionService, RuleBasedDischargeExtractionService>();
 
         return services;
     }

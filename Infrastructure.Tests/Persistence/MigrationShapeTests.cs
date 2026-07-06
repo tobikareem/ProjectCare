@@ -168,6 +168,22 @@ public class MigrationShapeTests
         migrationText.Should().NotContain("ReferentialAction.SetNull");
     }
 
+    [Fact]
+    public void AddTransitionsMigration_WhenRolledBack_FailsClosedInsteadOfDroppingPhiTables()
+    {
+        // Arrange
+        var migrationText = ReadMigration(AddTransitionsMigrationFile);
+        var downBody = Regex.Match(
+            migrationText,
+            "protected override void Down\\(MigrationBuilder migrationBuilder\\)[\\s\\S]*?\\n        }").Value;
+
+        // Assert
+        downBody.Should().Contain("forward-only");
+        downBody.Should().Contain("THROW 51002");
+        downBody.Should().NotContain("DropTable");
+        downBody.Should().NotContain("DropColumn");
+    }
+
     private static void AssertRestrictForeignKey(string migrationText, string foreignKeyName)
     {
         var pattern = $"name: \"{Regex.Escape(foreignKeyName)}\"[\\s\\S]*?onDelete: ReferentialAction\\.Restrict";

@@ -14,7 +14,7 @@ public interface IClientOperationsService
         UpdateClientRequest request,
         CancellationToken cancellationToken = default);
 
-    Task<ClientDetailDto> GetClientAsync(
+    Task<ClientDetailDto?> GetClientAsync(
         Guid clientId,
         CancellationToken cancellationToken = default);
 

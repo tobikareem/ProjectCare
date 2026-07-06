@@ -155,11 +155,38 @@ public class Sprint4OperationsServiceTests
         var dto = await service.GetClientAsync(client.Id);
 
         // Assert
-        dto.Id.Should().Be(client.Id);
+        dto.Should().NotBeNull();
+        dto!.Id.Should().Be(client.Id);
         dto.EstimatedWeeklyHours.Should().Be(0);
         auditLogger.Verify(logger => logger.LogAsync(
             It.Is<PhiAuditEntry>(entry => entry.Action == AuditAction.Read && entry.EntityType == ProtectedResourceType.Client && entry.EntityId == client.Id),
             It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task GetClientAsync_WhenClientDoesNotExist_ReturnsNull()
+    {
+        // Arrange
+        var clientId = Guid.NewGuid();
+        var unitOfWork = CreateUnitOfWork();
+        unitOfWork.Clients.Setup(repository => repository.GetByIdAsync(clientId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync((Client?)null);
+        var auditLogger = new Mock<IPhiAuditLogger>();
+        var service = new ClientOperationsService(
+            unitOfWork,
+            new TestCurrentUserContext(Guid.NewGuid(), new HashSet<string>(StringComparer.Ordinal) { ApplicationRoles.Admin }),
+            Mock.Of<IIdentityProvisioningService>(),
+            Mock.Of<IClientAccessEvaluator>(),
+            auditLogger.Object);
+
+        // Act
+        var dto = await service.GetClientAsync(clientId);
+
+        // Assert
+        dto.Should().BeNull();
+        auditLogger.Verify(logger => logger.LogAsync(
+            It.IsAny<PhiAuditEntry>(),
+            It.IsAny<CancellationToken>()), Times.Never);
     }
 
     [Fact]
@@ -424,7 +451,8 @@ public class Sprint4OperationsServiceTests
         var dto = await service.GetClientAsync(client.Id);
 
         // Assert
-        dto.Id.Should().Be(client.Id);
+        dto.Should().NotBeNull();
+        dto!.Id.Should().Be(client.Id);
     }
 
     [Fact]

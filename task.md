@@ -56,7 +56,7 @@ Build one shared healthcare operations backbone for:
 
 ## Immediate Next Step
 
-Commit the Sprint 5 closure docs and push `main` to origin. The complete backend now exists: Sprints 1-5 delivered domain, persistence, auth/contracts, core operations APIs, and the full 30-day Transitions loop (intake → extraction stub → clinician review → e-sign activation → reminders/check-ins → coordinator escalations), 579 tests green. Next: Sprint 6 Blazor Web MVP (`_specs/sprints/sprint-06-blazor-web-mvp.md`) — PM drafts the S6-TASK board first. Sprint 6 consumes what already exists: CarePath.Contracts DTOs, CarePath.Client typed clients (incl. TransitionsClient), and CarePath.Client.UI primitives; no UI may bind Domain entities or invent new endpoints without a board decision.
+Commit the Sprint 5 closure docs + Sprint 6 board draft, and push `main` to origin. Sprint 6 board is drafted at `_specs/sprints/sprint-06-tasks.md` (decisions D-S6-1..7) — awaiting Tobi approval (S6-TASK-001). Two backend gaps it closes by explicit authorization: an `AuthController` (no login endpoint exists yet) and an org-wide coordinator escalation-queue endpoint. Everything else consumes the frozen contract surface: CarePath.Contracts, typed clients, Client.UI primitives; no Domain binding, no other new endpoints.
 
 
 

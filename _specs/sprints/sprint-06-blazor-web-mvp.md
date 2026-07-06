@@ -1,6 +1,6 @@
 ﻿# Sprint 6 - Blazor Web App MVP
 
-Status: Draft
+Status: Approved - implementation contract proposed in `_specs/sprints/sprint-06-tasks.md` (S6-TASK board, decisions D-S6-1..7: project ownership, auth endpoint + in-memory tokens, browser PHI safety, component set incl. StatusPill->StatusBadge reconciliation, escalation-queue endpoint authorization, bUnit testing, accessibility baseline); approve the board before implementation
 Primary outcome: coordinator/admin/clinician web app using shared contracts and UI primitives.
 
 ## Sprint Goal

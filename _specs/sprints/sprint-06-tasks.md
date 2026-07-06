@@ -81,32 +81,46 @@ escalation acknowledge flow; PHI-exposure assertions (rendered markup for care-t
 components never contains SourceText/confidence). Playwright/E2E is out of scope (Sprint 7
 hardening may add it).
 
-### D-S6-8 - User management (added at approval per Tobi: Admin assigns/updates/removes roles)
+### D-S6-8 - Admin user ROLES and ACCOUNT STATUS management (refined 2026-07-06 per Tobi review)
 
-Admin-only user administration joins Sprint 6 scope — page + endpoints:
+SCOPE PRECISION: this is **role and account-status management**, NOT a permissions system.
+A user has exactly one `UserRole`; what each role may do stays hard-coded in policies and
+authorization services. Granular per-permission toggles are explicitly DEFERRED (post-MVP; a
+future spec if ever needed). Any implementation drift toward "permissions" stops for PM review.
 
-- **Endpoints (Admin policy, all audited, all IDs-only in audit values):**
-  `GET /api/admin/users` (paged, role/status filters) -> `PagedResult<UserAccountDto>`;
-  `POST /api/admin/users` (staff provisioning: Coordinator, Clinician, FacilityManager,
-  Admin) -> `UserAccountDto`; `PUT /api/admin/users/{id}/role` -> `UserAccountDto`;
-  `PUT /api/admin/users/{id}/status` (activate/deactivate) -> `UserAccountDto`.
-  These supersede D-S6-5's "only new endpoint" line — the authorized-additions list is now:
-  auth (D-S6-2), escalation queue (D-S6-5), admin users (D-S6-8).
-- **Single-role model holds**: a user has exactly one `UserRole`. "Update role" changes it
-  (Domain `User.Role` + ASP.NET Identity role re-synced atomically); "remove role/access" is
-  account deactivation (`IsActive = false`, login rejected via the generic failure code) —
-  never a hard delete, never a role-less account.
-- **Guardrails (enforced in Application, tested):** cannot demote or deactivate the last
-  active Admin; users with a Caregiver or Client profile cannot be role-changed away from
-  their profile's role (deactivate instead — profile/role divergence would corrupt scoping);
-  staff provisioning follows D-S4-5 (temp password rules, rollback, nothing logged).
-- **Token staleness**: role changes take effect at next login/refresh — access tokens are
-  short-lived and carry the old role until expiry. Documented on the page ("changes apply at
-  next sign-in"); server-side re-check of the DB role on sensitive admin actions.
-- **Seeder extension (immediate, unblocks testing):** add `coordinator@carepath.local` and
-  `clinician@carepath.local` dev accounts alongside the existing three.
-- Every role assign/change/deactivate is a PHI-adjacent audited write: actor, target user id,
-  old role, new role, timestamp — never names in log statements.
+- **Endpoints (Admin policy):**
+  - `GET /api/admin/users?pageNumber=&pageSize=&role=&isActive=&search=` ->
+    `PagedResult<UserAccountDto>`. `role` (optional `UserRole`), `isActive` (optional bool),
+    `search` matches **email and display name ONLY** — never phone, address, or any PHI field.
+  - `POST /api/admin/users` (staff provisioning: Coordinator, Clinician, FacilityManager,
+    Admin — NOT Caregiver/Client, which have their own D-S4-5 profile workflows) -> `UserAccountDto`.
+  - `PUT /api/admin/users/{id}/role` (`UpdateUserRoleRequest`) -> `UserAccountDto`.
+  - `PUT /api/admin/users/{id}/status` (`UpdateUserStatusRequest`, activate/deactivate) -> `UserAccountDto`.
+  - Supersedes D-S6-5's "only new endpoint" line — authorized additions are now: auth
+    (D-S6-2), escalation queue (D-S6-5), admin users (D-S6-8).
+- **`UserAccountDto` (normative shape):** `Id`, `Email`, `DisplayName`, `Role`, `IsActive`,
+  `LastLoginAt?`, `HasCaregiverProfile`, `HasClientProfile`, `CanChangeRole`, `CanDeactivate`,
+  `DisabledReason?` — the three action fields are computed server-side from the guardrails so
+  the UI renders disabled-with-reason without duplicating rules client-side.
+- **Single-role model holds**: "update role" changes Domain `User.Role` + ASP.NET Identity
+  role atomically (rollback on partial failure); "remove access" = deactivate (`IsActive =
+  false`, login then fails with the generic auth code) — never hard delete, never role-less.
+- **Guardrails (Application-enforced, tested):** cannot demote or deactivate the last active
+  Admin; users with a Caregiver/Client profile cannot be role-changed away from the profile's
+  role (deactivate instead); staff provisioning follows D-S4-5 (temp password from request,
+  rollback, no credential material anywhere).
+- **Actor DB re-check (task-level requirement):** every admin-users command handler verifies
+  from the DATABASE that the acting user is currently an active Admin — JWT claims alone are
+  insufficient (a demoted/deactivated admin's live token must not administer users).
+- **Token staleness:** role changes apply at the target's next login/refresh; the page states
+  "changes apply at next sign-in".
+- **Audit (security/admin events, not PHI):** reuse the existing `IPhiAuditLogger` pipeline
+  explicitly, with `EntityType = UserAccount` and actions `StaffProvisioned` / `RoleChanged`
+  (old + new role enum values) / `AccountActivated` / `AccountDeactivated`. Values are actor
+  ID, target user ID, role enum values, timestamp, TraceId — never emails or names in audit
+  values or log statements.
+- **Seeder extension (S6-TASK-013):** `coordinator@carepath.local` + `clinician@carepath.local`
+  dev accounts alongside the existing three.
 
 ### D-S6-7 - Accessibility baseline
 
@@ -152,10 +166,14 @@ Owners: **Claude** = PM/Contracts/Client/Client.UI + sprint docs. **Codex** = We
 
 | ID | Task | Owner | Depends on | Status |
 |---|---|---|---|---|
-| S6-TASK-001 | Approve this board + decisions D-S6-1..7 | Tobi | - | Done 2026-07-06 |
+| S6-TASK-001 | Approve this board + decisions D-S6-1..8 | Tobi | - | Done 2026-07-06 (D-S6-8 added and refined post-approval per Tobi review) |
 | S6-TASK-010 | WebApi `AuthController` per D-S6-2 (login/refresh on existing token services; generic failure code; lockout honored; no credential material logged) + tests | Codex | S6-TASK-001 | Done 2026-07-06 (`feat: auth login/refresh endpoints (S6-TASK-010) + auth contracts (S6-TASK-020 partial)`) |
 | S6-TASK-011 | `CarePath.Web` scaffold: Blazor WASM, references Contracts/Client/Client.UI only, sln entry under src, DI for typed clients + `AuthorizationMessageHandler` | Codex | S6-TASK-001 | Pending |
 | S6-TASK-012 | Authenticated layout + role-based navigation + global sanitized error boundary per D-S6-3 | Codex | S6-TASK-011, S6-TASK-021 | Pending |
+| S6-TASK-013 | Seeder: add `coordinator@carepath.local` + `clinician@carepath.local` dev accounts per D-S6-8 (dev-only, same secret password source). Standalone task | Codex | S6-TASK-001 | Pending |
+| S6-TASK-023 | Contracts: `UserAccountDto` (normative D-S6-8 shape incl. `CanChangeRole`/`CanDeactivate`/`DisabledReason`), `CreateStaffUserRequest`, `UpdateUserRoleRequest`, `UpdateUserStatusRequest`; Client: `AdminUsersClient` incl. list filters (role/isActive/search) | Claude | S6-TASK-001 | Pending |
+| S6-TASK-036 | WebApi/Application: admin users endpoints per D-S6-8 — Admin policy PLUS per-command actor DB re-check (active Admin from database, not JWT claims); atomic role re-sync with rollback; last-Admin + profile-role guardrails computed into the DTO action fields; search on email/display-name only; security/admin audit events via `IPhiAuditLogger` (IDs + role enums only); D-S4-5 provisioning rules; tests for every guardrail + the demoted-admin-live-token case | Codex | S6-TASK-023 | Pending |
+| S6-TASK-037 | Web: Users page per D-S6-8 (list/filter/search, create staff, change role, activate/deactivate; renders `CanChangeRole`/`CanDeactivate`/`DisabledReason` as disabled-with-reason; next-sign-in notice) + bUnit tests | Codex | S6-TASK-012, S6-TASK-036, S6-TASK-021 | Pending |
 | S6-TASK-020 | Contracts: `LoginRequest`, `RefreshTokenRequest`, `AuthTokenResponse`; Client: `AuthClient`, in-memory `IAccessTokenProvider` implementation | Claude | S6-TASK-001 | In progress — Contracts half Done 2026-07-06 (`CarePath.Contracts/Auth/`, builds 0 warnings) so S6-TASK-010 is unblocked; `AuthClient` + token provider follow with slice 6B |
 | S6-TASK-021 | Client.UI: `KpiCard`, `RiskBadge`, `ShiftCard`, `EscalationBanner`, `PatientInstructionCard` (patient-safe DTO param), `InstructionReviewCard`, `AuditTimeline`; StatusBadgeTones extended to 6 Transitions enums; accessibility per D-S6-7 | Claude | S6-TASK-001 | Pending |
 | S6-TASK-022 | Client: `TransitionsClient.GetEscalationQueueAsync` for the D-S6-5 endpoint | Claude | S6-TASK-034 route shape | Pending |

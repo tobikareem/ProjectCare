@@ -1,7 +1,7 @@
 # CarePath Sprint Execution Tracker
 
 Last updated: 2026-07-06
-Status: Sprint 4 closed - Sprint 5 ready for board approval
+Status: Sprint 5 complete - ready for Sprint 6
 
 This tracker is the working checklist for moving CarePath from a Domain-only foundation into a usable backend, Blazor web app, and MAUI Blazor Hybrid mobile app. The detailed sprint specs live in `_specs/sprints/`.
 
@@ -20,7 +20,7 @@ Build one shared healthcare operations backbone for:
 | Sprint 2 | Infrastructure Foundation | [x] Complete | `_specs/sprints/sprint-02-infrastructure-foundation.md` |
 | Sprint 3 | Application, Auth & Shared Contracts | [x] Complete | `_specs/sprints/sprint-03-application-auth-contracts.md` |
 | Sprint 4 | Core Operations Backend | [x] Complete | `_specs/sprints/sprint-04-core-operations-backend.md` |
-| Sprint 5 | CarePath Transitions Backend MVP | [ ] Board Proposed | `_specs/sprints/sprint-05-transitions-backend-mvp.md` |
+| Sprint 5 | CarePath Transitions Backend MVP | [x] Complete | `_specs/sprints/sprint-05-transitions-backend-mvp.md` |
 | Sprint 6 | Blazor Web App MVP | [ ] Not Started | `_specs/sprints/sprint-06-blazor-web-mvp.md` |
 | Sprint 7 | MAUI Mobile MVP, Notifications, AI & Hardening | [ ] Not Started | `_specs/sprints/sprint-07-mobile-notifications-ai-hardening.md` |
 
@@ -56,7 +56,7 @@ Build one shared healthcare operations backbone for:
 
 ## Immediate Next Step
 
-Sprint 5 board is drafted at `_specs/sprints/sprint-05-tasks.md` (decisions D-S5-1..8) and is awaiting Tobi approval (S5-TASK-001) before implementation. Sprint 4 is closed; the board now carries forward the CP-03 persistence unfreeze protocol, Clinician scoping, clinical/patient-facing/care-team DTO split, activation/e-signature field alignment, and PHI 404 body-identity rules.
+Commit the Sprint 5 closure docs and push `main` to origin. The complete backend now exists: Sprints 1-5 delivered domain, persistence, auth/contracts, core operations APIs, and the full 30-day Transitions loop (intake → extraction stub → clinician review → e-sign activation → reminders/check-ins → coordinator escalations), 579 tests green. Next: Sprint 6 Blazor Web MVP (`_specs/sprints/sprint-06-blazor-web-mvp.md`) — PM drafts the S6-TASK board first. Sprint 6 consumes what already exists: CarePath.Contracts DTOs, CarePath.Client typed clients (incl. TransitionsClient), and CarePath.Client.UI primitives; no UI may bind Domain entities or invent new endpoints without a board decision.
 
 
 

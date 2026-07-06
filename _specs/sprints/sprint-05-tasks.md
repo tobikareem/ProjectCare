@@ -1,6 +1,6 @@
 # Sprint 5 Tasks - CarePath Transitions Backend MVP
 
-Status: Approved
+Status: Complete (closed 2026-07-06 by PM after exit verification `770e4a9`)
 Parent spec: `_specs/sprints/sprint-05-transitions-backend-mvp.md`
 Design spec: `_specs/02-design/cp-03-transitions.md` (source of truth except where amended by D-S5 decisions below)
 Last updated: 2026-07-06
@@ -183,7 +183,7 @@ implementation (Domain/Application/Infrastructure/WebApi). **Tobi** = approvals.
 | S5-TASK-040 | WebApi: `TransitionsController` per endpoint matrix; role policies; `IIdorGuard` on every `{id}` route; patient-view + check-in routes wired to grant/self evaluation | Codex | S5-TASK-030..037 | Done 2026-07-06 (`c71f9f6`; hardened in `48fd8fd` — self/grant evaluation runs BEFORE active/window checks so plan status is never disclosed to unauthorized callers) |
 | S5-TASK-041 | Tests: safety-guard suite (pre-activation reminder block, stub-cannot-bypass-review, no-autonomous-escalation, window boundary at exactly +30 days), IDOR byte-identical 404s on all Transitions routes with no body TraceId, PHI audit emission for RawContent/SourceText reads, patient/caregiver exposure tests (no SourceText/RawContent/ResponsesJson/confidence/reviewer notes) | Codex | S5-TASK-040 | Done 2026-07-06 (`c71f9f6` + `48fd8fd` — incl. Transitions byte-identical 404s; middleware now omits null traceId key entirely) |
 | S5-TASK-050 | Client: `TransitionsClient` typed client over `ApiClientBase` | Claude | S5-TASK-040 stable | Done 2026-07-06 — 15 methods covering all 14 matrix routes (role-shaped client-plan route split into `GetPlanForClientAsync`/`GetCareTeamPlanForClientAsync`); body-less `PostAsync` added to ApiClientBase for the extract trigger; builds 0 warnings. Uncommitted: `CarePath.Client/ApiClientBase.cs`, `CarePath.Client/Api/TransitionsClient.cs`, board |
-| S5-TASK-060 | Exit verification: build 0 warnings, all tests green, reviewer pass, HIPAA spot check (RawContent/SourceText grep of log statements, no PHI in errors/URLs, storage-gate rejection verified), PROGRESS/lessons updated; PM closes after review | Codex + Claude + Tobi | all above | Pending |
+| S5-TASK-060 | Exit verification: build 0 warnings, all tests green, reviewer pass, HIPAA spot check (RawContent/SourceText grep of log statements, no PHI in errors/URLs, storage-gate rejection verified), PROGRESS/lessons updated; PM closes after review | Codex + Claude + Tobi | all above | Done 2026-07-06 (`770e4a9`; S5-TASK-050 in `c7880fb`) — 579 tests green (D268/A237/I74); reviewer found and fixed 2 high issues (RawContent read-audit ordering; caregiver care-team active-window scoping), re-review clean; all four safety absolutes verified by named tests; binary intake rejected with `transition.intake_source_deferred`; exposure and byte-identical 404 tests pass; authorization-before-state lesson recorded in lessons.md |
 
 ### Success criteria (every task)
 

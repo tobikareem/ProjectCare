@@ -1,6 +1,6 @@
 # Sprint 5 - CarePath Transitions Backend MVP
 
-Status: Draft - Sprint 4 closed; implementation contract proposed in `_specs/sprints/sprint-05-tasks.md` (S5-TASK board, decisions D-S5-1..8: persistence unfreeze protocol, Clinician relationship source, source-text visibility amendment, extraction stub, activation/e-sign, reminder guard, records-only escalation, PHI 404 body identity); approve the board before implementation
+Status: Complete (closed 2026-07-06) - implementation contract and per-task record in `_specs/sprints/sprint-05-tasks.md`; decisions D-S5-1..8 remain normative for Sprint 6/7 work touching Transitions
 Primary outcome: working backend for the 30-day discharge workflow.
 
 ## Sprint Goal

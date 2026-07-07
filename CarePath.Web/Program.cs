@@ -1,6 +1,5 @@
 using CarePath.Client.Api;
 using CarePath.Client.Http;
-using CarePath.Web.Security;
 using CarePath.Web;
 using Microsoft.AspNetCore.Components.Web;
 using Microsoft.AspNetCore.Components.WebAssembly.Hosting;
@@ -15,8 +14,11 @@ if (!Uri.TryCreate(apiBaseAddress, UriKind.Absolute, out var apiBaseUri))
     throw new InvalidOperationException("Api:BaseAddress must be configured in wwwroot/appsettings.json.");
 }
 
-builder.Services.AddSingleton<IAccessTokenProvider, EmptyAccessTokenProvider>();
+builder.Services.AddSingleton<InMemoryAccessTokenProvider>();
+builder.Services.AddSingleton<IAccessTokenProvider>(services =>
+    services.GetRequiredService<InMemoryAccessTokenProvider>());
 builder.Services.AddTransient<AuthorizationMessageHandler>();
+AddApiClient<AuthClient>(builder.Services, apiBaseUri);
 AddApiClient<CaregiversClient>(builder.Services, apiBaseUri);
 AddApiClient<ClientsClient>(builder.Services, apiBaseUri);
 AddApiClient<ShiftsClient>(builder.Services, apiBaseUri);

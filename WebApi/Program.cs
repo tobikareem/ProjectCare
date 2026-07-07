@@ -56,7 +56,12 @@ if (app.Environment.IsDevelopment())
     await CarePathDbContextSeed.SeedAsync(context, userManager, roleManager, builder.Configuration, app.Environment);
 }
 
-app.UseHttpsRedirection();
+// The WASM client calls the documented http://localhost:5240 dev endpoint; a 307 to https
+// breaks browser CORS preflights, so HTTPS is only forced outside Development.
+if (!app.Environment.IsDevelopment())
+{
+    app.UseHttpsRedirection();
+}
 
 app.UseCors(webClientCorsPolicy);
 

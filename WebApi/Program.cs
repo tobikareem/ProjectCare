@@ -9,6 +9,8 @@ using CarePath.WebApi.Validation;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 
+const string webClientCorsPolicy = "WebClient";
+
 var builder = WebApplication.CreateBuilder(args);
 
 // Add services to the container.
@@ -23,6 +25,15 @@ builder.Services
     {
         options.InvalidModelStateResponseFactory = InvalidModelStateProblemFactory.Create;
     });
+
+// Browser clients (Blazor WASM) send the JWT in the Authorization header — no cookies, so no
+// AllowCredentials. Origins come from configuration and the policy fails closed when unset.
+var allowedOrigins = builder.Configuration.GetSection("Cors:AllowedOrigins").Get<string[]>() ?? [];
+builder.Services.AddCors(options =>
+    options.AddPolicy(webClientCorsPolicy, policy =>
+        policy.WithOrigins(allowedOrigins)
+            .AllowAnyHeader()
+            .AllowAnyMethod()));
 
 // Learn more about configuring OpenAPI at https://aka.ms/aspnet/openapi
 builder.Services.AddOpenApi();
@@ -46,6 +57,8 @@ if (app.Environment.IsDevelopment())
 }
 
 app.UseHttpsRedirection();
+
+app.UseCors(webClientCorsPolicy);
 
 app.UseAuthentication();
 app.UseAuthorization();

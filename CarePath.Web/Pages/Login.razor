@@ -1,0 +1,107 @@
+@page "/login"
+@attribute [AllowAnonymous]
+@layout AuthLayout
+@using CarePath.Client.Api
+@using CarePath.Client.UI.Components
+@using CarePath.Contracts.Auth
+@using CarePath.Contracts.Common
+@inject AuthClient Auth
+@inject TokenAuthenticationStateProvider AuthState
+@inject NavigationManager Navigation
+
+<PageTitle>Sign in — CarePath</PageTitle>
+
+<div class="card auth-card">
+    <div class="auth-brand" aria-hidden="true">
+        <span class="auth-brand-mark">CP</span>
+        <span><strong>CarePath</strong><span class="auth-brand-sub">Operations</span></span>
+    </div>
+    <h1 class="auth-heading">Sign in</h1>
+    <p class="subtle">Use your CarePath staff account.</p>
+
+    <form @onsubmit="SignInAsync" @onsubmit:preventDefault="true">
+        <label class="auth-label" for="login-email">Email</label>
+        <input id="login-email" class="auth-input" type="email" autocomplete="username"
+               required @bind="_email" @bind:event="oninput" />
+
+        <label class="auth-label" for="login-password">Password</label>
+        <input id="login-password" class="auth-input" type="password" autocomplete="current-password"
+               required @bind="_password" @bind:event="oninput" />
+
+        @if (_error is not null)
+        {
+            <div class="auth-alert">
+                <ApiErrorAlert Response="_error" />
+            </div>
+        }
+
+        <button class="button button-primary auth-submit" type="submit"
+                disabled="@(_submitting || !CanSubmit)">
+            @(_submitting ? "Signing in…" : "Sign in")
+        </button>
+    </form>
+</div>
+
+@code {
+    // CREDENTIAL SAFETY (D-S6-2/D-S6-3): the form fields are never logged or echoed; the token
+    // session lives only in the in-memory provider — never cookies or browser storage.
+    private string _email = string.Empty;
+    private string _password = string.Empty;
+    private bool _submitting;
+    private ApiResponse? _error;
+
+    /// <summary>Requested post-login path, set by <see cref="RedirectToLogin"/>. Guid-only routes, no PHI.</summary>
+    [SupplyParameterFromQuery(Name = "returnUrl")]
+    public string? ReturnUrl { get; set; }
+
+    private bool CanSubmit => !string.IsNullOrWhiteSpace(_email) && !string.IsNullOrWhiteSpace(_password);
+
+    protected override void OnInitialized()
+    {
+        if (AuthState.HasActiveSession)
+        {
+            Navigation.NavigateTo(SafeReturnUrl(), replace: true);
+        }
+    }
+
+    private async Task SignInAsync()
+    {
+        if (_submitting || !CanSubmit)
+        {
+            return;
+        }
+
+        _submitting = true;
+        _error = null;
+
+        try
+        {
+            var response = await Auth.LoginAsync(new LoginRequest { Email = _email.Trim(), Password = _password });
+            if (response is { Success: true, Data: not null })
+            {
+                AuthState.MarkSignedIn(response.Data);
+                _password = string.Empty;
+                Navigation.NavigateTo(SafeReturnUrl(), replace: true);
+                return;
+            }
+
+            _error = response;
+        }
+        catch (HttpRequestException)
+        {
+            // PHI/credential-safe generic failure — never surface exception details.
+            _error = ApiResponse.Fail(new ApiError("network.unreachable", "The server could not be reached."));
+        }
+
+        _submitting = false;
+    }
+
+    // Only same-origin relative paths — an absolute or protocol-relative returnUrl is discarded
+    // so login can never open-redirect off the app.
+    private string SafeReturnUrl() =>
+        !string.IsNullOrEmpty(ReturnUrl)
+        && !ReturnUrl.Contains("://", StringComparison.Ordinal)
+        && !ReturnUrl.StartsWith("//", StringComparison.Ordinal)
+            ? ReturnUrl
+            : string.Empty;
+}

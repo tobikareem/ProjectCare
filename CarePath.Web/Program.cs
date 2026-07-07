@@ -1,6 +1,8 @@
 using CarePath.Client.Api;
 using CarePath.Client.Http;
 using CarePath.Web;
+using CarePath.Web.Auth;
+using Microsoft.AspNetCore.Components.Authorization;
 using Microsoft.AspNetCore.Components.Web;
 using Microsoft.AspNetCore.Components.WebAssembly.Hosting;
 
@@ -18,6 +20,11 @@ builder.Services.AddSingleton<InMemoryAccessTokenProvider>();
 builder.Services.AddSingleton<IAccessTokenProvider>(services =>
     services.GetRequiredService<InMemoryAccessTokenProvider>());
 builder.Services.AddTransient<AuthorizationMessageHandler>();
+builder.Services.AddAuthorizationCore();
+builder.Services.AddCascadingAuthenticationState();
+builder.Services.AddSingleton<TokenAuthenticationStateProvider>();
+builder.Services.AddSingleton<AuthenticationStateProvider>(services =>
+    services.GetRequiredService<TokenAuthenticationStateProvider>());
 AddApiClient<AuthClient>(builder.Services, apiBaseUri);
 AddApiClient<CaregiversClient>(builder.Services, apiBaseUri);
 AddApiClient<ClientsClient>(builder.Services, apiBaseUri);

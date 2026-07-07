@@ -1,0 +1,16 @@
+@namespace CarePath.Web.Auth
+@inject NavigationManager Navigation
+
+@* Renders nothing — sends unauthenticated visitors to the login page, preserving the
+   requested path as returnUrl. Routes are Guid-only (D-S6-3), so the URL carries no PHI. *@
+
+@code {
+    protected override void OnInitialized()
+    {
+        var returnUrl = Navigation.ToBaseRelativePath(Navigation.Uri);
+        var target = string.IsNullOrEmpty(returnUrl)
+            ? "login"
+            : $"login?returnUrl={Uri.EscapeDataString(returnUrl)}";
+        Navigation.NavigateTo(target, replace: true);
+    }
+}

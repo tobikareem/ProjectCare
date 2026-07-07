@@ -731,6 +731,76 @@ h3 {
     opacity: 0.55;
 }
 
+.auth-shell {
+    display: grid;
+    min-height: 100vh;
+    place-items: center;
+    padding: 24px;
+    background: var(--surface-alt);
+}
+
+.auth-card {
+    width: min(420px, 100%);
+}
+
+.auth-brand {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 18px;
+}
+
+.auth-brand-mark {
+    display: grid;
+    width: 38px;
+    height: 38px;
+    place-items: center;
+    color: var(--surface);
+    background: var(--teal-900);
+    border-radius: 12px;
+    font-weight: 900;
+}
+
+.auth-brand-sub {
+    display: block;
+    color: var(--muted);
+    font-size: 0.75rem;
+}
+
+.auth-heading {
+    margin-bottom: 4px;
+}
+
+.auth-label {
+    display: block;
+    margin: 14px 0 6px;
+    font-size: 0.85rem;
+    font-weight: 700;
+}
+
+.auth-input {
+    width: 100%;
+    min-height: 44px;
+    padding: 10px 13px;
+    color: var(--ink);
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+}
+
+.auth-alert {
+    margin-top: 14px;
+}
+
+.auth-submit {
+    width: 100%;
+    margin-top: 18px;
+}
+
+.user-signout {
+    margin-left: 6px;
+}
+
 #blazor-error-ui {
     color-scheme: light only;
     position: fixed;

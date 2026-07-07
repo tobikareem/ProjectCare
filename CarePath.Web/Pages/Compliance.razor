@@ -1,104 +1,90 @@
 @page "/compliance"
+@attribute [Authorize(Roles = "Admin,Coordinator")]
 @using CarePath.Client.Api
-@using CarePath.Client.Http
 @using CarePath.Client.UI.Components
 @using CarePath.Contracts.Common
 @using CarePath.Contracts.Enumerations
 @using CarePath.Contracts.Identity
 @using static CarePath.Web.Shared.BusinessFormatting
 @inject CaregiversClient Caregivers
-@inject InMemoryAccessTokenProvider Tokens
 
 <PageTitle>Compliance</PageTitle>
 
-@if (!RoleAllowed)
-{
-    <div class="page-heading">
-        <div>
-            <p class="eyebrow">Business</p>
-            <h1>Access restricted</h1>
-            <p class="subtle">Compliance is available to administrators and coordinators only.</p>
-        </div>
+<div class="page-heading">
+    <div>
+        <p class="eyebrow">Business</p>
+        <h1>Compliance</h1>
+        @if (_certifications is not null)
+        {
+            <p class="subtle">@_certifications.TotalCount items require action · @PageExpiredCount expired · @PageExpiringCount expiring within 30 days (this page)</p>
+        }
+        else
+        {
+            <p class="subtle">Expired and expiring caregiver credentials</p>
+        }
     </div>
+    <button class="button button-secondary" type="button" disabled title="Coming soon"
+            aria-label="Export compliance report (coming soon)">↓ Export compliance report</button>
+</div>
+
+@if (_error is not null)
+{
+    <ApiErrorAlert Response="_error" />
 }
-else
+else if (_loading)
 {
-    <div class="page-heading">
-        <div>
-            <p class="eyebrow">Business</p>
-            <h1>Compliance</h1>
-            @if (_certifications is not null)
-            {
-                <p class="subtle">@_certifications.TotalCount items require action · @PageExpiredCount expired · @PageExpiringCount expiring within 30 days (this page)</p>
-            }
-            else
-            {
-                <p class="subtle">Expired and expiring caregiver credentials</p>
-            }
+    <p class="subtle" role="status">Loading credentials…</p>
+}
+else if (_certifications is not null)
+{
+    var certifications = _certifications;
+
+    @if (PageExpiredCount > 0 || PageExpiringCount > 0)
+    {
+        <div class="alert-item compliance-alert">
+            <strong>Action required</strong>
+            <p>
+                @PageExpiredCount expired and @PageExpiringCount expiring within 30 days on this page.
+                Caregivers with expired credentials cannot be scheduled for certification-required shifts until renewed.
+            </p>
         </div>
-        <button class="button button-secondary" type="button" disabled title="Coming soon"
-                aria-label="Export compliance report (coming soon)">↓ Export compliance report</button>
+    }
+
+    <div class="row-list">
+        <div class="cert-row row-list-header" aria-hidden="true">
+            <span>Certification</span><span>Issued</span><span>Expires</span><span>Status</span><span></span>
+        </div>
+        @if (certifications.Items.Count == 0)
+        {
+            <p class="empty-state">No expired or expiring certifications — credentials are in good standing.</p>
+        }
+        @foreach (var certification in certifications.Items)
+        {
+            <div class="cert-row @RowClass(certification)">
+                <span>
+                    <strong>@CertTypeLabel(certification.Type)</strong>
+                    @if (CertMeta(certification) is { Length: > 0 } meta)
+                    {
+                        <span class="meta">@meta</span>
+                    }
+                </span>
+                <span>@LongDate(certification.IssueDate)</span>
+                <span class="@ExpiryClass(certification)">@ExpiryText(certification)</span>
+                <span><StatusBadge Text="@StatusLabel(certification)" Tone="@StatusTone(certification)" /></span>
+                <span></span>
+            </div>
+        }
     </div>
 
-    @if (_error is not null)
+    @if (certifications.TotalPages > 1)
     {
-        <ApiErrorAlert Response="_error" />
-    }
-    else if (_loading)
-    {
-        <p class="subtle" role="status">Loading credentials…</p>
-    }
-    else if (_certifications is not null)
-    {
-        var certifications = _certifications;
-
-        @if (PageExpiredCount > 0 || PageExpiringCount > 0)
-        {
-            <div class="alert-item compliance-alert">
-                <strong>Action required</strong>
-                <p>
-                    @PageExpiredCount expired and @PageExpiringCount expiring within 30 days on this page.
-                    Caregivers with expired credentials cannot be scheduled for certification-required shifts until renewed.
-                </p>
-            </div>
-        }
-
-        <div class="row-list">
-            <div class="cert-row row-list-header" aria-hidden="true">
-                <span>Certification</span><span>Issued</span><span>Expires</span><span>Status</span><span></span>
-            </div>
-            @if (certifications.Items.Count == 0)
-            {
-                <p class="empty-state">No expired or expiring certifications — credentials are in good standing.</p>
-            }
-            @foreach (var certification in certifications.Items)
-            {
-                <div class="cert-row @RowClass(certification)">
-                    <span>
-                        <strong>@CertTypeLabel(certification.Type)</strong>
-                        @if (CertMeta(certification) is { Length: > 0 } meta)
-                        {
-                            <span class="meta">@meta</span>
-                        }
-                    </span>
-                    <span>@LongDate(certification.IssueDate)</span>
-                    <span class="@ExpiryClass(certification)">@ExpiryText(certification)</span>
-                    <span><StatusBadge Text="@StatusLabel(certification)" Tone="@StatusTone(certification)" /></span>
-                    <span></span>
-                </div>
-            }
-        </div>
-
-        @if (certifications.TotalPages > 1)
-        {
-            <nav class="cp-pager" aria-label="Certification pages">
-                <button type="button" class="cp-pager-prev" disabled="@(!certifications.HasPreviousPage)"
-                        @onclick="() => LoadPageAsync(certifications.PageNumber - 1)">Previous</button>
-                <span class="cp-pager-status">Page @certifications.PageNumber of @certifications.TotalPages</span>
-                <button type="button" class="cp-pager-next" disabled="@(!certifications.HasNextPage)"
-                        @onclick="() => LoadPageAsync(certifications.PageNumber + 1)">Next</button>
-            </nav>
-        }
+        <nav class="cp-pager" aria-label="Certification pages">
+            <button type="button" class="cp-pager-prev" disabled="@(!certifications.HasPreviousPage)"
+                    @onclick="() => LoadPageAsync(certifications.PageNumber - 1)">Previous</button>
+            <span class="cp-pager-status">Page @certifications.PageNumber of @certifications.TotalPages</span>
+            <button type="button" class="cp-pager-next" disabled="@(!certifications.HasNextPage)"
+                    @onclick="() => LoadPageAsync(certifications.PageNumber + 1)">Next</button>
+        </nav>
     }
 }
 
@@ -111,31 +97,11 @@ else
     private ApiResponse? _error;
     private bool _loading = true;
 
-    private bool RoleAllowed
-    {
-        get
-        {
-            // Courtesy client-side guard (Admin + Coordinator); the server authorizes every call.
-            // A null session still renders until the authenticated layout lands (S6-TASK-012).
-            var session = Tokens.CurrentSession;
-            return session is null || session.Role is UserRole.Admin or UserRole.Coordinator;
-        }
-    }
-
     private int PageExpiredCount => _certifications?.Items.Count(c => c.IsExpired) ?? 0;
 
     private int PageExpiringCount => _certifications?.Items.Count(c => c is { IsExpired: false, IsExpiringSoon: true }) ?? 0;
 
-    protected override async Task OnInitializedAsync()
-    {
-        if (!RoleAllowed)
-        {
-            _loading = false;
-            return;
-        }
-
-        await LoadPageAsync(1);
-    }
+    protected override Task OnInitializedAsync() => LoadPageAsync(1);
 
     private async Task LoadPageAsync(int pageNumber)
     {

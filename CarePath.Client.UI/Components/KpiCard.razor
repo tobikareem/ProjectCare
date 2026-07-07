@@ -1,0 +1,28 @@
+@namespace CarePath.Client.UI.Components
+
+<div class="cp-kpi-card cp-kpi-@Tone.ToString().ToLowerInvariant()" role="group" aria-label="@Label">
+    <span class="cp-kpi-label">@Label</span>
+    <span class="cp-kpi-value">@Value</span>
+    @if (ChildContent is not null)
+    {
+        <div class="cp-kpi-extra">@ChildContent</div>
+    }
+</div>
+
+@code {
+    /// <summary>KPI label (e.g., "Open shifts"). Must be PHI-free.</summary>
+    [Parameter, EditorRequired]
+    public string Label { get; set; } = string.Empty;
+
+    /// <summary>KPI value, preformatted (e.g., "12"). Must be PHI-free.</summary>
+    [Parameter, EditorRequired]
+    public string Value { get; set; } = string.Empty;
+
+    /// <summary>Visual tone.</summary>
+    [Parameter]
+    public BadgeTone Tone { get; set; } = BadgeTone.Neutral;
+
+    /// <summary>Optional extra content (e.g., a drill-down link).</summary>
+    [Parameter]
+    public RenderFragment? ChildContent { get; set; }
+}

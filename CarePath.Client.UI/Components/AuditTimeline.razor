@@ -1,0 +1,22 @@
+@namespace CarePath.Client.UI.Components
+
+<ol class="cp-audit-timeline" aria-label="Activity timeline">
+    @foreach (var entry in Entries.OrderByDescending(e => e.TimestampUtc))
+    {
+        <li class="cp-audit-timeline-entry">
+            <span class="cp-audit-timeline-time">@entry.TimestampUtc.ToLocalTime().ToString("g")</span>
+            <span class="cp-audit-timeline-action">@entry.Action</span>
+            <span class="cp-audit-timeline-actor">@entry.Actor</span>
+            @if (!string.IsNullOrWhiteSpace(entry.Description))
+            {
+                <span class="cp-audit-timeline-description">@entry.Description</span>
+            }
+        </li>
+    }
+</ol>
+
+@code {
+    /// <summary>The entries to render, newest first. Values must be PHI-free.</summary>
+    [Parameter, EditorRequired]
+    public IReadOnlyList<AuditTimelineEntry> Entries { get; set; } = [];
+}

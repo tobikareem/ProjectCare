@@ -306,6 +306,18 @@ Follow this sequence for every implementation task:
 
 ---
 
+## UI Design (Source of Truth)
+
+**`Documentation/Wireframes/carepath-wireframe.html` is the source of truth for ALL UI design** — web (Blazor WASM) and mobile (MAUI Blazor Hybrid). Full spec: `_specs/02-design/ui-design-system.md`. Tokens are extracted verbatim into `CarePath.Client.UI/wwwroot/carepath-ui.css`.
+
+- **Never hard-code colors, fonts, radii, or shadows** in `.razor`/`.cs`/app stylesheets — use the CSS custom properties (`--teal-900` sidebar, Inter font stack, `--radius: 14px`, `--focus: #ff8a3d`, soft status colors).
+- Status colors map through `StatusBadgeTones` (Client.UI) — extend there, never inline.
+- Shared visual components live in `CarePath.Client.UI`; app projects add layout glue only.
+- A screen the wireframe doesn't define = STOP: get PM/wireframe update first, then extract, then implement.
+- Change process: wireframe → re-extract `carepath-ui.css` → update the spec. Never the reverse.
+
+---
+
 ## Tech Stack
 
 | Layer | Technology |

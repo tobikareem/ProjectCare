@@ -122,6 +122,31 @@ future spec if ever needed). Any implementation drift toward "permissions" stops
 - **Seeder extension (S6-TASK-013):** `coordinator@carepath.local` + `clinician@carepath.local`
   dev accounts alongside the existing three.
 
+### D-S6-9 - Wireframe is the UI source of truth (added 2026-07-06 per Tobi)
+
+`Documentation/Wireframes/carepath-wireframe.html` is the SOURCE OF TRUTH for all UI design:
+colors, typography, spacing, layout, and interaction patterns. Full transcribed spec:
+`_specs/02-design/ui-design-system.md` (tokens, typography, layout metrics, tone semantics,
+change process). Rules:
+
+- Its design tokens are extracted verbatim into `CarePath.Client.UI/wwwroot/carepath-ui.css`
+  (`--ink`, `--muted`, `--line`, `--surface`/`--surface-alt`, `--teal-900/700/100`,
+  `--orange(-soft)`, `--green(-soft)`, `--amber(-soft)`, `--red(-soft)`, `--shadow`,
+  `--radius: 14px`, `--focus: #ff8a3d`). Font: Inter with the wireframe's fallback stack.
+  Nobody invents colors/fonts in code — change the wireframe first, then re-extract.
+- `CarePath.Web` links the shared stylesheet (`_content/CarePath.Client.UI/carepath-ui.css`)
+  and implements page LAYOUT per the wireframe: teal-900 sidebar with role-scoped nav,
+  white top bar with `--line` bottom border, `--surface-alt` content background, card grids
+  with `--radius`/`--shadow`, and the wireframe's `--focus` outline on all interactive
+  elements.
+- Badge tone -> wireframe color mapping (already applied in the shared CSS):
+  Success=green/green-soft, Warning=amber/amber-soft, Danger=red/red-soft,
+  Info=teal-700/teal-100, Neutral=muted/surface-alt.
+- Screens that exist in the wireframe (dashboard, scheduling, review queue, escalations)
+  follow its structure; screens it lacks (e.g., the D-S6-8 Users page) reuse its patterns
+  (top-bar + filter row + card/table grid) and get added to the wireframe afterward.
+- Exit verification includes a side-by-side wireframe-vs-app pass per screen.
+
 ### D-S6-7 - Accessibility baseline
 
 Every interactive primitive: keyboard operable, labeled (aria-label or visible label), visible
@@ -171,11 +196,11 @@ Owners: **Claude** = PM/Contracts/Client/Client.UI + sprint docs. **Codex** = We
 | S6-TASK-011 | `CarePath.Web` scaffold: Blazor WASM, references Contracts/Client/Client.UI only, sln entry under src, DI for typed clients + `AuthorizationMessageHandler` | Codex | S6-TASK-001 | Pending |
 | S6-TASK-012 | Authenticated layout + role-based navigation + global sanitized error boundary per D-S6-3 | Codex | S6-TASK-011, S6-TASK-021 | Pending |
 | S6-TASK-013 | Seeder: add `coordinator@carepath.local` + `clinician@carepath.local` dev accounts per D-S6-8 (dev-only, same secret password source). Standalone task | Codex | S6-TASK-001 | Pending |
-| S6-TASK-023 | Contracts: `UserAccountDto` (normative D-S6-8 shape incl. `CanChangeRole`/`CanDeactivate`/`DisabledReason`), `CreateStaffUserRequest`, `UpdateUserRoleRequest`, `UpdateUserStatusRequest`; Client: `AdminUsersClient` incl. list filters (role/isActive/search) | Claude | S6-TASK-001 | Pending |
+| S6-TASK-023 | Contracts: `UserAccountDto` (normative D-S6-8 shape incl. `CanChangeRole`/`CanDeactivate`/`DisabledReason`), `CreateStaffUserRequest`, `UpdateUserRoleRequest`, `UpdateUserStatusRequest`; Client: `AdminUsersClient` incl. list filters (role/isActive/search) | Claude | S6-TASK-001 | Code complete 2026-07-06 — `CarePath.Contracts/Admin/` (4 files, normative DTO shape) + `AdminUsersClient`; Done 2026-07-06 — verified by full-sln build 0 warnings; S6-TASK-036 is type-unblocked |
 | S6-TASK-036 | WebApi/Application: admin users endpoints per D-S6-8 — Admin policy PLUS per-command actor DB re-check (active Admin from database, not JWT claims); atomic role re-sync with rollback; last-Admin + profile-role guardrails computed into the DTO action fields; search on email/display-name only; security/admin audit events via `IPhiAuditLogger` (IDs + role enums only); D-S4-5 provisioning rules; tests for every guardrail + the demoted-admin-live-token case | Codex | S6-TASK-023 | Pending |
 | S6-TASK-037 | Web: Users page per D-S6-8 (list/filter/search, create staff, change role, activate/deactivate; renders `CanChangeRole`/`CanDeactivate`/`DisabledReason` as disabled-with-reason; next-sign-in notice) + bUnit tests | Codex | S6-TASK-012, S6-TASK-036, S6-TASK-021 | Pending |
-| S6-TASK-020 | Contracts: `LoginRequest`, `RefreshTokenRequest`, `AuthTokenResponse`; Client: `AuthClient`, in-memory `IAccessTokenProvider` implementation | Claude | S6-TASK-001 | In progress — Contracts half Done 2026-07-06 (`CarePath.Contracts/Auth/`, builds 0 warnings) so S6-TASK-010 is unblocked; `AuthClient` + token provider follow with slice 6B |
-| S6-TASK-021 | Client.UI: `KpiCard`, `RiskBadge`, `ShiftCard`, `EscalationBanner`, `PatientInstructionCard` (patient-safe DTO param), `InstructionReviewCard`, `AuditTimeline`; StatusBadgeTones extended to 6 Transitions enums; accessibility per D-S6-7 | Claude | S6-TASK-001 | Pending |
+| S6-TASK-020 | Contracts: `LoginRequest`, `RefreshTokenRequest`, `AuthTokenResponse`; Client: `AuthClient`, in-memory `IAccessTokenProvider` implementation | Claude | S6-TASK-001 | Code complete 2026-07-06 — contracts committed in `c42ed21`; `AuthClient` + `InMemoryAccessTokenProvider` (with `CurrentSession`/`CurrentRefreshToken` for the auth state provider) in working tree. Done 2026-07-06 — verified by full-sln build 0 warnings (f019081 report) |
+| S6-TASK-021 | Client.UI: `KpiCard`, `RiskBadge`, `ShiftCard`, `EscalationBanner`, `PatientInstructionCard` (patient-safe DTO param), `InstructionReviewCard`, `AuditTimeline` (+ `AuditTimelineEntry` record); StatusBadgeTones extended to 6 Transitions enums; aria labels/roles + native-button keyboard operability per D-S6-7 | Claude | S6-TASK-001 | Done 2026-07-06 — 9 files + `wwwroot/carepath-ui.css` (D-S6-9 tokens); verified by full-sln build 0 warnings; stylesheet linked by CarePath.Web (`f019081`) |
 | S6-TASK-022 | Client: `TransitionsClient.GetEscalationQueueAsync` for the D-S6-5 endpoint | Claude | S6-TASK-034 route shape | Pending |
 | S6-TASK-030 | Web: coordinator dashboard (open shifts, overdue visit notes, expiring credentials, active plans, open escalations) | Codex | S6-TASK-012, S6-TASK-021 | Pending |
 | S6-TASK-031 | Web: schedule board + credential screens with guard-error surfacing | Codex | S6-TASK-030 | Pending |

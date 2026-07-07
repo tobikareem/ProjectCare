@@ -45,4 +45,78 @@ public static class StatusBadgeTones
         PaymentStatus.Refunded => BadgeTone.Warning,
         _ => BadgeTone.Neutral
     };
+
+    /// <summary>Tone for a transition plan status.</summary>
+    /// <param name="status">The plan status.</param>
+    /// <returns>The badge tone.</returns>
+    public static BadgeTone For(TransitionPlanStatus status) => status switch
+    {
+        TransitionPlanStatus.Draft => BadgeTone.Neutral,
+        TransitionPlanStatus.PendingVerification => BadgeTone.Warning,
+        TransitionPlanStatus.Active => BadgeTone.Success,
+        TransitionPlanStatus.Completed => BadgeTone.Info,
+        TransitionPlanStatus.Cancelled => BadgeTone.Neutral,
+        _ => BadgeTone.Neutral
+    };
+
+    /// <summary>Tone for a transition risk level.</summary>
+    /// <param name="level">The risk level.</param>
+    /// <returns>The badge tone.</returns>
+    public static BadgeTone For(TransitionRiskLevel level) => level switch
+    {
+        TransitionRiskLevel.Low => BadgeTone.Success,
+        TransitionRiskLevel.Medium => BadgeTone.Warning,
+        TransitionRiskLevel.High => BadgeTone.Danger,
+        _ => BadgeTone.Neutral
+    };
+
+    /// <summary>Tone for a reminder status.</summary>
+    /// <param name="status">The reminder status.</param>
+    /// <returns>The badge tone.</returns>
+    public static BadgeTone For(ReminderStatus status) => status switch
+    {
+        ReminderStatus.Scheduled => BadgeTone.Info,
+        ReminderStatus.Sent => BadgeTone.Info,
+        ReminderStatus.Acknowledged => BadgeTone.Success,
+        ReminderStatus.Missed => BadgeTone.Danger,
+        ReminderStatus.Failed => BadgeTone.Danger,
+        _ => BadgeTone.Neutral
+    };
+
+    /// <summary>Tone for an escalation level.</summary>
+    /// <param name="level">The escalation level.</param>
+    /// <returns>The badge tone.</returns>
+    public static BadgeTone For(EscalationLevel level) => level switch
+    {
+        EscalationLevel.CoordinatorAlert => BadgeTone.Warning,
+        EscalationLevel.FamilyNotification => BadgeTone.Warning,
+        EscalationLevel.UrgentCare => BadgeTone.Danger,
+        EscalationLevel.Emergency911 => BadgeTone.Danger,
+        _ => BadgeTone.Neutral
+    };
+
+    /// <summary>Tone for a discharge document status.</summary>
+    /// <param name="status">The document status.</param>
+    /// <returns>The badge tone.</returns>
+    public static BadgeTone For(DischargeDocumentStatus status) => status switch
+    {
+        DischargeDocumentStatus.Pending => BadgeTone.Neutral,
+        DischargeDocumentStatus.Extracting => BadgeTone.Info,
+        DischargeDocumentStatus.AwaitingReview => BadgeTone.Warning,
+        DischargeDocumentStatus.Approved => BadgeTone.Success,
+        DischargeDocumentStatus.Rejected => BadgeTone.Danger,
+        _ => BadgeTone.Neutral
+    };
+
+    /// <summary>Tone for a transition instruction review status.</summary>
+    /// <param name="status">The instruction status.</param>
+    /// <returns>The badge tone.</returns>
+    public static BadgeTone For(TransitionInstructionStatus status) => status switch
+    {
+        TransitionInstructionStatus.Pending => BadgeTone.Warning,
+        TransitionInstructionStatus.Approved => BadgeTone.Success,
+        TransitionInstructionStatus.Modified => BadgeTone.Success,
+        TransitionInstructionStatus.Rejected => BadgeTone.Neutral,
+        _ => BadgeTone.Neutral
+    };
 }

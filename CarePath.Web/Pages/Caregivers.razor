@@ -1,0 +1,402 @@
+@page "/caregivers"
+@using CarePath.Client.Api
+@using CarePath.Client.UI.Components
+@using CarePath.Contracts.Common
+@using CarePath.Contracts.Enumerations
+@using CarePath.Contracts.Identity
+@using Microsoft.AspNetCore.Authorization
+@attribute [Authorize(Roles = "Admin,Coordinator")]
+@inject CaregiversClient CaregiversClient
+
+<PageTitle>Caregivers</PageTitle>
+
+<div class="page-heading">
+    <div>
+        <p class="eyebrow">People</p>
+        <h1>Caregivers</h1>
+        <p class="subtle">@CaregiverSummaryText</p>
+    </div>
+    <button class="button button-primary" type="button">＋ Add caregiver</button>
+</div>
+
+<div class="filter-bar" role="search" aria-label="Caregiver filters">
+    <input type="search" placeholder="Search by name..." @bind="searchTerm" @bind:event="oninput" aria-label="Search caregivers by name" />
+    <select @bind="employmentFilter" aria-label="Employment type">
+        <option value="">All types</option>
+        <option value="@EmploymentType.W2Employee">W-2 Employee</option>
+        <option value="@EmploymentType.Contractor1099">1099 Contractor</option>
+    </select>
+    <select @bind="statusFilter" aria-label="Status">
+        <option value="">All statuses</option>
+        <option value="active">Active</option>
+        <option value="inactive">Inactive</option>
+    </select>
+</div>
+
+@if (caregiverError is not null)
+{
+    <ApiErrorAlert Response="caregiverError" />
+}
+
+<div class="workspace-grid">
+    <section class="card table-card" aria-labelledby="caregiver-list-heading">
+        <div class="section-header">
+            <div>
+                <h2 id="caregiver-list-heading">Caregiver roster</h2>
+                <span class="subtle">Paged from the caregiver API</span>
+            </div>
+            <span class="meta">@PagingText(caregiverPage)</span>
+        </div>
+
+        @if (isLoading)
+        {
+            <p class="empty-state">Loading caregivers...</p>
+        }
+        else if (FilteredCaregivers.Count == 0)
+        {
+            <p class="empty-state">No caregivers match the current filters.</p>
+        }
+        else
+        {
+            <div class="data-table-wrap">
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th>Name</th>
+                            <th>Type</th>
+                            <th>Rating</th>
+                            <th>Status</th>
+                            <th></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var caregiver in FilteredCaregivers)
+                        {
+                            <tr class="@(selectedCaregiverId == caregiver.Id ? "selected-row" : null)">
+                                <td>
+                                    <span class="avatar-sm" aria-hidden="true">@Initials(caregiver.FullName)</span>
+                                    <strong>@caregiver.FullName</strong>
+                                    <span class="meta">User @ShortId(caregiver.UserId)</span>
+                                </td>
+                                <td>@FormatEmploymentType(caregiver.EmploymentType)</td>
+                                <td>@FormatRating(caregiver.AverageRating)</td>
+                                <td>
+                                    <StatusBadge Text="@(caregiver.IsActive ? "Active" : "Inactive")"
+                                                 Tone="@(caregiver.IsActive ? BadgeTone.Success : BadgeTone.Neutral)" />
+                                </td>
+                                <td>
+                                    <button class="text-link" type="button" @onclick="() => SelectCaregiverAsync(caregiver.Id)">
+                                        View
+                                    </button>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+
+        <div class="pager-row" aria-label="Caregiver pages">
+            <button class="button button-secondary button-sm" type="button" disabled="@(!CanGoPrevious(caregiverPage) || isLoading)" @onclick="PreviousCaregiverPageAsync">Previous</button>
+            <span class="meta">@PagingText(caregiverPage)</span>
+            <button class="button button-secondary button-sm" type="button" disabled="@(!CanGoNext(caregiverPage) || isLoading)" @onclick="NextCaregiverPageAsync">Next</button>
+        </div>
+    </section>
+
+    <aside class="card detail-card" aria-labelledby="caregiver-detail-heading">
+        <div class="section-header">
+            <div>
+                <h2 id="caregiver-detail-heading">Profile detail</h2>
+                <span class="subtle">Skills and credential status</span>
+            </div>
+        </div>
+
+        @if (caregiverDetailError is not null)
+        {
+            <ApiErrorAlert Response="caregiverDetailError" />
+        }
+        else if (isDetailLoading)
+        {
+            <p class="empty-state">Loading caregiver profile...</p>
+        }
+        else if (selectedCaregiver is null)
+        {
+            <p class="empty-state">Select a caregiver to view skills and certifications.</p>
+        }
+        else
+        {
+            <div class="detail-heading">
+                <span class="avatar-lg" aria-hidden="true">@Initials(selectedCaregiver.FullName)</span>
+                <div>
+                    <strong>@selectedCaregiver.FullName</strong>
+                    <span class="meta">@FormatEmploymentType(selectedCaregiver.EmploymentType) · @AvailabilityText(selectedCaregiver)</span>
+                </div>
+            </div>
+
+            <dl class="detail-facts">
+                <div><dt>Max weekly hours</dt><dd>@selectedCaregiver.MaxWeeklyHours</dd></div>
+                <div><dt>Completed shifts</dt><dd>@selectedCaregiver.TotalShiftsCompleted</dd></div>
+                <div><dt>No-shows</dt><dd>@selectedCaregiver.NoShowCount</dd></div>
+            </dl>
+
+            <h3>Skills</h3>
+            <div class="badge-row">
+                @foreach (var skill in CaregiverSkills(selectedCaregiver))
+                {
+                    <StatusBadge Text="@skill" Tone="@BadgeTone.Info" />
+                }
+                @if (CaregiverSkills(selectedCaregiver).Count == 0)
+                {
+                    <span class="subtle">No specialty skills recorded.</span>
+                }
+            </div>
+
+            <h3>Certifications</h3>
+            <div class="stacked-list">
+                @if (selectedCaregiver.Certifications.Count == 0)
+                {
+                    <p class="empty-state compact">No certifications recorded.</p>
+                }
+                else
+                {
+                    @foreach (var certification in selectedCaregiver.Certifications)
+                    {
+                        <div class="credential-row">
+                            <div>
+                                <strong>@FormatCertificationType(certification.Type)</strong>
+                                <span class="meta">Expires @certification.ExpirationDate.ToLocalTime().ToString("MMM d, yyyy")</span>
+                            </div>
+                            <StatusBadge Text="@CertificationStatusText(certification)" Tone="@CertificationTone(certification)" />
+                        </div>
+                    }
+                }
+            </div>
+        }
+    </aside>
+</div>
+
+@code {
+    private const int PageSize = 10;
+
+    private PagedResult<CaregiverSummaryDto>? caregiverPage;
+    private ApiResponse? caregiverError;
+    private ApiResponse? caregiverDetailError;
+    private CaregiverDetailDto? selectedCaregiver;
+    private Guid? selectedCaregiverId;
+    private bool isLoading;
+    private bool isDetailLoading;
+    private int pageNumber = 1;
+    private string searchTerm = string.Empty;
+    private string employmentFilter = string.Empty;
+    private string statusFilter = string.Empty;
+
+    private IReadOnlyList<CaregiverSummaryDto> FilteredCaregivers =>
+        caregiverPage?.Items
+            .Where(MatchesFilters)
+            .ToArray() ?? [];
+
+    private string CaregiverSummaryText
+    {
+        get
+        {
+            var items = caregiverPage?.Items ?? [];
+            var active = items.Count(c => c.IsActive);
+            var inactive = items.Count(c => !c.IsActive);
+            return caregiverPage is null
+                ? "Loading roster..."
+                : $"{active} active · {inactive} inactive · {caregiverPage.TotalCount} total";
+        }
+    }
+
+    protected override async Task OnInitializedAsync() => await LoadCaregiversAsync();
+
+    private async Task LoadCaregiversAsync()
+    {
+        isLoading = true;
+        caregiverError = null;
+
+        var response = await CaregiversClient.GetPageAsync(new PagedRequest { PageNumber = pageNumber, PageSize = PageSize });
+        if (response.Success && response.Data is not null)
+        {
+            caregiverPage = response.Data;
+        }
+        else
+        {
+            caregiverError = response;
+        }
+
+        isLoading = false;
+    }
+
+    private async Task SelectCaregiverAsync(Guid caregiverId)
+    {
+        selectedCaregiverId = caregiverId;
+        selectedCaregiver = null;
+        caregiverDetailError = null;
+        isDetailLoading = true;
+
+        var response = await CaregiversClient.GetAsync(caregiverId);
+        if (response.Success && response.Data is not null)
+        {
+            selectedCaregiver = response.Data;
+        }
+        else
+        {
+            caregiverDetailError = response;
+        }
+
+        isDetailLoading = false;
+    }
+
+    private async Task PreviousCaregiverPageAsync()
+    {
+        if (!CanGoPrevious(caregiverPage))
+        {
+            return;
+        }
+
+        pageNumber--;
+        ClearSelection();
+        await LoadCaregiversAsync();
+    }
+
+    private async Task NextCaregiverPageAsync()
+    {
+        if (!CanGoNext(caregiverPage))
+        {
+            return;
+        }
+
+        pageNumber++;
+        ClearSelection();
+        await LoadCaregiversAsync();
+    }
+
+    private bool MatchesFilters(CaregiverSummaryDto caregiver)
+    {
+        if (!string.IsNullOrWhiteSpace(searchTerm)
+            && !caregiver.FullName.Contains(searchTerm, StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
+        if (!string.IsNullOrWhiteSpace(employmentFilter)
+            && caregiver.EmploymentType.ToString() != employmentFilter)
+        {
+            return false;
+        }
+
+        return statusFilter switch
+        {
+            "active" => caregiver.IsActive,
+            "inactive" => !caregiver.IsActive,
+            _ => true
+        };
+    }
+
+    private void ClearSelection()
+    {
+        selectedCaregiverId = null;
+        selectedCaregiver = null;
+        caregiverDetailError = null;
+    }
+
+    private static bool CanGoPrevious<T>(PagedResult<T>? page) => page?.HasPreviousPage == true;
+
+    private static bool CanGoNext<T>(PagedResult<T>? page) => page?.HasNextPage == true;
+
+    private static string PagingText<T>(PagedResult<T>? page) =>
+        page is null ? "Page 1" : $"Page {page.PageNumber} of {Math.Max(page.TotalPages, 1)}";
+
+    private static string Initials(string fullName)
+    {
+        var parts = fullName.Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        return string.Concat(parts.Take(2).Select(part => char.ToUpperInvariant(part[0])));
+    }
+
+    private static string ShortId(Guid id) => id.ToString("N")[..8];
+
+    private static string FormatRating(decimal? rating) =>
+        rating.HasValue ? $"{rating.Value:0.0} / 5" : "Not rated";
+
+    private static string FormatEmploymentType(EmploymentType type) => type switch
+    {
+        EmploymentType.W2Employee => "W-2 Employee",
+        EmploymentType.Contractor1099 => "1099 Contractor",
+        _ => type.ToString()
+    };
+
+    private static string FormatCertificationType(CertificationType type) => type switch
+    {
+        CertificationType.FirstAid => "First Aid",
+        CertificationType.Alzheimers => "Alzheimer's",
+        _ => type.ToString()
+    };
+
+    private static string AvailabilityText(CaregiverDetailDto caregiver)
+    {
+        var values = new List<string>();
+        if (caregiver.AvailableWeekdays)
+        {
+            values.Add("weekdays");
+        }
+
+        if (caregiver.AvailableWeekends)
+        {
+            values.Add("weekends");
+        }
+
+        if (caregiver.AvailableNights)
+        {
+            values.Add("nights");
+        }
+
+        return values.Count == 0 ? "availability not set" : string.Join(", ", values);
+    }
+
+    private static IReadOnlyList<string> CaregiverSkills(CaregiverDetailDto caregiver)
+    {
+        var skills = new List<string>();
+        if (caregiver.HasDementiaCare)
+        {
+            skills.Add("Dementia");
+        }
+
+        if (caregiver.HasAlzheimersCare)
+        {
+            skills.Add("Alzheimer's");
+        }
+
+        if (caregiver.HasMobilityAssistance)
+        {
+            skills.Add("Mobility");
+        }
+
+        if (caregiver.HasMedicationManagement)
+        {
+            skills.Add("Medication");
+        }
+
+        return skills;
+    }
+
+    private static string CertificationStatusText(CertificationDto certification)
+    {
+        if (certification.IsExpired)
+        {
+            return "Expired";
+        }
+
+        return certification.IsExpiringSoon ? "Expiring soon" : "Valid";
+    }
+
+    private static BadgeTone CertificationTone(CertificationDto certification)
+    {
+        if (certification.IsExpired)
+        {
+            return BadgeTone.Danger;
+        }
+
+        return certification.IsExpiringSoon ? BadgeTone.Warning : BadgeTone.Success;
+    }
+}

@@ -1,0 +1,349 @@
+@page "/clients"
+@using CarePath.Client.Api
+@using CarePath.Client.UI.Components
+@using CarePath.Contracts.Clients
+@using CarePath.Contracts.Common
+@using CarePath.Contracts.Enumerations
+@using Microsoft.AspNetCore.Authorization
+@attribute [Authorize(Roles = "Admin,Coordinator,Clinician")]
+@inject ClientsClient ClientsClient
+
+<PageTitle>Clients</PageTitle>
+
+<div class="page-heading">
+    <div>
+        <p class="eyebrow">People</p>
+        <h1>Clients</h1>
+        <p class="subtle">@ClientSummaryText</p>
+    </div>
+    <button class="button button-primary" type="button">＋ Add client</button>
+</div>
+
+<div class="filter-bar" role="search" aria-label="Client filters">
+    <input type="search" placeholder="Search by name..." @bind="searchTerm" @bind:event="oninput" aria-label="Search clients by name" />
+    <select @bind="serviceFilter" aria-label="Service type">
+        <option value="">All services</option>
+        <option value="@ServiceType.InHomeCare">In-home care</option>
+        <option value="@ServiceType.FacilityStaffing">Facility staffing</option>
+    </select>
+    <select @bind="statusFilter" aria-label="Status">
+        <option value="">All statuses</option>
+        <option value="active">Active</option>
+        <option value="inactive">Inactive</option>
+    </select>
+</div>
+
+@if (clientError is not null)
+{
+    <ApiErrorAlert Response="clientError" />
+}
+
+<div class="workspace-grid">
+    <section class="card table-card" aria-labelledby="client-list-heading">
+        <div class="section-header">
+            <div>
+                <h2 id="client-list-heading">Client list</h2>
+                <span class="subtle">Paged from the clients API</span>
+            </div>
+            <span class="meta">@PagingText(clientPage)</span>
+        </div>
+
+        @if (isLoading)
+        {
+            <p class="empty-state">Loading clients...</p>
+        }
+        else if (FilteredClients.Count == 0)
+        {
+            <p class="empty-state">No clients match the current filters.</p>
+        }
+        else
+        {
+            <div class="data-table-wrap">
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th>Client</th>
+                            <th>Service</th>
+                            <th>Age</th>
+                            <th>Status</th>
+                            <th></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var client in FilteredClients)
+                        {
+                            <tr class="@(selectedClientId == client.Id ? "selected-row" : null)">
+                                <td>
+                                    <span class="avatar-sm" aria-hidden="true">@Initials(client.FullName)</span>
+                                    <strong>@client.FullName</strong>
+                                    <span class="meta">Client @ShortId(client.Id)</span>
+                                </td>
+                                <td>
+                                    <StatusBadge Text="@FormatServiceType(client.ServiceType)" Tone="@ServiceTone(client.ServiceType)" />
+                                </td>
+                                <td>@client.Age</td>
+                                <td>
+                                    <StatusBadge Text="@(client.IsActive ? "Active" : "Inactive")"
+                                                 Tone="@(client.IsActive ? BadgeTone.Success : BadgeTone.Neutral)" />
+                                </td>
+                                <td>
+                                    <button class="text-link" type="button" @onclick="() => SelectClientAsync(client.Id)">
+                                        View
+                                    </button>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+
+        <div class="pager-row" aria-label="Client pages">
+            <button class="button button-secondary button-sm" type="button" disabled="@(!CanGoPrevious(clientPage) || isLoading)" @onclick="PreviousClientPageAsync">Previous</button>
+            <span class="meta">@PagingText(clientPage)</span>
+            <button class="button button-secondary button-sm" type="button" disabled="@(!CanGoNext(clientPage) || isLoading)" @onclick="NextClientPageAsync">Next</button>
+        </div>
+    </section>
+
+    <aside class="card detail-card" aria-labelledby="client-detail-heading">
+        <div class="section-header">
+            <div>
+                <h2 id="client-detail-heading">Client detail</h2>
+                <span class="subtle">Care needs and care plans</span>
+            </div>
+        </div>
+
+        @if (clientDetailError is not null)
+        {
+            <ApiErrorAlert Response="clientDetailError" />
+        }
+        else if (isDetailLoading)
+        {
+            <p class="empty-state">Loading client profile...</p>
+        }
+        else if (selectedClient is null)
+        {
+            <p class="empty-state">Select a client to view care needs and care plans.</p>
+        }
+        else
+        {
+            <div class="detail-heading">
+                <span class="avatar-lg" aria-hidden="true">@Initials(selectedClient.FullName)</span>
+                <div>
+                    <strong>@selectedClient.FullName</strong>
+                    <span class="meta">@FormatServiceType(selectedClient.ServiceType) · @selectedClient.EstimatedWeeklyHours hrs/wk</span>
+                </div>
+            </div>
+
+            <dl class="detail-facts">
+                <div><dt>Age</dt><dd>@selectedClient.Age</dd></div>
+                <div><dt>Status</dt><dd>@(CurrentSelectedSummary?.IsActive == true ? "Active" : "Inactive")</dd></div>
+                <div><dt>Care plans</dt><dd>Summary endpoint needed</dd></div>
+            </dl>
+
+            <h3>Care needs</h3>
+            <div class="badge-row">
+                @foreach (var need in CareNeeds(selectedClient))
+                {
+                    <StatusBadge Text="@need" Tone="@BadgeTone.Info" />
+                }
+                @if (CareNeeds(selectedClient).Count == 0)
+                {
+                    <span class="subtle">No care-need flags recorded.</span>
+                }
+            </div>
+
+            <h3>Care plans</h3>
+            <div class="stacked-list">
+                <p class="empty-state compact">
+                    Care plans need a summary endpoint before this page can list them without shipping clinical plan text to the browser.
+                </p>
+            </div>
+        }
+    </aside>
+</div>
+
+@code {
+    private const int PageSize = 10;
+
+    private PagedResult<ClientSummaryDto>? clientPage;
+    private ApiResponse? clientError;
+    private ApiResponse? clientDetailError;
+    private ClientDetailDto? selectedClient;
+    private Guid? selectedClientId;
+    private bool isLoading;
+    private bool isDetailLoading;
+    private int pageNumber = 1;
+    private string searchTerm = string.Empty;
+    private string serviceFilter = string.Empty;
+    private string statusFilter = string.Empty;
+
+    private IReadOnlyList<ClientSummaryDto> FilteredClients =>
+        clientPage?.Items
+            .Where(MatchesFilters)
+            .ToArray() ?? [];
+
+    private ClientSummaryDto? CurrentSelectedSummary =>
+        clientPage?.Items.FirstOrDefault(client => client.Id == selectedClientId);
+
+    private string ClientSummaryText
+    {
+        get
+        {
+            var items = clientPage?.Items ?? [];
+            var active = items.Count(c => c.IsActive);
+            return clientPage is null
+                ? "Loading clients..."
+                : $"{active} active clients · {clientPage.TotalCount} total";
+        }
+    }
+
+    protected override async Task OnInitializedAsync() => await LoadClientsAsync();
+
+    private async Task LoadClientsAsync()
+    {
+        isLoading = true;
+        clientError = null;
+
+        var response = await ClientsClient.GetPageAsync(new PagedRequest { PageNumber = pageNumber, PageSize = PageSize });
+        if (response.Success && response.Data is not null)
+        {
+            clientPage = response.Data;
+        }
+        else
+        {
+            clientError = response;
+        }
+
+        isLoading = false;
+    }
+
+    private async Task SelectClientAsync(Guid clientId)
+    {
+        selectedClientId = clientId;
+        selectedClient = null;
+        clientDetailError = null;
+        isDetailLoading = true;
+
+        var response = await ClientsClient.GetAsync(clientId);
+        if (response.Success && response.Data is not null)
+        {
+            selectedClient = response.Data;
+        }
+        else
+        {
+            clientDetailError = response;
+        }
+
+        isDetailLoading = false;
+    }
+
+    private async Task PreviousClientPageAsync()
+    {
+        if (!CanGoPrevious(clientPage))
+        {
+            return;
+        }
+
+        pageNumber--;
+        ClearSelection();
+        await LoadClientsAsync();
+    }
+
+    private async Task NextClientPageAsync()
+    {
+        if (!CanGoNext(clientPage))
+        {
+            return;
+        }
+
+        pageNumber++;
+        ClearSelection();
+        await LoadClientsAsync();
+    }
+
+    private bool MatchesFilters(ClientSummaryDto client)
+    {
+        if (!string.IsNullOrWhiteSpace(searchTerm)
+            && !client.FullName.Contains(searchTerm, StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
+        if (!string.IsNullOrWhiteSpace(serviceFilter)
+            && client.ServiceType.ToString() != serviceFilter)
+        {
+            return false;
+        }
+
+        return statusFilter switch
+        {
+            "active" => client.IsActive,
+            "inactive" => !client.IsActive,
+            _ => true
+        };
+    }
+
+    private void ClearSelection()
+    {
+        selectedClientId = null;
+        selectedClient = null;
+        clientDetailError = null;
+    }
+
+    private static bool CanGoPrevious<T>(PagedResult<T>? page) => page?.HasPreviousPage == true;
+
+    private static bool CanGoNext<T>(PagedResult<T>? page) => page?.HasNextPage == true;
+
+    private static string PagingText<T>(PagedResult<T>? page) =>
+        page is null ? "Page 1" : $"Page {page.PageNumber} of {Math.Max(page.TotalPages, 1)}";
+
+    private static string Initials(string fullName)
+    {
+        var parts = fullName.Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        return string.Concat(parts.Take(2).Select(part => char.ToUpperInvariant(part[0])));
+    }
+
+    private static string ShortId(Guid id) => id.ToString("N")[..8];
+
+    private static string FormatServiceType(ServiceType type) => type switch
+    {
+        ServiceType.InHomeCare => "In-home care",
+        ServiceType.FacilityStaffing => "Facility staffing",
+        _ => type.ToString()
+    };
+
+    private static BadgeTone ServiceTone(ServiceType type) => type switch
+    {
+        ServiceType.InHomeCare => BadgeTone.Info,
+        ServiceType.FacilityStaffing => BadgeTone.Warning,
+        _ => BadgeTone.Neutral
+    };
+
+    private static IReadOnlyList<string> CareNeeds(ClientDetailDto client)
+    {
+        var needs = new List<string>();
+        if (client.RequiresDementiaCare)
+        {
+            needs.Add("Dementia");
+        }
+
+        if (client.RequiresMobilityAssistance)
+        {
+            needs.Add("Mobility");
+        }
+
+        if (client.RequiresMedicationManagement)
+        {
+            needs.Add("Medication");
+        }
+
+        if (client.RequiresCompanionship)
+        {
+            needs.Add("Companionship");
+        }
+
+        return needs;
+    }
+
+}

@@ -1,0 +1,355 @@
+@page "/billing"
+@using CarePath.Client.Api
+@using CarePath.Client.Http
+@using CarePath.Client.UI.Components
+@using CarePath.Contracts.Billing
+@using CarePath.Contracts.Common
+@using CarePath.Contracts.Enumerations
+@using static CarePath.Web.Shared.BusinessFormatting
+@inject BillingClient BillingApi
+@inject InMemoryAccessTokenProvider Tokens
+
+<PageTitle>Billing &amp; Invoices</PageTitle>
+
+@if (!RoleAllowed)
+{
+    <div class="page-heading">
+        <div>
+            <p class="eyebrow">Business</p>
+            <h1>Access restricted</h1>
+            <p class="subtle">Billing is available to administrators and coordinators only.</p>
+        </div>
+    </div>
+}
+else
+{
+    <div class="page-heading">
+        <div>
+            <p class="eyebrow">Business</p>
+            <h1>Billing &amp; Invoices</h1>
+            @if (_invoices is not null)
+            {
+                <p class="subtle">@Money(PageOutstanding) outstanding (this page) · @PageOverdueCount overdue (this page)</p>
+            }
+            else
+            {
+                <p class="subtle">Invoices and payment status</p>
+            }
+        </div>
+        <button class="button button-primary" type="button" disabled title="Coming soon"
+                aria-label="Generate invoices (coming soon)">$ Generate invoices</button>
+    </div>
+
+    <div class="metric-grid metric-grid-3">
+        <article class="card metric-card">
+            <span class="metric-label">Total invoices</span>
+            <div class="metric-value">@(_invoices?.TotalCount ?? 0)</div>
+            <span class="trend trend-muted">Across all pages</span>
+        </article>
+        <article class="card metric-card">
+            <span class="metric-label">Outstanding (this page)</span>
+            <div class="metric-value metric-value-amber">@Money(PageOutstanding)</div>
+            <span class="trend trend-amber">@PageOverdueCount overdue on this page</span>
+        </article>
+        <article class="card metric-card">
+            <span class="metric-label">Overdue (this page)</span>
+            <div class="metric-value @(PageOverdueCount > 0 ? "metric-value-red" : null)">@PageOverdueCount</div>
+            <span class="trend trend-muted">Of @(_invoices?.Items.Count ?? 0) invoices on this page</span>
+        </article>
+    </div>
+
+    <div class="filter-bar">
+        <input type="search" placeholder="Search invoices…" aria-label="Search invoices on this page"
+               @bind="_search" @bind:event="oninput" />
+        <select aria-label="Filter by status" @bind="_statusFilter">
+            <option value="">All statuses</option>
+            @foreach (var status in Enum.GetValues<InvoiceStatus>())
+            {
+                <option value="@status">@StatusLabel(status)</option>
+            }
+        </select>
+        <select aria-label="Filter by client" @bind="_clientFilter">
+            <option value="">All clients</option>
+            @foreach (var client in ClientOptions)
+            {
+                <option value="@client">@client</option>
+            }
+        </select>
+        <span class="subtle filter-scope-note">Search and filters apply to the current page (MVP)</span>
+    </div>
+
+    @if (_error is not null)
+    {
+        <ApiErrorAlert Response="_error" />
+    }
+    else if (_loading)
+    {
+        <p class="subtle" role="status">Loading invoices…</p>
+    }
+    else if (_invoices is not null)
+    {
+        var invoices = _invoices;
+
+        <div class="card list-card">
+            <div class="row-list">
+                <div class="invoice-row row-list-header" aria-hidden="true">
+                    <span>Invoice #</span><span>Client</span><span>Amount</span><span>Due date</span><span>Status</span><span></span>
+                </div>
+                @if (FilteredInvoices.Count == 0)
+                {
+                    <p class="empty-state">
+                        @(invoices.Items.Count == 0 ? "No invoices yet." : "No invoices match the current filters.")
+                    </p>
+                }
+                @foreach (var invoice in FilteredInvoices)
+                {
+                    <div class="invoice-row">
+                        <span>
+                            <strong>@invoice.InvoiceNumber</strong>
+                            <span class="meta">@ShortDate(invoice.InvoiceDate)</span>
+                        </span>
+                        <span>
+                            @invoice.ClientFullName
+                            @if (invoice.AmountPaid > 0)
+                            {
+                                <span class="meta">Paid @Money(invoice.AmountPaid)</span>
+                            }
+                        </span>
+                        <span><strong>@Money(invoice.Total)</strong></span>
+                        <span>@ShortDate(invoice.DueDate)</span>
+                        <span><StatusBadge Text="@StatusLabel(invoice.Status)" Tone="@StatusBadgeTones.For(invoice.Status)" /></span>
+                        <button class="text-link" type="button" aria-label="View invoice @invoice.InvoiceNumber"
+                                @onclick="() => ViewInvoiceAsync(invoice.Id)">View</button>
+                    </div>
+                }
+            </div>
+        </div>
+
+        @if (invoices.TotalPages > 1)
+        {
+            <nav class="cp-pager" aria-label="Invoice pages">
+                <button type="button" class="cp-pager-prev" disabled="@(!invoices.HasPreviousPage)"
+                        @onclick="() => LoadPageAsync(invoices.PageNumber - 1)">Previous</button>
+                <span class="cp-pager-status">Page @invoices.PageNumber of @invoices.TotalPages</span>
+                <button type="button" class="cp-pager-next" disabled="@(!invoices.HasNextPage)"
+                        @onclick="() => LoadPageAsync(invoices.PageNumber + 1)">Next</button>
+            </nav>
+        }
+    }
+
+    @if (_detailError is not null)
+    {
+        <div class="section-offset">
+            <ApiErrorAlert Response="_detailError" />
+        </div>
+    }
+    else if (_detailLoading)
+    {
+        <p class="subtle section-offset" role="status">Loading invoice…</p>
+    }
+    else if (_detail is not null)
+    {
+        var detail = _detail;
+
+        <section class="card section-offset" aria-labelledby="invoice-detail-heading">
+            <div class="section-header">
+                <div>
+                    <h2 id="invoice-detail-heading">Invoice @detail.InvoiceNumber</h2>
+                    <span class="subtle">@detail.ClientFullName</span>
+                </div>
+                <button class="text-link" type="button" @onclick="CloseDetail">Close</button>
+            </div>
+            <div class="profile-list">
+                <div class="profile-row">
+                    <span class="subtle">Status</span>
+                    <StatusBadge Text="@StatusLabel(detail.Status)" Tone="@StatusBadgeTones.For(detail.Status)" />
+                </div>
+                <div class="profile-row"><span class="subtle">Invoice date</span><strong>@LongDate(detail.InvoiceDate)</strong></div>
+                <div class="profile-row"><span class="subtle">Due date</span><strong>@LongDate(detail.DueDate)</strong></div>
+                @if (detail.PaidDate is { } paidDate)
+                {
+                    <div class="profile-row"><span class="subtle">Paid date</span><strong>@LongDate(paidDate)</strong></div>
+                }
+                <div class="profile-row"><span class="subtle">Subtotal</span><strong>@Money(detail.Subtotal)</strong></div>
+                <div class="profile-row"><span class="subtle">Tax</span><strong>@Money(detail.TaxAmount)</strong></div>
+                <div class="profile-row"><span class="subtle">Total</span><strong>@Money(detail.Total)</strong></div>
+                <div class="profile-row"><span class="subtle">Amount paid</span><strong>@Money(detail.AmountPaid)</strong></div>
+                <div class="profile-row"><span class="subtle">Balance</span><strong>@Money(detail.Balance)</strong></div>
+            </div>
+            @if (detail.LineItems.Count > 0)
+            {
+                <h3 class="section-offset">Line items</h3>
+                <div class="profile-list">
+                    @foreach (var line in detail.LineItems)
+                    {
+                        <div class="profile-row">
+                            <span>
+                                @line.Description
+                                <span class="meta">@ShortDate(line.ServiceDate) · @Hours(line.BillableHours) hrs</span>
+                            </span>
+                            <strong>@Money(line.Total)</strong>
+                        </div>
+                    }
+                </div>
+            }
+            @if (detail.Payments.Count > 0)
+            {
+                <h3 class="section-offset">Payments</h3>
+                <div class="profile-list">
+                    @foreach (var payment in detail.Payments)
+                    {
+                        <div class="profile-row">
+                            <span class="subtle">@payment.Method · @ShortDate(payment.PaymentDate)</span>
+                            <strong>@Money(payment.Amount)</strong>
+                        </div>
+                    }
+                </div>
+            }
+        </section>
+    }
+}
+
+@code {
+    // TODO(PM): flag for a billing summary endpoint (MTD revenue, org-wide outstanding/overdue).
+    // No coordinator-accessible aggregate exists, so the KPI cards are honestly scoped to the
+    // loaded page ("this page") instead of fabricating month-to-date revenue.
+    private PagedResult<InvoiceSummaryDto>? _invoices;
+    private ApiResponse? _error;
+    private bool _loading = true;
+    private string _search = string.Empty;
+    private string _statusFilter = string.Empty;
+    private string _clientFilter = string.Empty;
+    private InvoiceDetailDto? _detail;
+    private ApiResponse? _detailError;
+    private bool _detailLoading;
+
+    private bool RoleAllowed
+    {
+        get
+        {
+            // Courtesy client-side guard (Admin + Coordinator); the server authorizes every call.
+            // A null session still renders until the authenticated layout lands (S6-TASK-012).
+            var session = Tokens.CurrentSession;
+            return session is null || session.Role is UserRole.Admin or UserRole.Coordinator;
+        }
+    }
+
+    private decimal PageOutstanding => _invoices?.Items.Sum(i => i.Balance) ?? 0m;
+
+    private int PageOverdueCount => _invoices?.Items.Count(i => i.Status == InvoiceStatus.Overdue) ?? 0;
+
+    private IReadOnlyList<string> ClientOptions =>
+        _invoices is null
+            ? []
+            : _invoices.Items
+                .Select(i => i.ClientFullName)
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .OrderBy(name => name, StringComparer.OrdinalIgnoreCase)
+                .ToList();
+
+    private IReadOnlyList<InvoiceSummaryDto> FilteredInvoices
+    {
+        get
+        {
+            if (_invoices is null)
+            {
+                return [];
+            }
+
+            IEnumerable<InvoiceSummaryDto> items = _invoices.Items;
+            if (!string.IsNullOrWhiteSpace(_search))
+            {
+                items = items.Where(i =>
+                    i.InvoiceNumber.Contains(_search, StringComparison.OrdinalIgnoreCase) ||
+                    i.ClientFullName.Contains(_search, StringComparison.OrdinalIgnoreCase));
+            }
+
+            if (Enum.TryParse<InvoiceStatus>(_statusFilter, out var status))
+            {
+                items = items.Where(i => i.Status == status);
+            }
+
+            if (!string.IsNullOrWhiteSpace(_clientFilter))
+            {
+                items = items.Where(i => string.Equals(i.ClientFullName, _clientFilter, StringComparison.OrdinalIgnoreCase));
+            }
+
+            return items.ToList();
+        }
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (!RoleAllowed)
+        {
+            _loading = false;
+            return;
+        }
+
+        await LoadPageAsync(1);
+    }
+
+    private async Task LoadPageAsync(int pageNumber)
+    {
+        _loading = true;
+        _error = null;
+
+        try
+        {
+            var response = await BillingApi.GetInvoicesAsync(new PagedRequest { PageNumber = pageNumber });
+            if (response is { Success: true, Data: not null })
+            {
+                _invoices = response.Data;
+            }
+            else
+            {
+                _error = response;
+            }
+        }
+        catch (HttpRequestException)
+        {
+            // PHI-safe generic failure — never surface exception details (D-S6-3).
+            _error = ApiResponse.Fail(new ApiError("network.unreachable", "The server could not be reached."));
+        }
+
+        _loading = false;
+    }
+
+    private async Task ViewInvoiceAsync(Guid invoiceId)
+    {
+        _detailLoading = true;
+        _detail = null;
+        _detailError = null;
+
+        try
+        {
+            var response = await BillingApi.GetInvoiceAsync(invoiceId);
+            if (response is { Success: true, Data: not null })
+            {
+                _detail = response.Data;
+            }
+            else
+            {
+                _detailError = response;
+            }
+        }
+        catch (HttpRequestException)
+        {
+            _detailError = ApiResponse.Fail(new ApiError("network.unreachable", "The server could not be reached."));
+        }
+
+        _detailLoading = false;
+    }
+
+    private void CloseDetail()
+    {
+        _detail = null;
+        _detailError = null;
+    }
+
+    private static string StatusLabel(InvoiceStatus status) => status switch
+    {
+        InvoiceStatus.PartiallyPaid => "Partially paid",
+        _ => status.ToString()
+    };
+}

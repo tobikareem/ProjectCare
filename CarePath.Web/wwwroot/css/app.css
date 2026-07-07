@@ -538,6 +538,199 @@ h3 {
     background: var(--red-soft);
 }
 
+.filter-bar {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 18px;
+    flex-wrap: wrap;
+}
+
+.filter-bar input,
+.filter-bar select {
+    min-height: 40px;
+    padding: 8px 12px;
+    border: 1px solid var(--line);
+    border-radius: 9px;
+    background: var(--surface);
+    color: var(--ink);
+}
+
+.filter-bar input {
+    width: 240px;
+}
+
+.filter-scope-note {
+    font-size: 0.78rem;
+}
+
+.list-card {
+    padding: 16px;
+}
+
+.row-list {
+    display: grid;
+    gap: 8px;
+}
+
+.invoice-row {
+    display: grid;
+    grid-template-columns: 130px minmax(140px, 1fr) 90px 100px 110px 80px;
+    align-items: center;
+    gap: 12px;
+    min-height: 56px;
+    padding: 10px 14px;
+    border: 1px solid var(--line);
+    border-radius: 10px;
+}
+
+.cert-row {
+    display: grid;
+    grid-template-columns: minmax(180px, 1.5fr) 130px 140px 120px 90px;
+    align-items: center;
+    gap: 12px;
+    min-height: 58px;
+    padding: 10px 14px;
+    border: 1px solid var(--line);
+    border-radius: 10px;
+}
+
+.cert-row-expired {
+    border-left: 4px solid var(--red);
+}
+
+.cert-row-expiring {
+    border-left: 4px solid var(--amber);
+}
+
+.row-list-header {
+    min-height: auto;
+    padding: 0 14px 8px;
+    border: 0;
+    border-bottom: 2px solid var(--line);
+    border-radius: 0;
+    color: var(--muted);
+    font-size: 0.72rem;
+    font-weight: 800;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+}
+
+.expiry-expired {
+    color: var(--red);
+}
+
+.expiry-soon {
+    color: var(--amber);
+}
+
+.empty-state {
+    margin: 0;
+    padding: 24px 14px;
+    color: var(--muted);
+    text-align: center;
+}
+
+.metric-grid-3 {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.metric-value-amber {
+    color: var(--amber);
+}
+
+.metric-value-red {
+    color: var(--red);
+}
+
+.trend-amber {
+    color: var(--amber);
+}
+
+.trend-red {
+    color: var(--red);
+}
+
+.trend-muted {
+    color: var(--muted);
+}
+
+.analytics-grid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 18px;
+    margin-bottom: 22px;
+}
+
+.kpi-big {
+    margin: 8px 0 2px;
+    font-size: 2.4rem;
+    font-weight: 900;
+    line-height: 1;
+}
+
+.kpi-big-positive {
+    color: var(--green);
+}
+
+.kpi-big-negative {
+    color: var(--red);
+}
+
+.chart-placeholder {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 180px;
+    color: var(--muted);
+    background: linear-gradient(135deg, var(--teal-100), var(--surface-alt));
+    border: 1px dashed var(--line);
+    border-radius: 10px;
+    font-size: 0.82rem;
+    font-weight: 700;
+}
+
+.bar-track-offset {
+    margin-top: 12px;
+}
+
+.bar-fill.staffing {
+    background: var(--orange);
+}
+
+.profile-list {
+    display: grid;
+    gap: 14px;
+}
+
+.profile-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 12px 0;
+    border-bottom: 1px solid var(--line);
+    font-size: 0.88rem;
+}
+
+.profile-row:last-child {
+    border-bottom: 0;
+}
+
+.summary-heading {
+    margin-bottom: 14px;
+}
+
+.compliance-alert {
+    margin-bottom: 20px;
+    padding: 20px;
+    border-radius: var(--radius);
+}
+
+.button:disabled {
+    cursor: not-allowed;
+    opacity: 0.55;
+}
+
 #blazor-error-ui {
     color-scheme: light only;
     position: fixed;
@@ -621,6 +814,10 @@ h3 {
     .dashboard-grid {
         grid-template-columns: 1fr;
     }
+
+    .analytics-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
 }
 
 @media (max-width: 780px) {
@@ -667,6 +864,28 @@ h3 {
 
     .calendar-card {
         overflow-x: auto;
+    }
+
+    .invoice-row {
+        grid-template-columns: 120px 1fr 100px 80px;
+    }
+
+    .invoice-row > :nth-child(3),
+    .invoice-row > :nth-child(5) {
+        display: none;
+    }
+
+    .cert-row {
+        grid-template-columns: 1fr 120px 80px;
+    }
+
+    .cert-row > :nth-child(2),
+    .cert-row > :nth-child(4) {
+        display: none;
+    }
+
+    .analytics-grid {
+        grid-template-columns: 1fr;
     }
 }
 

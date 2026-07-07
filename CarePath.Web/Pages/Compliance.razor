@@ -1,0 +1,224 @@
+@page "/compliance"
+@using CarePath.Client.Api
+@using CarePath.Client.Http
+@using CarePath.Client.UI.Components
+@using CarePath.Contracts.Common
+@using CarePath.Contracts.Enumerations
+@using CarePath.Contracts.Identity
+@using static CarePath.Web.Shared.BusinessFormatting
+@inject CaregiversClient Caregivers
+@inject InMemoryAccessTokenProvider Tokens
+
+<PageTitle>Compliance</PageTitle>
+
+@if (!RoleAllowed)
+{
+    <div class="page-heading">
+        <div>
+            <p class="eyebrow">Business</p>
+            <h1>Access restricted</h1>
+            <p class="subtle">Compliance is available to administrators and coordinators only.</p>
+        </div>
+    </div>
+}
+else
+{
+    <div class="page-heading">
+        <div>
+            <p class="eyebrow">Business</p>
+            <h1>Compliance</h1>
+            @if (_certifications is not null)
+            {
+                <p class="subtle">@_certifications.TotalCount items require action · @PageExpiredCount expired · @PageExpiringCount expiring within 30 days (this page)</p>
+            }
+            else
+            {
+                <p class="subtle">Expired and expiring caregiver credentials</p>
+            }
+        </div>
+        <button class="button button-secondary" type="button" disabled title="Coming soon"
+                aria-label="Export compliance report (coming soon)">↓ Export compliance report</button>
+    </div>
+
+    @if (_error is not null)
+    {
+        <ApiErrorAlert Response="_error" />
+    }
+    else if (_loading)
+    {
+        <p class="subtle" role="status">Loading credentials…</p>
+    }
+    else if (_certifications is not null)
+    {
+        var certifications = _certifications;
+
+        @if (PageExpiredCount > 0 || PageExpiringCount > 0)
+        {
+            <div class="alert-item compliance-alert">
+                <strong>Action required</strong>
+                <p>
+                    @PageExpiredCount expired and @PageExpiringCount expiring within 30 days on this page.
+                    Caregivers with expired credentials cannot be scheduled for certification-required shifts until renewed.
+                </p>
+            </div>
+        }
+
+        <div class="row-list">
+            <div class="cert-row row-list-header" aria-hidden="true">
+                <span>Certification</span><span>Issued</span><span>Expires</span><span>Status</span><span></span>
+            </div>
+            @if (certifications.Items.Count == 0)
+            {
+                <p class="empty-state">No expired or expiring certifications — credentials are in good standing.</p>
+            }
+            @foreach (var certification in certifications.Items)
+            {
+                <div class="cert-row @RowClass(certification)">
+                    <span>
+                        <strong>@CertTypeLabel(certification.Type)</strong>
+                        @if (CertMeta(certification) is { Length: > 0 } meta)
+                        {
+                            <span class="meta">@meta</span>
+                        }
+                    </span>
+                    <span>@LongDate(certification.IssueDate)</span>
+                    <span class="@ExpiryClass(certification)">@ExpiryText(certification)</span>
+                    <span><StatusBadge Text="@StatusLabel(certification)" Tone="@StatusTone(certification)" /></span>
+                    <span></span>
+                </div>
+            }
+        </div>
+
+        @if (certifications.TotalPages > 1)
+        {
+            <nav class="cp-pager" aria-label="Certification pages">
+                <button type="button" class="cp-pager-prev" disabled="@(!certifications.HasPreviousPage)"
+                        @onclick="() => LoadPageAsync(certifications.PageNumber - 1)">Previous</button>
+                <span class="cp-pager-status">Page @certifications.PageNumber of @certifications.TotalPages</span>
+                <button type="button" class="cp-pager-next" disabled="@(!certifications.HasNextPage)"
+                        @onclick="() => LoadPageAsync(certifications.PageNumber + 1)">Next</button>
+            </nav>
+        }
+    }
+}
+
+@code {
+    // TODO(PM): CertificationDto carries no caregiver display name, so rows show the
+    // certification identity only (the wireframe's first column is "Caregiver / Certification").
+    // TODO(PM): the wireframe's row actions (Start renewal / Send reminder) have no endpoints;
+    // the action column renders empty until those workflows exist.
+    private PagedResult<CertificationDto>? _certifications;
+    private ApiResponse? _error;
+    private bool _loading = true;
+
+    private bool RoleAllowed
+    {
+        get
+        {
+            // Courtesy client-side guard (Admin + Coordinator); the server authorizes every call.
+            // A null session still renders until the authenticated layout lands (S6-TASK-012).
+            var session = Tokens.CurrentSession;
+            return session is null || session.Role is UserRole.Admin or UserRole.Coordinator;
+        }
+    }
+
+    private int PageExpiredCount => _certifications?.Items.Count(c => c.IsExpired) ?? 0;
+
+    private int PageExpiringCount => _certifications?.Items.Count(c => c is { IsExpired: false, IsExpiringSoon: true }) ?? 0;
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (!RoleAllowed)
+        {
+            _loading = false;
+            return;
+        }
+
+        await LoadPageAsync(1);
+    }
+
+    private async Task LoadPageAsync(int pageNumber)
+    {
+        _loading = true;
+        _error = null;
+
+        try
+        {
+            var response = await Caregivers.GetExpiringCertificationsAsync(new PagedRequest { PageNumber = pageNumber });
+            if (response is { Success: true, Data: not null })
+            {
+                _certifications = response.Data;
+            }
+            else
+            {
+                _error = response;
+            }
+        }
+        catch (HttpRequestException)
+        {
+            // PHI-safe generic failure — never surface exception details (D-S6-3).
+            _error = ApiResponse.Fail(new ApiError("network.unreachable", "The server could not be reached."));
+        }
+
+        _loading = false;
+    }
+
+    private static string CertMeta(CertificationDto certification)
+    {
+        var parts = new List<string>(2);
+        if (!string.IsNullOrWhiteSpace(certification.IssuingAuthority))
+        {
+            parts.Add(certification.IssuingAuthority);
+        }
+
+        if (!string.IsNullOrWhiteSpace(certification.CertificationNumber))
+        {
+            parts.Add($"#{certification.CertificationNumber}");
+        }
+
+        return string.Join(" · ", parts);
+    }
+
+    private static string CertTypeLabel(CertificationType type) => type switch
+    {
+        CertificationType.FirstAid => "First Aid",
+        CertificationType.Dementia => "Dementia care",
+        CertificationType.Alzheimers => "Alzheimer's care",
+        _ => type.ToString()
+    };
+
+    private static string ExpiryText(CertificationDto certification)
+    {
+        var text = LongDate(certification.ExpirationDate);
+        if (certification is { IsExpired: false, IsExpiringSoon: true })
+        {
+            var days = (certification.ExpirationDate.Date - DateTime.UtcNow.Date).Days;
+            if (days >= 0)
+            {
+                text += $" · {days} days";
+            }
+        }
+
+        return text;
+    }
+
+    private static string? ExpiryClass(CertificationDto certification) =>
+        certification.IsExpired ? "expiry-expired"
+        : certification.IsExpiringSoon ? "expiry-soon"
+        : null;
+
+    private static string? RowClass(CertificationDto certification) =>
+        certification.IsExpired ? "cert-row-expired"
+        : certification.IsExpiringSoon ? "cert-row-expiring"
+        : null;
+
+    private static string StatusLabel(CertificationDto certification) =>
+        certification.IsExpired ? "Expired"
+        : certification.IsExpiringSoon ? "Expiring soon"
+        : "Valid";
+
+    private static BadgeTone StatusTone(CertificationDto certification) =>
+        certification.IsExpired ? BadgeTone.Danger
+        : certification.IsExpiringSoon ? BadgeTone.Warning
+        : BadgeTone.Success;
+}

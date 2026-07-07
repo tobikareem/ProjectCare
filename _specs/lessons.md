@@ -66,6 +66,7 @@ This file captures recurring mistakes, corrections, and hard-won patterns discov
 
 - **The wireframe is the UI source of truth** (`Documentation/Wireframes/carepath-wireframe.html`; spec: `_specs/02-design/ui-design-system.md`). Sprint 6 lesson: shared UI components were initially built without consulting it — always extract design tokens from the wireframe (`CarePath.Client.UI/wwwroot/carepath-ui.css`) before building any visual component, and never hard-code colors/fonts/radii in pages or components. Screens the wireframe lacks require a PM/wireframe update before implementation.
 - **CarePath.Web must consume the wireframe shell, not the Blazor template shell** - Link `_content/CarePath.Client.UI/carepath-ui.css`, use the wireframe variables (`--teal-900`, `--surface-alt`, `--line`, `--radius`, `--shadow`, `--focus`, Inter stack), and remove Bootstrap/template hard-coded colors, fonts, and radii from Web pages/layouts before considering a Web slice complete.
+- **Do not approximate the wireframe layout** - A UI pass that only uses the shared tokens but changes navigation grouping, route behavior, spacing, icons, labels, or page structure is not compliant with D-S6-9. Reproduce the relevant `carepath-wireframe.html` desktop shell/page structure first, then adapt only where Blazor routing requires it.
 
 ## Session History
 

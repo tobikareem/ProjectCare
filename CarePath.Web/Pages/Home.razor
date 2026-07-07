@@ -1,69 +1,127 @@
 @page "/"
 
-<PageTitle>Dashboard</PageTitle>
+<PageTitle>Operations overview</PageTitle>
 
 <div class="page-heading">
     <div>
-        <p class="eyebrow">Operations</p>
-        <h1>Coordinator Dashboard</h1>
-        <p class="subtle">Daily staffing, credentials, and transition follow-up signals.</p>
+        <p class="eyebrow">Monday, June 22</p>
+        <h1>Operations overview</h1>
+        <p class="subtle">Staff today's care, resolve exceptions, and protect service margins.</p>
     </div>
+    <button class="button button-primary" type="button">＋ Create shift</button>
 </div>
 
-<section class="metric-grid" aria-label="Dashboard metrics">
+<section class="metric-grid" aria-label="Key performance indicators">
     <article class="card metric-card">
-        <span class="metric-label">Open shifts</span>
-        <strong class="metric-value">12</strong>
-        <span class="subtle">Next 48 hours</span>
+        <span class="metric-label">Shifts today</span>
+        <div class="metric-value">28</div>
+        <span class="trend">24 staffed · 4 open</span>
     </article>
     <article class="card metric-card">
-        <span class="metric-label">Overdue notes</span>
-        <strong class="metric-value">7</strong>
-        <span class="subtle">Require follow-up</span>
+        <span class="metric-label">Caregiver utilization</span>
+        <div class="metric-value">84%</div>
+        <span class="trend">↑ 6% from last week</span>
     </article>
     <article class="card metric-card">
-        <span class="metric-label">Expiring credentials</span>
-        <strong class="metric-value">4</strong>
-        <span class="subtle">Within 30 days</span>
+        <span class="metric-label">Weekly billable hours</span>
+        <div class="metric-value">812</div>
+        <span class="trend">92% of target</span>
     </article>
     <article class="card metric-card">
-        <span class="metric-label">Open escalations</span>
-        <strong class="metric-value">3</strong>
-        <span class="subtle">Coordinator queue</span>
+        <span class="metric-label">Projected gross margin</span>
+        <div class="metric-value">39.6%</div>
+        <span class="trend">Within blended target</span>
     </article>
 </section>
 
-<section class="dashboard-grid">
-    <article class="card">
-        <div class="section-header">
-            <h2>Today&apos;s Schedule</h2>
-            <span class="subtle">Preview</span>
-        </div>
-        <ul class="task-list">
-            <li class="alert-item">
-                <strong>7:00 AM open shift</strong>
-                <p>Personal care slot needs coordinator assignment.</p>
-            </li>
-            <li class="alert-item">
-                <strong>10:30 AM certification guard</strong>
-                <p>One caregiver requires credential review before assignment.</p>
-            </li>
-        </ul>
-    </article>
+<div class="dashboard-grid">
+    <div>
+        <section class="card" aria-labelledby="today-heading">
+            <div class="section-header">
+                <div>
+                    <h2 id="today-heading">Today's schedule</h2>
+                    <span class="subtle">Priority shifts and exceptions</span>
+                </div>
+                <a class="text-link" href="schedule">Open schedule →</a>
+            </div>
+            <ol class="schedule-list">
+                <li class="schedule-row">
+                    <span class="time">8:00 AM</span>
+                    <strong>Jordan M.<span class="meta">In-home care · 4 hours</span></strong>
+                    <span>A. Williams<span class="meta">CNA · GPS required</span></span>
+                    <span class="status status-green">In progress</span>
+                    <button class="text-link" type="button">Details</button>
+                </li>
+                <li class="schedule-row">
+                    <span class="time">10:00 AM</span>
+                    <strong>Harborview Center<span class="meta">Facility staffing · 8 hours</span></strong>
+                    <span>Unassigned<span class="meta">RN required</span></span>
+                    <span class="status status-red">Open</span>
+                    <button class="text-link" type="button">Match</button>
+                </li>
+                <li class="schedule-row">
+                    <span class="time">1:30 PM</span>
+                    <strong>Casey R.<span class="meta">In-home care · 3 hours</span></strong>
+                    <span>D. Okafor<span class="meta">HHA · Dementia care</span></span>
+                    <span class="status status-blue">Confirmed</span>
+                    <button class="text-link" type="button">Details</button>
+                </li>
+                <li class="schedule-row">
+                    <span class="time">6:00 PM</span>
+                    <strong>Northside Rehab<span class="meta">Facility staffing · 12 hours</span></strong>
+                    <span>M. Johnson<span class="meta">LPN · Night shift</span></span>
+                    <span class="status status-amber">At risk</span>
+                    <button class="text-link" type="button">Review</button>
+                </li>
+            </ol>
+        </section>
 
-    <aside class="card" aria-label="Transition alerts">
-        <div class="section-header">
-            <h2>Transition Alerts</h2>
-        </div>
-        <ul class="task-list">
-            <li class="alert-item">
-                <strong>Medication acknowledgement missed</strong>
-                <p>Escalation queue contains unacknowledged follow-up.</p>
-            </li>
-            <li class="alert-item">
-                <strong>Review queue ready</strong>
-                <p>Clinician verification items are pending.</p>
-            </li>
-        </ul>
+        <section class="card section-offset" aria-labelledby="margin-heading">
+            <div class="section-header">
+                <div>
+                    <h2 id="margin-heading">Service-line margins</h2>
+                    <span class="subtle">Month-to-date vs target</span>
+                </div>
+                <button class="text-link" type="button">View analysis →</button>
+            </div>
+            <div class="margin-bars">
+                <div class="bar-row">
+                    <header><strong>In-home care</strong><span>42.1% / 40-45% target</span></header>
+                    <div class="bar-track" role="progressbar" aria-label="In-home care margin" aria-valuemin="0" aria-valuemax="50" aria-valuenow="42.1">
+                        <span class="bar-fill bar-fill-home"></span>
+                    </div>
+                </div>
+                <div class="bar-row">
+                    <header><strong>Healthcare staffing</strong><span>28.4% / 25-30% target</span></header>
+                    <div class="bar-track" role="progressbar" aria-label="Healthcare staffing margin" aria-valuemin="0" aria-valuemax="50" aria-valuenow="28.4">
+                        <span class="bar-fill bar-fill-staffing"></span>
+                    </div>
+                </div>
+            </div>
+        </section>
+    </div>
+
+    <aside>
+        <section class="card" aria-labelledby="alerts-heading">
+            <div class="section-header">
+                <h2 id="alerts-heading">Needs attention</h2>
+                <span class="status status-red">7 items</span>
+            </div>
+            <ul class="alert-list">
+                <li class="alert-item"><strong>4 shifts need coverage</strong><p>Two start within the next 6 hours.</p></li>
+                <li class="alert-item"><strong>3 visit notes overdue</strong><p>Documentation required before billing.</p></li>
+                <li class="alert-item"><strong>2 credentials expiring</strong><p>CNA and CPR expire within 30 days.</p></li>
+            </ul>
+        </section>
+
+        <section class="card section-offset" aria-labelledby="actions-heading">
+            <h2 id="actions-heading">Quick actions</h2>
+            <div class="quick-actions">
+                <button type="button">＋ Add client</button>
+                <button type="button">＋ Add caregiver</button>
+                <button type="button">$ Generate invoices</button>
+                <button type="button">✓ Review credentials</button>
+            </div>
+        </section>
     </aside>
-</section>
+</div>

@@ -2,6 +2,17 @@
 
 <a class="skip-link" href="#main-content">Skip to main content</a>
 
+<header class="prototype-bar">
+    <div>
+        <strong>CarePath Health — Product Wireframe</strong>
+        <p>Interactive concept — no real patient data</p>
+    </div>
+    <div class="view-switcher" aria-label="Prototype view">
+        <button type="button" aria-selected="true">Web operations</button>
+        <button type="button" aria-selected="false">Caregiver mobile</button>
+    </div>
+</header>
+
 <div class="web-app">
     <aside class="sidebar" aria-label="Primary navigation">
         <NavMenu />
@@ -9,22 +20,27 @@
 
     <div class="desktop-main">
         <header class="topbar">
-            <div class="search">
-                <label for="carepath-search">Search</label>
-                <input id="carepath-search" type="search" placeholder="Search clients, shifts, or plans" />
-            </div>
-
-            <div class="user-menu" aria-label="Current user">
+            <form class="search" role="search" @onsubmit="OnSearchSubmit" @onsubmit:preventDefault="true">
+                <label for="global-search">Search caregivers, clients, shifts, or invoices</label>
+                <input id="global-search" type="search" placeholder="Search caregivers, clients, shifts, invoices..." />
+            </form>
+            <div class="user-menu">
+                <div class="avatar" aria-hidden="true">TK</div>
                 <div>
-                    <strong>CarePath Health</strong>
-                    <span class="subtle">Web MVP</span>
+                    <strong>Tobi Kareem</strong>
+                    <span class="meta">Administrator</span>
                 </div>
-                <span class="avatar" aria-hidden="true">CP</span>
             </div>
         </header>
 
-        <main id="main-content" class="content">
+        <main id="main-content" class="web-page">
             @Body
         </main>
     </div>
 </div>
+
+@code {
+    private static void OnSearchSubmit()
+    {
+    }
+}

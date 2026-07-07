@@ -1,0 +1,10 @@
+@namespace CarePath.Client.UI.Components
+@using CarePath.Contracts.Enumerations
+
+<StatusBadge Text="@($"{Level} risk")" Tone="@StatusBadgeTones.For(Level)" />
+
+@code {
+    /// <summary>The transition risk level to display.</summary>
+    [Parameter, EditorRequired]
+    public TransitionRiskLevel Level { get; set; }
+}

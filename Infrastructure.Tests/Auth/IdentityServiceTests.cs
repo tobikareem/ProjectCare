@@ -113,13 +113,70 @@ public sealed class IdentityServiceTests
 
         // Act
         var firstFailure = await service.ValidateCredentialsAsync(fixture.Email, "WrongPassword1");
+        var userManager = fixture.ServiceProvider.GetRequiredService<UserManager<ApplicationUser>>();
+        var userAfterFirstFailure = await userManager.FindByIdAsync(fixture.UserId.ToString());
+        var firstFailureCount = userAfterFirstFailure?.AccessFailedCount;
+
         var secondFailure = await service.ValidateCredentialsAsync(fixture.Email, "WrongPassword1");
         var lockedOutResult = await service.ValidateCredentialsAsync(fixture.Email, Password);
 
         // Assert
         firstFailure.FailureCode.Should().Be("InvalidCredentials");
+        firstFailureCount.Should().Be(1);
         secondFailure.FailureCode.Should().Be("LockedOut");
         lockedOutResult.FailureCode.Should().Be("LockedOut");
+
+        var user = await userManager.FindByIdAsync(fixture.UserId.ToString());
+        user.Should().NotBeNull();
+        var isLockedOut = await userManager.IsLockedOutAsync(user!);
+        isLockedOut.Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task RefreshTokenAsync_WhenTokenIsRotated_RejectsReuseAndStoresOnlyHash()
+    {
+        // Arrange
+        await using var fixture = await IdentityFixture.CreateAsync(isActive: true, isDeleted: false, UserRole.Admin);
+        var service = fixture.ServiceProvider.GetRequiredService<IdentityService>();
+
+        // Act
+        var firstToken = await service.IssueRefreshTokenAsync(fixture.UserId);
+        var rotated = await service.RotateRefreshTokenAsync(firstToken);
+        var reused = await service.RotateRefreshTokenAsync(firstToken);
+
+        // Assert
+        firstToken.Should().NotBeNullOrWhiteSpace();
+        rotated.Succeeded.Should().BeTrue();
+        rotated.RefreshToken.Should().NotBeNullOrWhiteSpace();
+        rotated.RefreshToken.Should().NotBe(firstToken);
+        reused.Succeeded.Should().BeFalse();
+        reused.FailureCode.Should().Be("InvalidCredentials");
+
+        var context = fixture.ServiceProvider.GetRequiredService<CarePathDbContext>();
+        var user = await context.Set<ApplicationUser>().SingleAsync(identityUser => identityUser.Id == fixture.UserId);
+        user.RefreshTokenHash.Should().NotBeNullOrWhiteSpace();
+        user.RefreshTokenHash.Should().NotBe(rotated.RefreshToken);
+    }
+
+    [Fact]
+    public async Task RotateRefreshTokenAsync_WhenTokenIsExpired_ReturnsInvalidCredentials()
+    {
+        // Arrange
+        await using var fixture = await IdentityFixture.CreateAsync(isActive: true, isDeleted: false, UserRole.Admin);
+        var service = fixture.ServiceProvider.GetRequiredService<IdentityService>();
+        var refreshToken = await service.IssueRefreshTokenAsync(fixture.UserId);
+
+        var context = fixture.ServiceProvider.GetRequiredService<CarePathDbContext>();
+        var user = await context.Set<ApplicationUser>().SingleAsync(identityUser => identityUser.Id == fixture.UserId);
+        user.RefreshTokenExpiresAtUtc = DateTime.UtcNow.AddMinutes(-1);
+        await context.SaveChangesAsync();
+
+        // Act
+        var result = await service.RotateRefreshTokenAsync(refreshToken);
+
+        // Assert
+        result.Succeeded.Should().BeFalse();
+        result.FailureCode.Should().Be("InvalidCredentials");
     }
 
     private sealed class IdentityFixture : IAsyncDisposable

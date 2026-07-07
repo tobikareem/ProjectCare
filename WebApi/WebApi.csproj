@@ -3,6 +3,7 @@
   <PropertyGroup>
     <RootNamespace>CarePath.WebApi</RootNamespace>
     <AssemblyName>CarePath.WebApi</AssemblyName>
+    <UserSecretsId>f096a436-82b1-47d0-a11e-0d911b4a8369</UserSecretsId>
   </PropertyGroup>
 
   <ItemGroup>

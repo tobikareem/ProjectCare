@@ -1,5 +1,6 @@
 using CarePath.Application.Abstractions.Auth;
 using CarePath.Infrastructure.Auth;
+using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authorization;
 
@@ -12,7 +13,13 @@ public static class AuthenticationServiceCollectionExtensions
         IConfiguration configuration)
     {
         services
-            .AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
+            .AddAuthentication(options =>
+            {
+                options.DefaultAuthenticateScheme = JwtBearerDefaults.AuthenticationScheme;
+                options.DefaultChallengeScheme = JwtBearerDefaults.AuthenticationScheme;
+                options.DefaultForbidScheme = JwtBearerDefaults.AuthenticationScheme;
+                options.DefaultScheme = JwtBearerDefaults.AuthenticationScheme;
+            })
             .AddJwtBearer(options =>
             {
                 options.IncludeErrorDetails = false;
@@ -23,10 +30,15 @@ public static class AuthenticationServiceCollectionExtensions
         {
             foreach (var role in ApplicationRoles.All)
             {
-                options.AddPolicy(role, policy => policy.RequireRole(role));
+                options.AddPolicy(role, policy =>
+                {
+                    policy.AuthenticationSchemes.Add(JwtBearerDefaults.AuthenticationScheme);
+                    policy.RequireRole(role);
+                });
             }
 
             options.FallbackPolicy = new AuthorizationPolicyBuilder()
+                .AddAuthenticationSchemes(JwtBearerDefaults.AuthenticationScheme)
                 .RequireAuthenticatedUser()
                 .Build();
         });

@@ -1,0 +1,70 @@
+@namespace CarePath.Client.UI.Components
+@using CarePath.Contracts.Transitions
+
+@* Clinician review card: clinical DTO (SourceText + confidence) — use ONLY on
+   Clinician/Coordinator screens per D-S5-3. *@
+
+<div class="cp-instruction-review @(Instruction.IsLowConfidence ? "cp-instruction-low-confidence" : null)"
+     role="group" aria-label="Instruction under review">
+    <div class="cp-instruction-review-header">
+        <span class="cp-instruction-review-category">@Instruction.Category</span>
+        <StatusBadge Text="@Instruction.Status.ToString()" Tone="@StatusBadgeTones.For(Instruction.Status)" />
+        @if (Instruction.IsLowConfidence)
+        {
+            <StatusBadge Text="@($"Low confidence {Instruction.ConfidenceScore:P0}")" Tone="BadgeTone.Warning" />
+        }
+        @if (Instruction.NeedsPharmacistReview)
+        {
+            <StatusBadge Text="Pharmacist review" Tone="BadgeTone.Warning" />
+        }
+    </div>
+
+    <p class="cp-instruction-review-text">@Instruction.InstructionText</p>
+
+    @if (!string.IsNullOrWhiteSpace(Instruction.SourceText))
+    {
+        <details class="cp-instruction-review-source">
+            <summary>Source text</summary>
+            <p>@Instruction.SourceText</p>
+        </details>
+    }
+
+    @if (!string.IsNullOrWhiteSpace(Instruction.ClinicalNote))
+    {
+        <p class="cp-instruction-review-note">@Instruction.ClinicalNote</p>
+    }
+
+    @if (ShowActions)
+    {
+        <div class="cp-instruction-review-actions">
+            <button type="button" class="cp-review-approve" aria-label="Approve instruction"
+                    @onclick="() => OnApprove.InvokeAsync(Instruction.Id)">Approve</button>
+            <button type="button" class="cp-review-modify" aria-label="Modify instruction"
+                    @onclick="() => OnModify.InvokeAsync(Instruction.Id)">Modify</button>
+            <button type="button" class="cp-review-reject" aria-label="Reject instruction"
+                    @onclick="() => OnReject.InvokeAsync(Instruction.Id)">Reject</button>
+        </div>
+    }
+</div>
+
+@code {
+    /// <summary>The clinical instruction under review.</summary>
+    [Parameter, EditorRequired]
+    public TransitionInstructionClinicalDto Instruction { get; set; } = default!;
+
+    /// <summary>Show the review action buttons (hide for read-only views).</summary>
+    [Parameter]
+    public bool ShowActions { get; set; } = true;
+
+    /// <summary>Raised with the instruction ID when the clinician approves.</summary>
+    [Parameter]
+    public EventCallback<Guid> OnApprove { get; set; }
+
+    /// <summary>Raised with the instruction ID to open the modify flow.</summary>
+    [Parameter]
+    public EventCallback<Guid> OnModify { get; set; }
+
+    /// <summary>Raised with the instruction ID when the clinician rejects.</summary>
+    [Parameter]
+    public EventCallback<Guid> OnReject { get; set; }
+}

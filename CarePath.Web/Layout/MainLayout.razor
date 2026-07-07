@@ -1,0 +1,30 @@
+@inherits LayoutComponentBase
+
+<a class="skip-link" href="#main-content">Skip to main content</a>
+
+<div class="web-app">
+    <aside class="sidebar" aria-label="Primary navigation">
+        <NavMenu />
+    </aside>
+
+    <div class="desktop-main">
+        <header class="topbar">
+            <div class="search">
+                <label for="carepath-search">Search</label>
+                <input id="carepath-search" type="search" placeholder="Search clients, shifts, or plans" />
+            </div>
+
+            <div class="user-menu" aria-label="Current user">
+                <div>
+                    <strong>CarePath Health</strong>
+                    <span class="subtle">Web MVP</span>
+                </div>
+                <span class="avatar" aria-hidden="true">CP</span>
+            </div>
+        </header>
+
+        <main id="main-content" class="content">
+            @Body
+        </main>
+    </div>
+</div>

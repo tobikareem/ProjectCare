@@ -1,0 +1,201 @@
+/*
+  CarePath shared component styles (D-S6-9).
+  SOURCE OF TRUTH: Documentation/Wireframes/carepath-wireframe.html — the design tokens below
+  are extracted from it verbatim. Do not invent colors/fonts here; change the wireframe first.
+  Consumed via: <link href="_content/CarePath.Client.UI/carepath-ui.css" rel="stylesheet" />
+*/
+
+:root {
+  --ink: #172525;
+  --muted: #60706e;
+  --line: #cbd6d3;
+  --surface: #ffffff;
+  --surface-alt: #f3f7f6;
+  --teal-900: #073f43;
+  --teal-700: #08737b;
+  --teal-100: #d9eff0;
+  --orange: #c65323;
+  --orange-soft: #fff0e8;
+  --green: #24734f;
+  --green-soft: #e2f3e9;
+  --amber: #8a6100;
+  --amber-soft: #fff4cf;
+  --red: #a33131;
+  --red-soft: #fde8e8;
+  --shadow: 0 18px 48px rgb(7 63 67 / 12%);
+  --radius: 14px;
+  --focus: #ff8a3d;
+}
+
+/* ---- Badges (StatusBadge / RiskBadge) — wireframe soft-color pill pattern ---- */
+.cp-badge {
+  display: inline-block;
+  padding: 3px 10px;
+  border-radius: 999px;
+  font-size: 0.8rem;
+  font-weight: 700;
+  line-height: 1.4;
+}
+.cp-badge-neutral { color: var(--muted); background: var(--surface-alt); border: 1px solid var(--line); }
+.cp-badge-info    { color: var(--teal-700); background: var(--teal-100); }
+.cp-badge-success { color: var(--green); background: var(--green-soft); }
+.cp-badge-warning { color: var(--amber); background: var(--amber-soft); }
+.cp-badge-danger  { color: var(--red); background: var(--red-soft); }
+
+/* ---- Focus visibility (wireframe --focus, D-S6-7 accessibility) ---- */
+.cp-shift-card-action:focus-visible,
+.cp-escalation-ack:focus-visible,
+.cp-review-approve:focus-visible,
+.cp-review-modify:focus-visible,
+.cp-review-reject:focus-visible,
+.cp-pager-prev:focus-visible,
+.cp-pager-next:focus-visible {
+  outline: 3px solid var(--focus);
+  outline-offset: 2px;
+}
+
+/* ---- KpiCard ---- */
+.cp-kpi-card {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 16px 18px;
+  color: var(--ink);
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+}
+.cp-kpi-label { color: var(--muted); font-size: 0.85rem; font-weight: 600; }
+.cp-kpi-value { font-size: 1.7rem; font-weight: 800; }
+.cp-kpi-warning .cp-kpi-value { color: var(--amber); }
+.cp-kpi-danger .cp-kpi-value { color: var(--red); }
+.cp-kpi-success .cp-kpi-value { color: var(--green); }
+.cp-kpi-info .cp-kpi-value { color: var(--teal-700); }
+
+/* ---- ShiftCard ---- */
+.cp-shift-card {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 14px 16px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+}
+.cp-shift-card-header { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.cp-shift-card-client { color: var(--ink); font-weight: 700; }
+.cp-shift-card-body { display: flex; flex-direction: column; gap: 2px; color: var(--muted); font-size: 0.9rem; }
+.cp-shift-card-action {
+  align-self: flex-start;
+  padding: 6px 14px;
+  color: #fff;
+  background: var(--teal-700);
+  border: 0;
+  border-radius: 8px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.cp-shift-card-action:hover { background: var(--teal-900); }
+
+/* ---- EscalationBanner ---- */
+.cp-escalation-banner {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 14px 16px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-left: 6px solid var(--amber);
+  border-radius: var(--radius);
+}
+.cp-escalation-urgentcare, .cp-escalation-emergency911 { border-left-color: var(--red); }
+.cp-escalation-header { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.cp-escalation-time { color: var(--muted); font-size: 0.85rem; }
+.cp-escalation-details { margin: 0; color: var(--ink); }
+.cp-escalation-ack {
+  align-self: flex-start;
+  padding: 6px 14px;
+  color: #fff;
+  background: var(--orange);
+  border: 0;
+  border-radius: 8px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.cp-escalation-acked { color: var(--green); font-size: 0.85rem; font-weight: 600; }
+
+/* ---- PatientInstructionCard ---- */
+.cp-patient-instruction {
+  padding: 12px 16px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+}
+.cp-patient-instruction-category { color: var(--teal-700); font-size: 0.8rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.04em; }
+.cp-patient-instruction-text { margin: 4px 0 0; color: var(--ink); }
+
+/* ---- InstructionReviewCard ---- */
+.cp-instruction-review {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 14px 16px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+}
+.cp-instruction-low-confidence { border-left: 6px solid var(--amber); background: var(--amber-soft); }
+.cp-instruction-review-header { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.cp-instruction-review-category { color: var(--teal-700); font-weight: 800; }
+.cp-instruction-review-text { margin: 0; color: var(--ink); }
+.cp-instruction-review-source summary { color: var(--muted); cursor: pointer; font-size: 0.85rem; }
+.cp-instruction-review-source p { margin: 6px 0 0; padding: 8px 10px; color: var(--muted); background: var(--surface-alt); border-radius: 8px; font-size: 0.9rem; }
+.cp-instruction-review-note { margin: 0; color: var(--muted); font-style: italic; font-size: 0.9rem; }
+.cp-instruction-review-actions { display: flex; gap: 8px; }
+.cp-review-approve { padding: 6px 14px; color: #fff; background: var(--green); border: 0; border-radius: 8px; font-weight: 700; cursor: pointer; }
+.cp-review-modify { padding: 6px 14px; color: var(--ink); background: var(--surface-alt); border: 1px solid var(--line); border-radius: 8px; font-weight: 700; cursor: pointer; }
+.cp-review-reject { padding: 6px 14px; color: var(--red); background: var(--red-soft); border: 0; border-radius: 8px; font-weight: 700; cursor: pointer; }
+
+/* ---- ValidationErrorList / ApiErrorAlert ---- */
+.cp-validation-errors {
+  margin: 0;
+  padding: 12px 16px 12px 32px;
+  color: var(--red);
+  background: var(--red-soft);
+  border-radius: var(--radius);
+}
+.cp-api-error {
+  padding: 12px 16px;
+  color: var(--red);
+  background: var(--red-soft);
+  border-radius: var(--radius);
+}
+.cp-api-error-message { margin: 0; font-weight: 600; }
+.cp-api-error-trace { margin: 4px 0 0; color: var(--muted); font-size: 0.8rem; }
+
+/* ---- PagedTable ---- */
+.cp-table { width: 100%; border-collapse: collapse; background: var(--surface); border-radius: var(--radius); }
+.cp-table th { padding: 10px 12px; color: var(--muted); text-align: left; font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.04em; border-bottom: 1px solid var(--line); }
+.cp-table td { padding: 10px 12px; color: var(--ink); border-bottom: 1px solid var(--line); }
+.cp-table-empty { color: var(--muted); text-align: center; }
+.cp-pager { display: flex; align-items: center; gap: 12px; margin-top: 10px; }
+.cp-pager-prev, .cp-pager-next {
+  padding: 6px 14px;
+  color: var(--teal-700);
+  background: var(--teal-100);
+  border: 0;
+  border-radius: 8px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.cp-pager-prev:disabled, .cp-pager-next:disabled { color: var(--muted); background: var(--surface-alt); cursor: not-allowed; }
+.cp-pager-status { color: var(--muted); font-size: 0.9rem; }
+
+/* ---- AuditTimeline ---- */
+.cp-audit-timeline { margin: 0; padding-left: 20px; }
+.cp-audit-timeline-entry { display: flex; flex-wrap: wrap; gap: 8px; padding: 6px 0; color: var(--ink); border-bottom: 1px solid var(--line); }
+.cp-audit-timeline-time { color: var(--muted); font-size: 0.85rem; min-width: 130px; }
+.cp-audit-timeline-action { font-weight: 700; }
+.cp-audit-timeline-actor { color: var(--teal-700); }
+.cp-audit-timeline-description { color: var(--muted); }

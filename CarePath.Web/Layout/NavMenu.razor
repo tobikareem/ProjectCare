@@ -1,0 +1,66 @@
+<a class="brand" href="" aria-label="CarePath dashboard">
+    <span class="brand-mark" aria-hidden="true">C</span>
+    <span>
+        <span class="brand-name">CarePath</span>
+        <span class="brand-subtitle">Care coordination</span>
+    </span>
+</a>
+
+<button type="button" class="nav-toggle" @onclick="ToggleNavMenu" aria-expanded="@(!collapseNavMenu)">
+    Navigation
+</button>
+
+<div class="@NavMenuCssClass nav-scrollable">
+    <div class="nav-label">Coordinator</div>
+    <nav class="side-nav" aria-label="Coordinator navigation">
+        <NavLink class="nav-link" href="" Match="NavLinkMatch.All">
+            <span class="nav-glyph" aria-hidden="true">D</span>
+            <span>Dashboard</span>
+        </NavLink>
+        <NavLink class="nav-link" href="schedule">
+            <span class="nav-glyph" aria-hidden="true">S</span>
+            <span>Schedule</span>
+        </NavLink>
+        <NavLink class="nav-link" href="credentials">
+            <span class="nav-glyph" aria-hidden="true">C</span>
+            <span>Credentials</span>
+        </NavLink>
+        <NavLink class="nav-link" href="transitions/escalations">
+            <span class="nav-glyph" aria-hidden="true">E</span>
+            <span>Escalations</span>
+            <span class="nav-count">3</span>
+        </NavLink>
+    </nav>
+
+    <div class="nav-label">Clinician</div>
+    <nav class="side-nav" aria-label="Clinician navigation">
+        <NavLink class="nav-link" href="transitions/review">
+            <span class="nav-glyph" aria-hidden="true">R</span>
+            <span>Review Queue</span>
+            <span class="nav-count">5</span>
+        </NavLink>
+    </nav>
+
+    <div class="nav-label">Admin</div>
+    <nav class="side-nav" aria-label="Admin navigation">
+        <NavLink class="nav-link" href="admin/users">
+            <span class="nav-glyph" aria-hidden="true">U</span>
+            <span>Users</span>
+        </NavLink>
+        <NavLink class="nav-link" href="billing/margins">
+            <span class="nav-glyph" aria-hidden="true">M</span>
+            <span>Margin Snapshot</span>
+        </NavLink>
+    </nav>
+</div>
+
+@code {
+    private bool collapseNavMenu = true;
+
+    private string? NavMenuCssClass => collapseNavMenu ? "collapse" : null;
+
+    private void ToggleNavMenu()
+    {
+        collapseNavMenu = !collapseNavMenu;
+    }
+}

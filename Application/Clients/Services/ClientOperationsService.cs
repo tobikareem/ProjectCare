@@ -187,11 +187,16 @@ public sealed class ClientOperationsService : IClientOperationsService
         return client.ToDetailDto(includeOperationalFields: HasOperationalClientDetailAccess());
     }
 
-    public async Task<ClientDetailDto> GetClientAsync(
+    public async Task<ClientDetailDto?> GetClientAsync(
         Guid clientId,
         CancellationToken cancellationToken = default)
     {
-        var client = await GetClientEntityAsync(clientId, cancellationToken);
+        var client = await unitOfWork.Clients.GetByIdAsync(clientId, cancellationToken);
+        if (client is null)
+        {
+            return null;
+        }
+
         await EnsureCanReadClientAsync(client, AccessScope.Full, cancellationToken);
 
         client.User = await GetUserAsync(client.UserId, cancellationToken);

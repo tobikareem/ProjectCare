@@ -75,8 +75,8 @@ public class CarePathDbContextSeedTests
         await CarePathDbContextSeed.SeedAsync(context, userManager, roleManager, configuration, environment);
 
         // Assert
-        (await context.DomainUsers.IgnoreQueryFilters().CountAsync()).Should().Be(3);
-        (await context.Set<ApplicationUser>().IgnoreQueryFilters().CountAsync()).Should().Be(3);
+        (await context.DomainUsers.IgnoreQueryFilters().CountAsync()).Should().Be(5);
+        (await context.Set<ApplicationUser>().IgnoreQueryFilters().CountAsync()).Should().Be(5);
         (await roleManager.Roles.CountAsync()).Should().Be(Enum.GetNames<UserRole>().Length);
         (await context.Caregivers.IgnoreQueryFilters().CountAsync()).Should().Be(1);
         (await context.Clients.IgnoreQueryFilters().CountAsync()).Should().Be(1);
@@ -84,6 +84,16 @@ public class CarePathDbContextSeedTests
         var adminIdentity = await userManager.FindByEmailAsync("admin@carepath.local");
         adminIdentity.Should().NotBeNull();
         (await userManager.IsInRoleAsync(adminIdentity!, UserRole.Admin.ToString())).Should().BeTrue();
+
+        var coordinatorIdentity = await userManager.FindByEmailAsync("coordinator@carepath.local");
+        coordinatorIdentity.Should().NotBeNull();
+        coordinatorIdentity!.Id.Should().Be(Guid.Parse("66666666-6666-6666-6666-666666666666"));
+        (await userManager.IsInRoleAsync(coordinatorIdentity, UserRole.Coordinator.ToString())).Should().BeTrue();
+
+        var clinicianIdentity = await userManager.FindByEmailAsync("clinician@carepath.local");
+        clinicianIdentity.Should().NotBeNull();
+        clinicianIdentity!.Id.Should().Be(Guid.Parse("77777777-7777-7777-7777-777777777777"));
+        (await userManager.IsInRoleAsync(clinicianIdentity, UserRole.Clinician.ToString())).Should().BeTrue();
 
         var client = await context.Clients.IgnoreQueryFilters().SingleAsync();
         client.MedicalConditions.Should().StartWith("Synthetic demo condition only");
@@ -116,11 +126,11 @@ public class CarePathDbContextSeedTests
         await CarePathDbContextSeed.SeedAsync(context, userManager, roleManager, configuration, environment);
 
         // Assert
-        (await context.DomainUsers.IgnoreQueryFilters().CountAsync()).Should().Be(3);
-        (await context.Set<ApplicationUser>().IgnoreQueryFilters().CountAsync()).Should().Be(3);
+        (await context.DomainUsers.IgnoreQueryFilters().CountAsync()).Should().Be(5);
+        (await context.Set<ApplicationUser>().IgnoreQueryFilters().CountAsync()).Should().Be(5);
         (await context.Caregivers.IgnoreQueryFilters().CountAsync()).Should().Be(1);
         (await context.Clients.IgnoreQueryFilters().CountAsync()).Should().Be(1);
-        (await context.DomainUsers.CountAsync()).Should().Be(3);
+        (await context.DomainUsers.CountAsync()).Should().Be(5);
         (await context.Caregivers.CountAsync()).Should().Be(1);
         (await context.Clients.CountAsync()).Should().Be(1);
     }

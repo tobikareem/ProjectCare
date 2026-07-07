@@ -1,0 +1,33 @@
+@namespace CarePath.Client.UI.Components
+@using CarePath.Contracts.Transitions
+
+<div class="cp-escalation-banner cp-escalation-@Escalation.EscalationLevel.ToString().ToLowerInvariant()"
+     role="alert" aria-label="Escalation">
+    <div class="cp-escalation-header">
+        <StatusBadge Text="@Escalation.TriggerType.ToString()" Tone="@StatusBadgeTones.For(Escalation.EscalationLevel)" />
+        <span class="cp-escalation-time">@Escalation.EscalatedAt.ToLocalTime().ToString("g")</span>
+    </div>
+    <p class="cp-escalation-details">@Escalation.TriggerDetails</p>
+    @if (Escalation.AcknowledgedAt is null && OnAcknowledge.HasDelegate)
+    {
+        <button type="button" class="cp-escalation-ack"
+                aria-label="Acknowledge escalation"
+                @onclick="() => OnAcknowledge.InvokeAsync(Escalation.Id)">
+            Acknowledge
+        </button>
+    }
+    else if (Escalation.AcknowledgedAt is not null)
+    {
+        <span class="cp-escalation-acked">Acknowledged @Escalation.AcknowledgedAt.Value.ToLocalTime().ToString("g")</span>
+    }
+</div>
+
+@code {
+    /// <summary>The escalation to render (coordinator-facing clinical PHI — never logged).</summary>
+    [Parameter, EditorRequired]
+    public TransitionEscalationDto Escalation { get; set; } = default!;
+
+    /// <summary>Raised with the escalation ID to open the acknowledge flow.</summary>
+    [Parameter]
+    public EventCallback<Guid> OnAcknowledge { get; set; }
+}

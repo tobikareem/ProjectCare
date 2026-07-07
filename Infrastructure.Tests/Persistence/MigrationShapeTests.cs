@@ -8,6 +8,7 @@ public class MigrationShapeTests
     private const string InitialMigrationFile = "20260628003352_InitialCreate.cs";
     private const string ClientAccessGrantMigrationFile = "20260705080331_AddClientAccessGrants.cs";
     private const string AddTransitionsMigrationFile = "20260706085154_AddTransitions.cs";
+    private const string AddAuthRefreshTokensMigrationFile = "20260706210500_AddAuthRefreshTokens.cs";
 
     [Fact]
     public void InitialCreateMigration_WhenGenerated_CreatesExpectedCp01TablesOnly()
@@ -182,6 +183,26 @@ public class MigrationShapeTests
         downBody.Should().Contain("THROW 51002");
         downBody.Should().NotContain("DropTable");
         downBody.Should().NotContain("DropColumn");
+    }
+
+    [Fact]
+    public void AddAuthRefreshTokensMigration_WhenGenerated_AddsOnlyHashedRefreshTokenColumns()
+    {
+        // Arrange
+        var migrationText = ReadMigration(AddAuthRefreshTokensMigrationFile);
+
+        // Assert
+        migrationText.Should().Contain("table: \"AspNetUsers\"");
+        migrationText.Should().Contain("name: \"RefreshTokenHash\"");
+        migrationText.Should().Contain("type: \"nvarchar(128)\"");
+        migrationText.Should().Contain("name: \"RefreshTokenExpiresAtUtc\"");
+        migrationText.Should().Contain("type: \"datetime2\"");
+        migrationText.Should().Contain("name: \"IX_AspNetUsers_RefreshTokenHash\"");
+        migrationText.Should().Contain("filter: \"[RefreshTokenHash] IS NOT NULL\"");
+        migrationText.Should().NotContain("RefreshToken\"");
+        migrationText.Should().NotContain("nvarchar(max)");
+        migrationText.Should().NotContain("DeleteData");
+        migrationText.Should().NotContain("TRUNCATE");
     }
 
     private static void AssertRestrictForeignKey(string migrationText, string foreignKeyName)

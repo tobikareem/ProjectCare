@@ -1,8 +1,9 @@
 using CarePath.Application.Abstractions.Auth;
 using CarePath.WebApi.Security;
 using FluentAssertions;
-using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Authorization.Infrastructure;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -22,12 +23,19 @@ public sealed class AuthConfigurationTests
         // Act
         services.AddCarePathAuthentication(configuration);
         using var provider = services.BuildServiceProvider();
+        var authenticationOptions = provider.GetRequiredService<IOptions<AuthenticationOptions>>().Value;
         var authorizationOptions = provider.GetRequiredService<IOptions<AuthorizationOptions>>().Value;
         var jwtOptions = provider.GetRequiredService<IOptionsMonitor<JwtBearerOptions>>().Get(JwtBearerDefaults.AuthenticationScheme);
 
         // Assert
+        authenticationOptions.DefaultAuthenticateScheme.Should().Be(JwtBearerDefaults.AuthenticationScheme);
+        authenticationOptions.DefaultChallengeScheme.Should().Be(JwtBearerDefaults.AuthenticationScheme);
+        authenticationOptions.DefaultForbidScheme.Should().Be(JwtBearerDefaults.AuthenticationScheme);
         jwtOptions.IncludeErrorDetails.Should().BeFalse();
         authorizationOptions.FallbackPolicy.Should().NotBeNull();
+        authorizationOptions.FallbackPolicy!.AuthenticationSchemes
+            .Should()
+            .ContainSingle(JwtBearerDefaults.AuthenticationScheme);
         authorizationOptions.FallbackPolicy!.Requirements
             .Any(requirement => requirement is DenyAnonymousAuthorizationRequirement)
             .Should()
@@ -37,6 +45,7 @@ public sealed class AuthConfigurationTests
         {
             var policy = authorizationOptions.GetPolicy(role);
             policy.Should().NotBeNull($"role policy {role} must be registered");
+            policy!.AuthenticationSchemes.Should().ContainSingle(JwtBearerDefaults.AuthenticationScheme);
             policy!.Requirements
                 .Any(requirement =>
                     requirement is RolesAuthorizationRequirement rolesRequirement &&

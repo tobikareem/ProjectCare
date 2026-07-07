@@ -1,0 +1,17 @@
+@namespace CarePath.Client.UI.Components
+@using CarePath.Contracts.Transitions
+
+@* PHI SAFETY BY TYPE (D-S6-4): this component accepts ONLY the patient-facing instruction
+   DTO. It cannot render SourceText, confidence scores, review status, or clinician notes —
+   those fields do not exist on the parameter type, so leakage is a compile error. *@
+
+<div class="cp-patient-instruction" role="group" aria-label="Care instruction">
+    <span class="cp-patient-instruction-category">@Instruction.Category</span>
+    <p class="cp-patient-instruction-text">@Instruction.InstructionText</p>
+</div>
+
+@code {
+    /// <summary>The clinician-approved, patient-safe instruction.</summary>
+    [Parameter, EditorRequired]
+    public TransitionInstructionPatientFacingDto Instruction { get; set; } = default!;
+}

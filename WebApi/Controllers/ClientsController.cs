@@ -3,6 +3,7 @@ using CarePath.Application.Clients.Services;
 using CarePath.Application.Common.Exceptions;
 using CarePath.Contracts.Clients;
 using CarePath.Contracts.Common;
+using CarePath.WebApi.Middleware;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
@@ -12,6 +13,8 @@ namespace CarePath.WebApi.Controllers;
 [Route("api/clients")]
 public sealed class ClientsController : ControllerBase
 {
+    private const string ResourceNotFoundCode = "resource.not_found";
+
     private readonly IClientOperationsService clientService;
     private readonly IClientAccessGrantService grantService;
     private readonly IIdorGuard idorGuard;
@@ -33,7 +36,8 @@ public sealed class ClientsController : ControllerBase
     public async Task<ActionResult<ClientDetailDto>> GetClient(Guid id, CancellationToken cancellationToken)
     {
         await EnsureAuthorizedAsync(ProtectedResourceType.Client, id, ObjectAccessAction.Read, cancellationToken);
-        return Ok(await clientService.GetClientAsync(id, cancellationToken));
+        var client = await clientService.GetClientAsync(id, cancellationToken);
+        return client is null ? ClientNotFound() : Ok(client);
     }
 
     [HttpPost]
@@ -100,5 +104,20 @@ public sealed class ClientsController : ControllerBase
         {
             throw new ResourceAccessDeniedException(result.DenialCode ?? "ResourceUnavailable", isPhiResource: true);
         }
+    }
+
+    private static NotFoundObjectResult ClientNotFound()
+    {
+        return new NotFoundObjectResult(new ProblemDetailsResponse
+        {
+            Type = "about:blank",
+            Title = "Resource not found.",
+            Status = StatusCodes.Status404NotFound,
+            Detail = null,
+            Instance = null,
+            TraceId = null,
+            ValidationErrors = [],
+            Errors = [new ApiError(ResourceNotFoundCode, "Resource not found.")],
+        });
     }
 }

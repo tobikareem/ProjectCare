@@ -62,6 +62,11 @@ public interface ITransitionsService
         Guid planId,
         CancellationToken cancellationToken = default);
 
+    Task<PagedResult<TransitionEscalationDto>> GetEscalationQueueAsync(
+        PagedRequest request,
+        bool openOnly = true,
+        CancellationToken cancellationToken = default);
+
     Task<TransitionEscalationDto> AcknowledgeEscalationAsync(
         Guid escalationId,
         AcknowledgeEscalationRequest request,

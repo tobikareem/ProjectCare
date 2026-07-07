@@ -10,4 +10,12 @@ public interface IIdentityService
     Task<IdentityUserResult> GetUserAsync(
         Guid userId,
         CancellationToken cancellationToken = default);
+
+    Task<string> IssueRefreshTokenAsync(
+        Guid userId,
+        CancellationToken cancellationToken = default);
+
+    Task<RefreshTokenRotationResult> RotateRefreshTokenAsync(
+        string refreshToken,
+        CancellationToken cancellationToken = default);
 }

@@ -19,11 +19,19 @@ public sealed class ApplicationUserConfiguration : IEntityTypeConfiguration<Appl
         builder.Property(user => user.Email).HasMaxLength(256);
         builder.Property(user => user.UserName).HasMaxLength(256);
         builder.Property(user => user.PhoneNumber).HasMaxLength(20);
+        builder.Property(user => user.RefreshTokenHash).HasMaxLength(128);
+        builder.Property(user => user.RefreshTokenExpiresAtUtc);
 
         builder
             .HasIndex(user => user.DomainUserId)
             .IsUnique()
             .HasDatabaseName("IX_AspNetUsers_DomainUserId");
+
+        builder
+            .HasIndex(user => user.RefreshTokenHash)
+            .IsUnique()
+            .HasFilter("[RefreshTokenHash] IS NOT NULL")
+            .HasDatabaseName("IX_AspNetUsers_RefreshTokenHash");
 
         builder
             .HasOne(user => user.DomainUser)

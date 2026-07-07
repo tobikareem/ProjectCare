@@ -1,0 +1,35 @@
+@namespace CarePath.Client.UI.Components
+@using CarePath.Contracts.Scheduling
+
+<div class="cp-shift-card" role="group" aria-label="Shift details">
+    <div class="cp-shift-card-header">
+        <span class="cp-shift-card-client">@Shift.ClientFullName</span>
+        <StatusBadge Text="@Shift.Status.ToString()" Tone="@StatusBadgeTones.For(Shift.Status)" />
+    </div>
+    <div class="cp-shift-card-body">
+        <span class="cp-shift-card-time">
+            @Shift.ScheduledStartTime.ToLocalTime().ToString("g") – @Shift.ScheduledEndTime.ToLocalTime().ToString("t")
+        </span>
+        <span class="cp-shift-card-caregiver">
+            @(string.IsNullOrWhiteSpace(Shift.CaregiverFullName) ? "Unassigned" : Shift.CaregiverFullName)
+        </span>
+    </div>
+    @if (OnSelected.HasDelegate)
+    {
+        <button type="button" class="cp-shift-card-action"
+                aria-label="Open shift details"
+                @onclick="() => OnSelected.InvokeAsync(Shift.Id)">
+            View
+        </button>
+    }
+</div>
+
+@code {
+    /// <summary>The shift summary to render.</summary>
+    [Parameter, EditorRequired]
+    public ShiftSummaryDto Shift { get; set; } = default!;
+
+    /// <summary>Raised with the shift ID when the caller wants a details view.</summary>
+    [Parameter]
+    public EventCallback<Guid> OnSelected { get; set; }
+}

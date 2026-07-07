@@ -3,6 +3,7 @@ using CarePath.Infrastructure.Identity;
 using CarePath.Infrastructure.Persistence;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
+using System.Security.Cryptography;
 
 namespace CarePath.Infrastructure.Auth;
 
@@ -11,6 +12,9 @@ namespace CarePath.Infrastructure.Auth;
 /// </summary>
 public sealed class IdentityService : IIdentityService
 {
+    private const int RefreshTokenBytes = 32;
+    private static readonly TimeSpan RefreshTokenLifetime = TimeSpan.FromDays(7);
+
     private readonly CarePathDbContext dbContext;
     private readonly SignInManager<ApplicationUser> signInManager;
     private readonly UserManager<ApplicationUser> userManager;
@@ -75,6 +79,95 @@ public sealed class IdentityService : IIdentityService
     }
 
     /// <inheritdoc />
+    public async Task<string> IssueRefreshTokenAsync(
+        Guid userId,
+        CancellationToken cancellationToken = default)
+    {
+        var user = await FindUserByIdAsync(userId, cancellationToken)
+            ?? throw new InvalidOperationException("Authenticated user could not be found.");
+
+        var token = CreateOpaqueRefreshToken();
+        user.RefreshTokenHash = HashRefreshToken(token);
+        user.RefreshTokenExpiresAtUtc = DateTime.UtcNow.Add(RefreshTokenLifetime);
+
+        await dbContext.SaveChangesAsync(cancellationToken);
+        return token;
+    }
+
+    /// <inheritdoc />
+    public async Task<RefreshTokenRotationResult> RotateRefreshTokenAsync(
+        string refreshToken,
+        CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(refreshToken))
+        {
+            return RefreshTokenRotationResult.Failed("InvalidCredentials");
+        }
+
+        var tokenHash = HashRefreshToken(refreshToken);
+        var matchingUsers = await userManager.Users
+            .IgnoreQueryFilters()
+            .Include(identityUser => identityUser.DomainUser)
+            .Where(identityUser => identityUser.RefreshTokenHash == tokenHash)
+            .Take(2)
+            .ToListAsync(cancellationToken);
+
+        if (matchingUsers.Count != 1)
+        {
+            return RefreshTokenRotationResult.Failed("InvalidCredentials");
+        }
+
+        var user = matchingUsers[0];
+        var now = DateTime.UtcNow;
+        if (user.RefreshTokenExpiresAtUtc is null || user.RefreshTokenExpiresAtUtc <= now)
+        {
+            return RefreshTokenRotationResult.Failed("InvalidCredentials");
+        }
+
+        var availabilityFailure = GetAvailabilityFailure(user);
+        if (availabilityFailure is not null || await userManager.IsLockedOutAsync(user))
+        {
+            return RefreshTokenRotationResult.Failed("InvalidCredentials");
+        }
+
+        var rotatedToken = CreateOpaqueRefreshToken();
+        var rotatedTokenHash = HashRefreshToken(rotatedToken);
+        var rotatedTokenExpiresAtUtc = now.Add(RefreshTokenLifetime);
+
+        if (dbContext.Database.IsRelational())
+        {
+            var updatedRows = await dbContext.Set<ApplicationUser>()
+                .Where(identityUser =>
+                    identityUser.Id == user.Id &&
+                    identityUser.RefreshTokenHash == tokenHash &&
+                    identityUser.RefreshTokenExpiresAtUtc > now)
+                .ExecuteUpdateAsync(
+                    setters => setters
+                        .SetProperty(identityUser => identityUser.RefreshTokenHash, rotatedTokenHash)
+                        .SetProperty(identityUser => identityUser.RefreshTokenExpiresAtUtc, rotatedTokenExpiresAtUtc),
+                    cancellationToken);
+
+            if (updatedRows != 1)
+            {
+                return RefreshTokenRotationResult.Failed("InvalidCredentials");
+            }
+        }
+        else
+        {
+            user.RefreshTokenHash = rotatedTokenHash;
+            user.RefreshTokenExpiresAtUtc = rotatedTokenExpiresAtUtc;
+
+            await dbContext.SaveChangesAsync(cancellationToken);
+        }
+
+        return new RefreshTokenRotationResult(
+            true,
+            await CreateSuccessResultAsync(user),
+            rotatedToken,
+            null);
+    }
+
+    /// <inheritdoc />
     public async Task<IdentityUserResult> GetUserAsync(
         Guid userId,
         CancellationToken cancellationToken = default)
@@ -134,6 +227,18 @@ public sealed class IdentityService : IIdentityService
             user.Id,
             user.Email,
             new HashSet<string>(roles, StringComparer.Ordinal),
-            null);
+            null,
+            user.DomainUser.FullName);
+    }
+
+    private static string CreateOpaqueRefreshToken()
+    {
+        return Convert.ToBase64String(RandomNumberGenerator.GetBytes(RefreshTokenBytes));
+    }
+
+    private static string HashRefreshToken(string refreshToken)
+    {
+        var hash = SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(refreshToken));
+        return Convert.ToBase64String(hash);
     }
 }

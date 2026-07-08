@@ -1,0 +1,479 @@
+@page "/transitions/{PlanId:guid}"
+@using CarePath.Client.Api
+@using CarePath.Client.UI.Components
+@using CarePath.Contracts.Common
+@using CarePath.Contracts.Enumerations
+@using CarePath.Contracts.Transitions
+@using Microsoft.AspNetCore.Authorization
+@attribute [Authorize(Roles = "Admin,Coordinator,Clinician")]
+@inject TransitionsClient TransitionsClient
+@inject NavigationManager Navigation
+@inject AuthenticationStateProvider AuthenticationStateProvider
+
+<PageTitle>Transition Plan</PageTitle>
+
+<div class="page-heading">
+    <div>
+        <p class="eyebrow">Transitions - Patient plan</p>
+        <h1>@(plan?.ClientFullName ?? "Transition plan")</h1>
+        <p class="subtle">@PlanSummary</p>
+    </div>
+    <div class="button-row">
+        <button class="button button-secondary" type="button" @onclick="GoToDashboard">Dashboard</button>
+        @if (isClinician)
+        {
+            <button class="button button-primary" type="button" @onclick="GoToReview">Review plan</button>
+        }
+    </div>
+</div>
+
+@if (planError is not null)
+{
+    <ApiErrorAlert Response="planError" />
+}
+
+@if (escalationError is not null)
+{
+    <ApiErrorAlert Response="escalationError" />
+}
+
+@if (remindersError is not null)
+{
+    <ApiErrorAlert Response="remindersError" />
+}
+
+@if (checkInsError is not null)
+{
+    <ApiErrorAlert Response="checkInsError" />
+}
+
+@if (reminderError is not null)
+{
+    <ApiErrorAlert Response="reminderError" />
+}
+
+@if (!string.IsNullOrWhiteSpace(successMessage))
+{
+    <div class="card transition-success" role="status">@successMessage</div>
+}
+
+@if (isLoading)
+{
+    <p class="empty-state" role="status">Loading transition plan...</p>
+}
+else if (plan is not null)
+{
+    <section class="card transition-window-card" aria-labelledby="window-heading">
+        <div class="section-header">
+            <div>
+                <h2 id="window-heading">30-day window</h2>
+                <span class="subtle">@plan.DischargeDate.ToLocalTime().ToString("MMM d") - @plan.TransitionWindowEnd.ToLocalTime().ToString("MMM d")</span>
+            </div>
+            <StatusBadge Text="@plan.RiskLevel.ToString()" Tone="@StatusBadgeTones.For(plan.RiskLevel)" />
+        </div>
+        <div class="bar-track" role="progressbar" aria-label="Transition window elapsed" aria-valuemin="0" aria-valuemax="100" aria-valuenow="@WindowPercent">
+            <span class="bar-fill transition-progress-fill" style="@WindowProgressStyle"></span>
+        </div>
+        <div class="transition-window-meta">
+            <span class="meta">Discharged @plan.DischargeDate.ToLocalTime().ToString("MMM d")</span>
+            <span class="meta">@plan.DaysRemaining days remaining</span>
+            <span class="meta">Ends @plan.TransitionWindowEnd.ToLocalTime().ToString("MMM d")</span>
+        </div>
+    </section>
+
+    <div class="dashboard-grid section-offset">
+        <div>
+            <section class="card" aria-labelledby="instructions-heading">
+                <div class="section-header">
+                    <div>
+                        <h2 id="instructions-heading">Plan instructions</h2>
+                        <span class="subtle">Clinical view. Patient-safe rendering is handled by dedicated DTOs.</span>
+                    </div>
+                    <StatusBadge Text="@StatusText(plan.Status)" Tone="@StatusBadgeTones.For(plan.Status)" />
+                </div>
+                @if (plan.Instructions.Count == 0)
+                {
+                    <p class="empty-state compact">No instructions are attached to this plan.</p>
+                }
+                else
+                {
+                    <div class="transition-instruction-list">
+                        @foreach (var instruction in plan.Instructions.OrderBy(i => i.Category).ThenBy(i => i.InstructionText))
+                        {
+                            <InstructionReviewCard Instruction="instruction" ShowActions="false" />
+                        }
+                    </div>
+                }
+            </section>
+
+            @if (isCoordinator)
+            {
+                <section class="card section-offset" aria-labelledby="reminder-heading">
+                <div class="section-header">
+                    <div>
+                        <h2 id="reminder-heading">Reminder management</h2>
+                        <span class="subtle">Schedule reminder records only after server-side activation checks pass.</span>
+                    </div>
+                </div>
+                <div class="form-field-grid">
+                    <label class="form-field" for="reminder-type">
+                        Type
+                        <select id="reminder-type" @bind="reminderType" disabled="@(!CanScheduleReminder)">
+                            <option value="@ReminderType.Medication">Medication</option>
+                            <option value="@ReminderType.Appointment">Appointment</option>
+                            <option value="@ReminderType.SymptomCheckIn">Symptom check-in</option>
+                            <option value="@ReminderType.Refill">Refill</option>
+                            <option value="@ReminderType.Equipment">Equipment</option>
+                            <option value="@ReminderType.Activity">Activity</option>
+                            <option value="@ReminderType.Diet">Diet</option>
+                        </select>
+                    </label>
+                    <label class="form-field" for="reminder-channel">
+                        Channel
+                        <select id="reminder-channel" @bind="reminderChannel" disabled="@(!CanScheduleReminder)">
+                            <option value="@ReminderChannel.App">App</option>
+                            <option value="@ReminderChannel.Sms">SMS</option>
+                            <option value="@ReminderChannel.Voice">Voice</option>
+                        </select>
+                    </label>
+                    <label class="form-field" for="reminder-at">
+                        Scheduled at
+                        <input id="reminder-at" type="datetime-local" @bind="reminderAt" disabled="@(!CanScheduleReminder)" />
+                    </label>
+                    <label class="form-field" for="instruction-id">
+                        Linked instruction
+                        <select id="instruction-id" @bind="selectedInstructionIdText" disabled="@(!CanScheduleReminder)">
+                            <option value="">No specific instruction</option>
+                            @foreach (var instruction in plan.Instructions)
+                            {
+                                <option value="@instruction.Id">@instruction.Category - @ShortText(instruction.InstructionText)</option>
+                            }
+                        </select>
+                    </label>
+                </div>
+                <button class="button button-primary transition-reminder-button" type="button" disabled="@(!CanScheduleReminder)" @onclick="ScheduleReminderAsync">Schedule reminder</button>
+                @if (plan.Status != TransitionPlanStatus.Active)
+                {
+                    <p class="meta">Reminder scheduling is disabled until the server marks the plan Active.</p>
+                }
+
+                <section class="section-offset" aria-labelledby="scheduled-reminders-heading">
+                    <h2 id="scheduled-reminders-heading">Scheduled reminders</h2>
+                    @if (isRemindersLoading)
+                    {
+                        <p class="empty-state compact" role="status">Loading reminders...</p>
+                    }
+                    else if (reminders.Count == 0)
+                    {
+                        <p class="empty-state compact">No reminders are scheduled for this plan.</p>
+                    }
+                    else
+                    {
+                        <div class="stacked-list">
+                            @foreach (var reminder in reminders.OrderBy(reminder => reminder.ScheduledAt))
+                            {
+                                <div class="credential-row">
+                                    <div>
+                                        <strong>@reminder.ReminderType</strong>
+                                        <span class="meta">@reminder.Channel - @reminder.ScheduledAt.ToLocalTime().ToString("g")</span>
+                                    </div>
+                                    <StatusBadge Text="@reminder.Status.ToString()" Tone="@StatusBadgeTones.For(reminder.Status)" />
+                                </div>
+                            }
+                        </div>
+                    }
+                </section>
+                </section>
+            }
+        </div>
+
+        <aside>
+            @if (isCoordinator)
+            {
+                <section class="card transition-panel" aria-labelledby="escalation-log-heading">
+                <div class="section-header">
+                    <h2 id="escalation-log-heading">Escalation log</h2>
+                    <StatusBadge Text="@escalations.Count.ToString()" Tone="@(OpenEscalations == 0 ? BadgeTone.Success : BadgeTone.Danger)" />
+                </div>
+                @if (isEscalationsLoading)
+                {
+                    <p class="empty-state compact" role="status">Loading escalations...</p>
+                }
+                else if (escalations.Count == 0)
+                {
+                    <p class="empty-state compact">No escalations are recorded for this plan.</p>
+                }
+                else
+                {
+                    <div class="transition-instruction-list">
+                        @foreach (var escalation in escalations)
+                        {
+                            <EscalationBanner Escalation="escalation" OnAcknowledge="GoToEscalationQueue" />
+                        }
+                    </div>
+                }
+                </section>
+            }
+
+            <section class="card section-offset transition-panel" aria-labelledby="checkins-heading">
+                <h2 id="checkins-heading">Check-ins</h2>
+                @if (isCheckInsLoading)
+                {
+                    <p class="empty-state compact" role="status">Loading check-ins...</p>
+                }
+                else if (checkIns.Count == 0)
+                {
+                    <p class="empty-state compact">No check-ins have been recorded for this plan.</p>
+                }
+                else
+                {
+                    <div class="stacked-list">
+                        @foreach (var checkIn in checkIns.OrderByDescending(checkIn => checkIn.CheckInDate).Take(5))
+                        {
+                            <div class="credential-row">
+                                <div>
+                                    <strong>@checkIn.CheckInDate.ToLocalTime().ToString("g")</strong>
+                                    <span class="meta">@checkIn.Channel</span>
+                                </div>
+                                <StatusBadge Text="@(checkIn.ContainsWarningSymptom ? "Warning symptom" : "No warning flag")"
+                                             Tone="@(checkIn.ContainsWarningSymptom ? BadgeTone.Danger : BadgeTone.Success)" />
+                            </div>
+                        }
+                    </div>
+                }
+            </section>
+        </aside>
+    </div>
+}
+
+@code {
+    [Parameter]
+    public Guid PlanId { get; set; }
+
+    private TransitionPlanClinicalDto? plan;
+    private IReadOnlyList<TransitionEscalationDto> escalations = [];
+    private IReadOnlyList<TransitionReminderDto> reminders = [];
+    private IReadOnlyList<TransitionCheckInDto> checkIns = [];
+    private ApiResponse? planError;
+    private ApiResponse? escalationError;
+    private ApiResponse? remindersError;
+    private ApiResponse? checkInsError;
+    private ApiResponse? reminderError;
+    private bool isLoading = true;
+    private bool isEscalationsLoading;
+    private bool isRemindersLoading;
+    private bool isCheckInsLoading;
+    private bool isSchedulingReminder;
+    private bool isCoordinator;
+    private bool isClinician;
+    private string? successMessage;
+    private ReminderType reminderType = ReminderType.SymptomCheckIn;
+    private ReminderChannel reminderChannel = ReminderChannel.App;
+    private DateTime reminderAt = DateTime.UtcNow.ToLocalTime().AddHours(2);
+    private string selectedInstructionIdText = string.Empty;
+
+    private string PlanSummary => plan is null
+        ? "Loading plan details..."
+        : $"{plan.HospitalName ?? "Hospital not recorded"} - discharged {plan.DischargeDate.ToLocalTime():MMM d} - {plan.DaysRemaining} days remaining";
+
+    private int OpenEscalations => escalations.Count(escalation => escalation.AcknowledgedAt is null);
+
+    private bool CanScheduleReminder =>
+        plan is { Status: TransitionPlanStatus.Active } &&
+        !isSchedulingReminder;
+
+    private int WindowPercent
+    {
+        get
+        {
+            if (plan is null)
+            {
+                return 0;
+            }
+
+            var totalDays = Math.Max(1, (plan.TransitionWindowEnd.Date - plan.DischargeDate.Date).Days);
+            var elapsed = Math.Clamp(totalDays - plan.DaysRemaining, 0, totalDays);
+            return (int)Math.Round((double)elapsed / totalDays * 100);
+        }
+    }
+
+    private string WindowProgressStyle => $"width:{WindowPercent}%";
+
+    protected override async Task OnParametersSetAsync()
+    {
+        await LoadRoleStateAsync();
+        await LoadPlanAsync();
+        await LoadRemindersAsync();
+        await LoadCheckInsAsync();
+        if (isCoordinator)
+        {
+            await LoadEscalationsAsync();
+        }
+    }
+
+    private async Task LoadRoleStateAsync()
+    {
+        var authState = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+        isCoordinator = authState.User.IsInRole("Admin") || authState.User.IsInRole("Coordinator");
+        isClinician = authState.User.IsInRole("Admin") || authState.User.IsInRole("Clinician");
+    }
+
+    private async Task LoadPlanAsync()
+    {
+        isLoading = true;
+        planError = null;
+
+        try
+        {
+            var response = await TransitionsClient.GetPlanAsync(PlanId);
+            if (response is { Success: true, Data: not null })
+            {
+                plan = response.Data;
+            }
+            else
+            {
+                planError = response;
+            }
+        }
+        catch (HttpRequestException)
+        {
+            planError = ApiResponse.Fail(new ApiError("network.unreachable", "The request could not be completed."));
+        }
+
+        isLoading = false;
+    }
+
+    private async Task LoadEscalationsAsync()
+    {
+        isEscalationsLoading = true;
+        escalationError = null;
+
+        try
+        {
+            var response = await TransitionsClient.GetEscalationsAsync(PlanId);
+            if (response is { Success: true, Data: not null })
+            {
+                escalations = response.Data;
+            }
+            else
+            {
+                escalationError = response;
+            }
+        }
+        catch (HttpRequestException)
+        {
+            escalationError = ApiResponse.Fail(new ApiError("network.unreachable", "The request could not be completed."));
+        }
+
+        isEscalationsLoading = false;
+    }
+
+    private async Task LoadRemindersAsync()
+    {
+        isRemindersLoading = true;
+        remindersError = null;
+
+        try
+        {
+            var response = await TransitionsClient.GetRemindersAsync(PlanId);
+            if (response is { Success: true, Data: not null })
+            {
+                reminders = response.Data;
+            }
+            else
+            {
+                remindersError = response;
+            }
+        }
+        catch (HttpRequestException)
+        {
+            remindersError = ApiResponse.Fail(new ApiError("network.unreachable", "The request could not be completed."));
+        }
+
+        isRemindersLoading = false;
+    }
+
+    private async Task LoadCheckInsAsync()
+    {
+        isCheckInsLoading = true;
+        checkInsError = null;
+
+        try
+        {
+            var response = await TransitionsClient.GetCheckInsAsync(PlanId);
+            if (response is { Success: true, Data: not null })
+            {
+                checkIns = response.Data;
+            }
+            else
+            {
+                checkInsError = response;
+            }
+        }
+        catch (HttpRequestException)
+        {
+            checkInsError = ApiResponse.Fail(new ApiError("network.unreachable", "The request could not be completed."));
+        }
+
+        isCheckInsLoading = false;
+    }
+
+    private async Task ScheduleReminderAsync()
+    {
+        if (plan is null)
+        {
+            return;
+        }
+
+        isSchedulingReminder = true;
+        reminderError = null;
+        successMessage = null;
+
+        Guid? instructionId = Guid.TryParse(selectedInstructionIdText, out var parsedInstructionId)
+            ? parsedInstructionId
+            : null;
+
+        try
+        {
+            var response = await TransitionsClient.ScheduleReminderAsync(plan.Id, new ScheduleReminderRequest
+            {
+                TransitionInstructionId = instructionId,
+                ReminderType = reminderType,
+                Channel = reminderChannel,
+                ScheduledAt = DateTime.SpecifyKind(reminderAt, DateTimeKind.Local).ToUniversalTime()
+            });
+
+            if (response is { Success: true })
+            {
+                successMessage = "Reminder scheduled.";
+                await LoadRemindersAsync();
+            }
+            else
+            {
+                reminderError = response;
+            }
+        }
+        catch (HttpRequestException)
+        {
+            reminderError = ApiResponse.Fail(new ApiError("network.unreachable", "The request could not be completed."));
+        }
+        finally
+        {
+            isSchedulingReminder = false;
+        }
+    }
+
+    private void GoToDashboard() => Navigation.NavigateTo("/transitions");
+
+    private void GoToReview() => Navigation.NavigateTo($"/transitions/review/{PlanId}");
+
+    private void GoToEscalationQueue(Guid _) => Navigation.NavigateTo("/transitions/escalations");
+
+    private static string StatusText(TransitionPlanStatus status) => status switch
+    {
+        TransitionPlanStatus.PendingVerification => "Pending verification",
+        _ => status.ToString()
+    };
+
+    private static string ShortText(string value) => value.Length <= 40 ? value : $"{value[..40]}...";
+}

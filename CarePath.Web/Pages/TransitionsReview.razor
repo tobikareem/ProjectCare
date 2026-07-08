@@ -1,0 +1,469 @@
+@page "/transitions/review"
+@page "/transitions/review/{PlanId:guid}"
+@using CarePath.Client.Api
+@using CarePath.Client.UI.Components
+@using CarePath.Contracts.Common
+@using CarePath.Contracts.Enumerations
+@using CarePath.Contracts.Transitions
+@using Microsoft.AspNetCore.Authorization
+@attribute [Authorize(Roles = "Admin,Clinician")]
+@inject TransitionsClient TransitionsClient
+@inject NavigationManager Navigation
+
+<PageTitle>Transition Review Queue</PageTitle>
+
+<div class="page-heading">
+    <div>
+        <p class="eyebrow">Transitions - Review queue</p>
+        <h1>@(selectedPlan is null ? "Clinician review" : $"Clinician review - {selectedPlan.ClientFullName}")</h1>
+        <p class="subtle">@ReviewSummary</p>
+    </div>
+    <button class="button button-secondary" type="button" @onclick="GoToDashboard">Dashboard</button>
+</div>
+
+@if (queueError is not null)
+{
+    <ApiErrorAlert Response="queueError" />
+}
+
+@if (planError is not null)
+{
+    <ApiErrorAlert Response="planError" />
+}
+
+@if (actionError is not null)
+{
+    <ApiErrorAlert Response="actionError" />
+}
+
+@if (!string.IsNullOrWhiteSpace(successMessage))
+{
+    <div class="card transition-success" role="status">@successMessage</div>
+}
+
+<div class="transition-review-grid">
+    <section class="card table-card" aria-labelledby="review-list-heading">
+        <div class="section-header">
+            <div>
+                <h2 id="review-list-heading">Awaiting verification</h2>
+                <span class="subtle">Plans in PendingVerification status.</span>
+            </div>
+            <span class="meta">@PagingText(queuePage)</span>
+        </div>
+
+        @if (isQueueLoading)
+        {
+            <p class="empty-state" role="status">Loading review queue...</p>
+        }
+        else if (PendingPlans.Count == 0)
+        {
+            <p class="empty-state">No plans are awaiting clinician review.</p>
+        }
+        else
+        {
+            <div class="data-table-wrap">
+                <table class="data-table" aria-label="Plans awaiting review">
+                    <thead>
+                        <tr>
+                            <th>Patient</th>
+                            <th>Hospital</th>
+                            <th>Risk</th>
+                            <th>Pending</th>
+                            <th></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var plan in PendingPlans)
+                        {
+                            <tr class="@(selectedPlan?.Id == plan.Id ? "selected-row" : null)">
+                                <td><span class="avatar-sm" aria-hidden="true">@Initials(plan.ClientFullName)</span><strong>@plan.ClientFullName</strong></td>
+                                <td>@DisplayValue(plan.HospitalName)</td>
+                                <td><StatusBadge Text="@plan.RiskLevel.ToString()" Tone="@StatusBadgeTones.For(plan.RiskLevel)" /></td>
+                                <td>@plan.PendingInstructionCount</td>
+                                <td><button class="text-link" type="button" @onclick="() => SelectPlanAsync(plan.Id)">Review</button></td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+
+        <div class="pager-row" aria-label="Review queue pages">
+            <button class="button button-secondary button-sm" type="button" disabled="@(!CanGoPrevious(queuePage) || isQueueLoading)" @onclick="PreviousPageAsync">Previous</button>
+            <span class="meta">@PagingText(queuePage)</span>
+            <button class="button button-secondary button-sm" type="button" disabled="@(!CanGoNext(queuePage) || isQueueLoading)" @onclick="NextPageAsync">Next</button>
+        </div>
+    </section>
+
+    <section class="card transition-detail-card" aria-labelledby="instructions-heading">
+        <div class="section-header">
+            <div>
+                <h2 id="instructions-heading">Instruction verification</h2>
+                <span class="subtle">Clinical source text is shown only on this authorized review screen.</span>
+            </div>
+            @if (selectedPlan is not null)
+            {
+                <StatusBadge Text="@StatusText(selectedPlan.Status)" Tone="@StatusBadgeTones.For(selectedPlan.Status)" />
+            }
+        </div>
+
+        @if (isPlanLoading)
+        {
+            <p class="empty-state" role="status">Loading plan details...</p>
+        }
+        else if (selectedPlan is null)
+        {
+            <p class="empty-state">Select a pending plan from the review queue.</p>
+        }
+        else
+        {
+            <section class="transition-review-callout" aria-label="Review progress">
+                <strong>@ReviewedCount of @selectedPlan.Instructions.Count instructions reviewed</strong>
+                <p class="meta">@PendingCount pending. Low-confidence instructions remain highlighted until terminal review.</p>
+                <div class="bar-track" role="progressbar" aria-label="Review progress" aria-valuemin="0" aria-valuemax="100" aria-valuenow="@ReviewPercent">
+                    <span class="bar-fill transition-progress-fill" style="@ProgressStyle"></span>
+                </div>
+            </section>
+
+            <div class="transition-instruction-list">
+                @foreach (var instruction in selectedPlan.Instructions.OrderBy(i => i.Category).ThenBy(i => i.InstructionText))
+                {
+                    <InstructionReviewCard Instruction="instruction"
+                                           ShowActions="@(instruction.Status == TransitionInstructionStatus.Pending)"
+                                           OnApprove="ApproveInstructionAsync"
+                                           OnModify="OpenModify"
+                                           OnReject="RejectInstructionAsync" />
+                }
+            </div>
+        }
+    </section>
+
+    <aside class="card transition-panel" aria-labelledby="activation-heading">
+        <h2 id="activation-heading">Activation</h2>
+        @if (selectedPlan is null)
+        {
+            <p class="empty-state compact">Choose a plan to review activation readiness.</p>
+        }
+        else
+        {
+            <div class="profile-row"><span class="subtle">Patient</span><span>@selectedPlan.ClientFullName</span></div>
+            <div class="profile-row"><span class="subtle">Window</span><span>@selectedPlan.DischargeDate.ToLocalTime().ToString("MMM d") - @selectedPlan.TransitionWindowEnd.ToLocalTime().ToString("MMM d")</span></div>
+            <label class="form-field transition-textarea-field" for="risk-level">
+                Risk level
+                <select id="risk-level" @bind="activationRisk" disabled="@activationInProgress">
+                    <option value="@TransitionRiskLevel.Low">Low</option>
+                    <option value="@TransitionRiskLevel.Medium">Medium</option>
+                    <option value="@TransitionRiskLevel.High">High</option>
+                </select>
+            </label>
+            <label class="check-row transition-check-row">
+                <input type="checkbox" @bind="confirmESignature" disabled="@activationInProgress" />
+                Confirm clinician e-signature
+            </label>
+            <button class="button button-primary transition-full-button" type="button" disabled="@(!CanActivate)" @onclick="ActivatePlanAsync">
+                Sign and activate plan
+            </button>
+            @if (!CanActivate && PendingCount > 0)
+            {
+                <p class="meta">Activation is disabled until every instruction is approved, modified, or rejected.</p>
+            }
+        }
+
+        @if (modifyInstruction is not null)
+        {
+            <section class="section-offset" aria-labelledby="modify-heading">
+                <h2 id="modify-heading">Modify instruction</h2>
+                <label class="form-field transition-textarea-field" for="modified-text">
+                    Instruction text
+                    <textarea id="modified-text" class="transition-textarea transition-textarea-small" @bind="modifiedText"></textarea>
+                </label>
+                <label class="form-field transition-textarea-field" for="clinical-note">
+                    Clinical note
+                    <textarea id="clinical-note" class="transition-textarea transition-textarea-small" @bind="clinicalNote"></textarea>
+                </label>
+                <label class="check-row transition-check-row">
+                    <input type="checkbox" @bind="needsPharmacistReview" />
+                    Pharmacist review needed
+                </label>
+                <div class="button-row transition-action-row">
+                    <button class="button button-primary button-sm" type="button" disabled="@actionInProgress" @onclick="SaveModificationAsync">Save</button>
+                    <button class="button button-secondary button-sm" type="button" disabled="@actionInProgress" @onclick="CancelModify">Cancel</button>
+                </div>
+            </section>
+        }
+    </aside>
+</div>
+
+@code {
+    private const int PageSize = 20;
+
+    [Parameter]
+    public Guid? PlanId { get; set; }
+
+    private PagedResult<TransitionPlanSummaryDto>? queuePage;
+    private TransitionPlanClinicalDto? selectedPlan;
+    private ApiResponse? queueError;
+    private ApiResponse? planError;
+    private ApiResponse? actionError;
+    private bool isQueueLoading = true;
+    private bool isPlanLoading;
+    private bool actionInProgress;
+    private bool activationInProgress;
+    private int pageNumber = 1;
+    private string? successMessage;
+    private bool confirmESignature;
+    private TransitionRiskLevel activationRisk = TransitionRiskLevel.Medium;
+    private TransitionInstructionClinicalDto? modifyInstruction;
+    private string modifiedText = string.Empty;
+    private string clinicalNote = string.Empty;
+    private bool needsPharmacistReview;
+
+    private IReadOnlyList<TransitionPlanSummaryDto> PendingPlans =>
+        queuePage?.Items.Where(plan => plan.Status == TransitionPlanStatus.PendingVerification).ToArray() ?? [];
+
+    private int PendingCount => selectedPlan?.Instructions.Count(i => i.Status == TransitionInstructionStatus.Pending) ?? 0;
+
+    private int ReviewedCount => selectedPlan is null ? 0 : selectedPlan.Instructions.Count - PendingCount;
+
+    private int ReviewPercent => selectedPlan is { Instructions.Count: > 0 }
+        ? (int)Math.Round((double)ReviewedCount / selectedPlan.Instructions.Count * 100)
+        : 0;
+
+    private bool CanActivate =>
+        selectedPlan is { Status: TransitionPlanStatus.PendingVerification } &&
+        PendingCount == 0 &&
+        confirmESignature &&
+        !activationInProgress;
+
+    private string ProgressStyle => $"width:{ReviewPercent}%";
+
+    private string ReviewSummary => selectedPlan is null
+        ? "Review extracted instructions and e-sign activation when ready."
+        : $"{selectedPlan.HospitalName ?? "Hospital not recorded"} discharge - {PendingCount} pending instructions";
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadQueueAsync();
+        if (PlanId.HasValue)
+        {
+            await SelectPlanAsync(PlanId.Value);
+        }
+    }
+
+    private async Task LoadQueueAsync()
+    {
+        isQueueLoading = true;
+        queueError = null;
+
+        try
+        {
+            var response = await TransitionsClient.GetPlansAsync(
+                new PagedRequest { PageNumber = pageNumber, PageSize = PageSize },
+                TransitionPlanStatus.PendingVerification);
+            if (response is { Success: true, Data: not null })
+            {
+                queuePage = response.Data;
+            }
+            else
+            {
+                queueError = response;
+            }
+        }
+        catch (HttpRequestException)
+        {
+            queueError = ApiResponse.Fail(new ApiError("network.unreachable", "The server could not be reached."));
+        }
+
+        isQueueLoading = false;
+    }
+
+    private async Task SelectPlanAsync(Guid planId)
+    {
+        isPlanLoading = true;
+        planError = null;
+        actionError = null;
+        successMessage = null;
+        modifyInstruction = null;
+
+        try
+        {
+            var response = await TransitionsClient.GetPlanAsync(planId);
+            if (response is { Success: true, Data: not null })
+            {
+                selectedPlan = response.Data;
+                activationRisk = selectedPlan.RiskLevel;
+                confirmESignature = false;
+                Navigation.NavigateTo($"/transitions/review/{planId}", replace: true);
+            }
+            else
+            {
+                selectedPlan = null;
+                planError = response;
+            }
+        }
+        catch (HttpRequestException)
+        {
+            selectedPlan = null;
+            planError = ApiResponse.Fail(new ApiError("network.unreachable", "The request could not be completed."));
+        }
+
+        isPlanLoading = false;
+    }
+
+    private async Task ApproveInstructionAsync(Guid instructionId) =>
+        await ReviewInstructionAsync(instructionId, new ReviewInstructionRequest { Status = TransitionInstructionStatus.Approved });
+
+    private async Task RejectInstructionAsync(Guid instructionId) =>
+        await ReviewInstructionAsync(instructionId, new ReviewInstructionRequest { Status = TransitionInstructionStatus.Rejected });
+
+    private void OpenModify(Guid instructionId)
+    {
+        modifyInstruction = selectedPlan?.Instructions.SingleOrDefault(instruction => instruction.Id == instructionId);
+        modifiedText = modifyInstruction?.InstructionText ?? string.Empty;
+        clinicalNote = modifyInstruction?.ClinicalNote ?? string.Empty;
+        needsPharmacistReview = modifyInstruction?.NeedsPharmacistReview ?? false;
+        actionError = null;
+    }
+
+    private async Task SaveModificationAsync()
+    {
+        if (modifyInstruction is null)
+        {
+            return;
+        }
+
+        await ReviewInstructionAsync(modifyInstruction.Id, new ReviewInstructionRequest
+        {
+            Status = TransitionInstructionStatus.Modified,
+            ModifiedInstructionText = modifiedText,
+            ClinicalNote = string.IsNullOrWhiteSpace(clinicalNote) ? null : clinicalNote,
+            NeedsPharmacistReview = needsPharmacistReview
+        });
+        modifyInstruction = null;
+    }
+
+    private void CancelModify() => modifyInstruction = null;
+
+    private async Task ReviewInstructionAsync(Guid instructionId, ReviewInstructionRequest request)
+    {
+        if (selectedPlan is null)
+        {
+            return;
+        }
+
+        actionInProgress = true;
+        actionError = null;
+        successMessage = null;
+
+        try
+        {
+            var response = await TransitionsClient.ReviewInstructionAsync(selectedPlan.Id, instructionId, request);
+            if (response is { Success: true })
+            {
+                var planId = selectedPlan.Id;
+                successMessage = "Instruction review saved.";
+                await SelectPlanAsync(planId);
+                await LoadQueueAsync();
+            }
+            else
+            {
+                actionError = response;
+            }
+        }
+        catch (HttpRequestException)
+        {
+            actionError = ApiResponse.Fail(new ApiError("network.unreachable", "The request could not be completed."));
+        }
+        finally
+        {
+            actionInProgress = false;
+        }
+    }
+
+    private async Task ActivatePlanAsync()
+    {
+        if (selectedPlan is null)
+        {
+            return;
+        }
+
+        activationInProgress = true;
+        actionError = null;
+        successMessage = null;
+
+        try
+        {
+            var response = await TransitionsClient.ActivatePlanAsync(selectedPlan.Id, new ActivatePlanRequest
+            {
+                RiskLevel = activationRisk,
+                ConfirmESignature = confirmESignature
+            });
+
+            if (response is { Success: true, Data: not null })
+            {
+                selectedPlan = response.Data;
+                successMessage = "Plan activated. Reminders can now be scheduled by the server workflow.";
+                await LoadQueueAsync();
+            }
+            else
+            {
+                actionError = response;
+            }
+        }
+        catch (HttpRequestException)
+        {
+            actionError = ApiResponse.Fail(new ApiError("network.unreachable", "The request could not be completed."));
+        }
+        finally
+        {
+            activationInProgress = false;
+        }
+    }
+
+    private async Task PreviousPageAsync()
+    {
+        if (!CanGoPrevious(queuePage))
+        {
+            return;
+        }
+
+        pageNumber--;
+        await LoadQueueAsync();
+    }
+
+    private async Task NextPageAsync()
+    {
+        if (!CanGoNext(queuePage))
+        {
+            return;
+        }
+
+        pageNumber++;
+        await LoadQueueAsync();
+    }
+
+    private void GoToDashboard() => Navigation.NavigateTo("/transitions");
+
+    private static bool CanGoPrevious<T>(PagedResult<T>? page) => page?.HasPreviousPage == true;
+
+    private static bool CanGoNext<T>(PagedResult<T>? page) => page?.HasNextPage == true;
+
+    private static string PagingText<T>(PagedResult<T>? page) =>
+        page is null ? "Page 1" : $"Page {page.PageNumber} of {Math.Max(page.TotalPages, 1)}";
+
+    private static string Initials(string fullName)
+    {
+        var parts = fullName.Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        return parts.Length == 0
+            ? "?"
+            : string.Concat(parts.Take(2).Select(part => char.ToUpperInvariant(part[0])));
+    }
+
+    private static string DisplayValue(string? value) => string.IsNullOrWhiteSpace(value) ? "Not recorded" : value;
+
+    private static string StatusText(TransitionPlanStatus status) => status switch
+    {
+        TransitionPlanStatus.PendingVerification => "Pending verification",
+        _ => status.ToString()
+    };
+}

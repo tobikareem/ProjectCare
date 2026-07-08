@@ -1,5 +1,6 @@
 using CarePath.Contracts.Common;
 using CarePath.Contracts.Transitions;
+using ContractTransitionPlanStatus = CarePath.Contracts.Enumerations.TransitionPlanStatus;
 
 namespace CarePath.Application.Transitions.Services;
 
@@ -17,12 +18,17 @@ public interface ITransitionsService
         Guid documentId,
         CancellationToken cancellationToken = default);
 
+    Task<PagedResult<DischargeDocumentDto>> GetDischargeDocumentsAsync(
+        PagedRequest request,
+        CancellationToken cancellationToken = default);
+
     Task<TransitionPlanClinicalDto> ExtractDischargeDocumentAsync(
         Guid documentId,
         CancellationToken cancellationToken = default);
 
     Task<PagedResult<TransitionPlanSummaryDto>> GetPlansAsync(
         PagedRequest request,
+        ContractTransitionPlanStatus? status = null,
         CancellationToken cancellationToken = default);
 
     Task<TransitionPlanClinicalDto> GetPlanAsync(
@@ -53,9 +59,17 @@ public interface ITransitionsService
         ScheduleReminderRequest request,
         CancellationToken cancellationToken = default);
 
+    Task<IReadOnlyList<TransitionReminderDto>> GetRemindersAsync(
+        Guid planId,
+        CancellationToken cancellationToken = default);
+
     Task<TransitionCheckInDto> CreateCheckInAsync(
         Guid planId,
         CreateCheckInRequest request,
+        CancellationToken cancellationToken = default);
+
+    Task<IReadOnlyList<TransitionCheckInDto>> GetCheckInsAsync(
+        Guid planId,
         CancellationToken cancellationToken = default);
 
     Task<IReadOnlyList<TransitionEscalationDto>> GetEscalationsAsync(

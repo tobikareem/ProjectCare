@@ -24,6 +24,7 @@ using ContractReminderChannel = CarePath.Contracts.Enumerations.ReminderChannel;
 using ContractReminderType = CarePath.Contracts.Enumerations.ReminderType;
 using ContractEscalationLevel = CarePath.Contracts.Enumerations.EscalationLevel;
 using ContractTransitionInstructionStatus = CarePath.Contracts.Enumerations.TransitionInstructionStatus;
+using ContractTransitionPlanStatus = CarePath.Contracts.Enumerations.TransitionPlanStatus;
 using ContractTransitionRiskLevel = CarePath.Contracts.Enumerations.TransitionRiskLevel;
 
 namespace CarePath.Application.Tests.Transitions;
@@ -373,6 +374,268 @@ public sealed class TransitionsServiceTests
         auditLogger.Verify(logger => logger.LogAsync(
             It.Is<PhiAuditEntry>(entry => entry.EntityType == ProtectedResourceType.TransitionEscalation && entry.EntityId == openEscalation.Id && entry.Action == AuditAction.Read),
             It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task GetPlansAsync_WhenStatusFilterProvided_QueriesOnlyPlansMatchingThatStatus()
+    {
+        // Arrange
+        var user = new User
+        {
+            Id = Guid.NewGuid(),
+            FirstName = "Synthetic",
+            LastName = "Client",
+            Email = "client@example.test",
+            PhoneNumber = "555-0100",
+            Role = UserRole.Client,
+        };
+        var client = new DomainClient { Id = Guid.NewGuid(), UserId = user.Id, DateOfBirth = UtcDate(1940, 1, 1) };
+        var pendingPlan = new TransitionPlan
+        {
+            Id = Guid.NewGuid(),
+            ClientId = client.Id,
+            DischargeDocumentId = Guid.NewGuid(),
+            DischargeDate = UtcDate(2026, 7, 1),
+            TransitionWindowEnd = UtcDate(2026, 7, 31),
+            Status = TransitionPlanStatus.PendingVerification,
+        };
+        var activePlan = new TransitionPlan
+        {
+            Id = Guid.NewGuid(),
+            ClientId = client.Id,
+            DischargeDocumentId = Guid.NewGuid(),
+            DischargeDate = UtcDate(2026, 7, 1),
+            TransitionWindowEnd = UtcDate(2026, 7, 31),
+            Status = TransitionPlanStatus.Active,
+        };
+        Expression<Func<TransitionPlan, bool>>? capturedPredicate = null;
+        var unitOfWork = CreateUnitOfWork();
+        unitOfWork.TransitionPlans.Setup(repository => repository.GetPagedAsync(
+                It.IsAny<Expression<Func<TransitionPlan, bool>>>(),
+                1,
+                10,
+                It.IsAny<CancellationToken>()))
+            .Callback<Expression<Func<TransitionPlan, bool>>, int, int, CancellationToken>((predicate, _, _, _) => capturedPredicate = predicate)
+            .ReturnsAsync((new[] { pendingPlan }, 1));
+        unitOfWork.TransitionInstructions.Setup(repository => repository.FindAsync(It.IsAny<Expression<Func<TransitionInstruction, bool>>>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(Array.Empty<TransitionInstruction>());
+        unitOfWork.TransitionEscalations.Setup(repository => repository.FindAsync(It.IsAny<Expression<Func<TransitionEscalation, bool>>>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(Array.Empty<TransitionEscalation>());
+        unitOfWork.Clients.Setup(repository => repository.FindAsync(It.IsAny<Expression<Func<DomainClient, bool>>>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new[] { client });
+        unitOfWork.Users.Setup(repository => repository.FindAsync(It.IsAny<Expression<Func<User, bool>>>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new[] { user });
+        var service = CreateService(unitOfWork);
+
+        // Act
+        var result = await service.GetPlansAsync(
+            new PagedRequest { PageNumber = 1, PageSize = 10 },
+            ContractTransitionPlanStatus.PendingVerification);
+
+        // Assert
+        result.Items.Should().ContainSingle(summary => summary.Id == pendingPlan.Id);
+        capturedPredicate.Should().NotBeNull();
+        var predicate = capturedPredicate!.Compile();
+        predicate(pendingPlan).Should().BeTrue();
+        predicate(activePlan).Should().BeFalse();
+        unitOfWork.TransitionPlans.Verify(repository => repository.GetPagedAsync(
+            It.IsAny<int>(),
+            It.IsAny<int>(),
+            It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task GetRemindersAsync_WhenCoordinator_ReturnsChronologicalRemindersAndAuditsReads()
+    {
+        // Arrange
+        var plan = CreateActivePlan();
+        var laterReminder = new TransitionReminder
+        {
+            Id = Guid.NewGuid(),
+            TransitionPlanId = plan.Id,
+            ReminderType = ReminderType.SymptomCheckIn,
+            Channel = ReminderChannel.Sms,
+            ScheduledAt = DateTime.SpecifyKind(DateTime.UtcNow.Date.AddDays(3), DateTimeKind.Utc),
+            Status = ReminderStatus.Scheduled,
+        };
+        var earlierReminder = new TransitionReminder
+        {
+            Id = Guid.NewGuid(),
+            TransitionPlanId = plan.Id,
+            ReminderType = ReminderType.Medication,
+            Channel = ReminderChannel.App,
+            ScheduledAt = DateTime.SpecifyKind(DateTime.UtcNow.Date.AddDays(1), DateTimeKind.Utc),
+            Status = ReminderStatus.Scheduled,
+        };
+        var unitOfWork = CreateUnitOfWork();
+        unitOfWork.TransitionPlans.Setup(repository => repository.GetByIdAsync(plan.Id, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(plan);
+        unitOfWork.TransitionReminders.Setup(repository => repository.FindAsync(It.IsAny<Expression<Func<TransitionReminder, bool>>>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new[] { laterReminder, earlierReminder });
+        var auditLogger = new Mock<IPhiAuditLogger>();
+        auditLogger.Setup(logger => logger.LogAsync(It.IsAny<PhiAuditEntry>(), It.IsAny<CancellationToken>()))
+            .Returns(Task.CompletedTask);
+        var service = CreateService(unitOfWork, auditLogger: auditLogger.Object);
+
+        // Act
+        var result = await service.GetRemindersAsync(plan.Id);
+
+        // Assert
+        result.Should().HaveCount(2);
+        result[0].Id.Should().Be(earlierReminder.Id);
+        result[1].Id.Should().Be(laterReminder.Id);
+        auditLogger.Verify(logger => logger.LogAsync(
+            It.Is<PhiAuditEntry>(entry => entry.EntityType == ProtectedResourceType.TransitionReminder && entry.EntityId == earlierReminder.Id && entry.Action == AuditAction.Read),
+            It.IsAny<CancellationToken>()), Times.Once);
+        auditLogger.Verify(logger => logger.LogAsync(
+            It.Is<PhiAuditEntry>(entry => entry.EntityType == ProtectedResourceType.TransitionReminder && entry.EntityId == laterReminder.Id && entry.Action == AuditAction.Read),
+            It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task GetRemindersAsync_WhenCallerLacksClinicalRole_DeniesBeforePlanLookup()
+    {
+        // Arrange
+        var unitOfWork = CreateUnitOfWork();
+        var service = CreateService(
+            unitOfWork,
+            roles: new HashSet<string>(StringComparer.Ordinal) { ApplicationRoles.Caregiver });
+
+        // Act
+        var act = async () => await service.GetRemindersAsync(Guid.NewGuid());
+
+        // Assert
+        await act.Should().ThrowAsync<ResourceAccessDeniedException>();
+        unitOfWork.TransitionPlans.Verify(repository => repository.GetByIdAsync(It.IsAny<Guid>(), It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task GetCheckInsAsync_WhenClinician_ReturnsRecentFirstWithoutResponsesAndAuditsReads()
+    {
+        // Arrange
+        var plan = CreateActivePlan();
+        var olderCheckIn = new TransitionCheckIn
+        {
+            Id = Guid.NewGuid(),
+            TransitionPlanId = plan.Id,
+            CheckInDate = UtcDate(2026, 7, 5),
+            Channel = ReminderChannel.App,
+            ResponsesJson = "{\"feeling\":\"synthetic warning symptom text\"}",
+            ContainsWarningSymptom = true,
+        };
+        var newerCheckIn = new TransitionCheckIn
+        {
+            Id = Guid.NewGuid(),
+            TransitionPlanId = plan.Id,
+            CheckInDate = UtcDate(2026, 7, 7),
+            Channel = ReminderChannel.Sms,
+            ResponsesJson = "{\"feeling\":\"synthetic okay text\"}",
+            ContainsWarningSymptom = false,
+        };
+        var unitOfWork = CreateUnitOfWork();
+        unitOfWork.TransitionPlans.Setup(repository => repository.GetByIdAsync(plan.Id, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(plan);
+        unitOfWork.TransitionCheckIns.Setup(repository => repository.FindAsync(It.IsAny<Expression<Func<TransitionCheckIn, bool>>>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new[] { olderCheckIn, newerCheckIn });
+        var auditLogger = new Mock<IPhiAuditLogger>();
+        auditLogger.Setup(logger => logger.LogAsync(It.IsAny<PhiAuditEntry>(), It.IsAny<CancellationToken>()))
+            .Returns(Task.CompletedTask);
+        var service = CreateService(
+            unitOfWork,
+            auditLogger: auditLogger.Object,
+            roles: new HashSet<string>(StringComparer.Ordinal) { ApplicationRoles.Clinician });
+
+        // Act
+        var result = await service.GetCheckInsAsync(plan.Id);
+
+        // Assert
+        result.Should().HaveCount(2);
+        result[0].Id.Should().Be(newerCheckIn.Id);
+        result[1].Id.Should().Be(olderCheckIn.Id);
+        result[1].ContainsWarningSymptom.Should().BeTrue();
+        typeof(TransitionCheckInDto).GetProperties().Select(property => property.Name).Should().NotContain("ResponsesJson");
+        auditLogger.Verify(logger => logger.LogAsync(
+            It.Is<PhiAuditEntry>(entry => entry.EntityType == ProtectedResourceType.TransitionCheckIn && entry.EntityId == olderCheckIn.Id && entry.Action == AuditAction.Read),
+            It.IsAny<CancellationToken>()), Times.Once);
+        auditLogger.Verify(logger => logger.LogAsync(
+            It.Is<PhiAuditEntry>(entry => entry.EntityType == ProtectedResourceType.TransitionCheckIn && entry.EntityId == newerCheckIn.Id && entry.Action == AuditAction.Read),
+            It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task GetCheckInsAsync_WhenCallerLacksClinicalRole_DeniesBeforePlanLookup()
+    {
+        // Arrange
+        var unitOfWork = CreateUnitOfWork();
+        var service = CreateService(
+            unitOfWork,
+            roles: new HashSet<string>(StringComparer.Ordinal) { ApplicationRoles.Client });
+
+        // Act
+        var act = async () => await service.GetCheckInsAsync(Guid.NewGuid());
+
+        // Assert
+        await act.Should().ThrowAsync<ResourceAccessDeniedException>();
+        unitOfWork.TransitionPlans.Verify(repository => repository.GetByIdAsync(It.IsAny<Guid>(), It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task GetDischargeDocumentsAsync_WhenCoordinator_ReturnsPagedMetadataAndAuditsReads()
+    {
+        // Arrange
+        var document = new DischargeDocument
+        {
+            Id = Guid.NewGuid(),
+            ClientId = Guid.NewGuid(),
+            SourceType = DischargeDocumentSourceType.PdfUpload,
+            RawContent = "synthetic discharge content",
+            SourceReference = "DOC-456",
+            Status = DischargeDocumentStatus.AwaitingReview,
+            UploadedBy = Guid.NewGuid(),
+            UploadedAt = UtcDate(2026, 7, 6),
+        };
+        var unitOfWork = CreateUnitOfWork();
+        unitOfWork.DischargeDocuments.Setup(repository => repository.GetPagedAsync(2, 1, It.IsAny<CancellationToken>()))
+            .ReturnsAsync((new[] { document }, 4));
+        var auditLogger = new Mock<IPhiAuditLogger>();
+        auditLogger.Setup(logger => logger.LogAsync(It.IsAny<PhiAuditEntry>(), It.IsAny<CancellationToken>()))
+            .Returns(Task.CompletedTask);
+        var service = CreateService(unitOfWork, auditLogger: auditLogger.Object);
+
+        // Act
+        var result = await service.GetDischargeDocumentsAsync(new PagedRequest { PageNumber = 2, PageSize = 1 });
+
+        // Assert
+        result.PageNumber.Should().Be(2);
+        result.PageSize.Should().Be(1);
+        result.TotalCount.Should().Be(4);
+        var dto = result.Items.Should().ContainSingle().Subject;
+        dto.Id.Should().Be(document.Id);
+        dto.SourceReference.Should().Be("DOC-456");
+        typeof(DischargeDocumentDto).GetProperties().Select(property => property.Name).Should().NotContain("RawContent");
+        auditLogger.Verify(logger => logger.LogAsync(
+            It.Is<PhiAuditEntry>(entry => entry.EntityType == ProtectedResourceType.DischargeDocument && entry.EntityId == document.Id && entry.Action == AuditAction.Read),
+            It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task GetDischargeDocumentsAsync_WhenCallerLacksClinicalRole_DeniesBeforeQuery()
+    {
+        // Arrange
+        var unitOfWork = CreateUnitOfWork();
+        var service = CreateService(
+            unitOfWork,
+            roles: new HashSet<string>(StringComparer.Ordinal) { ApplicationRoles.Caregiver });
+
+        // Act
+        var act = async () => await service.GetDischargeDocumentsAsync(new PagedRequest());
+
+        // Assert
+        await act.Should().ThrowAsync<ResourceAccessDeniedException>();
+        unitOfWork.DischargeDocuments.Verify(repository => repository.GetPagedAsync(
+            It.IsAny<int>(),
+            It.IsAny<int>(),
+            It.IsAny<CancellationToken>()), Times.Never);
     }
 
     [Fact]

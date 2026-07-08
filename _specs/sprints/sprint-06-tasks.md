@@ -182,6 +182,31 @@ The caregiver and scheduling UX follows the updated wireframe exactly:
   from successful caregiver check-in/out records and returned only through an authorized
   Admin/Coordinator profile or scheduling DTO.
 
+### D-S6-11 - Transitions wireframe read surface (added 2026-07-08 per Tobi backend dispatch)
+
+The wireframe Transitions pages (`page-transitions`, `page-transitions-upload`,
+`page-transitions-review`, `page-transitions-patient`) need reads the Sprint 5 surface did not
+expose. Authorized additions (all Coordinator+Clinician role-gated, PHI-read-audited, and
+pinned in `Sprint4ControllerContractTests` + `Sprint6TransitionsClientRouteAlignmentTests`):
+
+- `GET /api/transitions/plans?status=` — optional `TransitionPlanStatus` filter on the existing
+  paged plans route (review queue fetches `PendingVerification` server-side instead of paging
+  the whole table). Client: `TransitionsClient.GetPlansAsync(paging, status?)`.
+- `GET /api/transitions/plans/{id:guid}/reminders` — plan reminder records ordered by
+  `ScheduledAt`; IDOR-guarded. Client: `GetRemindersAsync`.
+- `GET /api/transitions/plans/{id:guid}/check-ins` — plan check-in history, most recent first;
+  IDOR-guarded; returns the existing PHI-minimal `TransitionCheckInDto` (warning flag + review
+  metadata; `ResponsesJson` is never echoed per D-S5-3). Client: `GetCheckInsAsync`.
+- `GET /api/transitions/documents?pageNumber=&pageSize=` — paged document status/metadata for
+  the upload page's recent-uploads list (`DischargeDocumentDto`, no `RawContent`). Client:
+  `GetDischargeDocumentsAsync`.
+
+Known wireframe needs deliberately NOT added (need a follow-up decision before any schema/DTO
+change): dashboard `Missed`/`Last check-in` summary columns (per-plan reminder/check-in
+aggregates), check-in response-text previews for coordinators (would expose `ResponsesJson`
+content — mirror the audited `/content` route pattern if approved), plan-linked visit-note
+lists, and a Transitions KPI/metrics endpoint (pages derive KPIs from paged reads for now).
+
 ### D-S6-7 - Accessibility baseline
 
 Every interactive primitive: keyboard operable, labeled (aria-label or visible label), visible
@@ -289,12 +314,12 @@ Owners: **Claude** = PM/Contracts/Client/Client.UI + sprint docs. **Codex** = We
 | S6-TASK-037 | Web: Users page per D-S6-8 (list/filter/search, create staff, change role, activate/deactivate; renders `CanChangeRole`/`CanDeactivate`/`DisabledReason` as disabled-with-reason; next-sign-in notice) + bUnit tests | Codex | S6-TASK-012, S6-TASK-036, S6-TASK-021 | Pending |
 | S6-TASK-020 | Contracts: `LoginRequest`, `RefreshTokenRequest`, `AuthTokenResponse`; Client: `AuthClient`, in-memory `IAccessTokenProvider` implementation | Claude | S6-TASK-001 | Code complete 2026-07-06 — contracts committed in `c42ed21`; `AuthClient` + `InMemoryAccessTokenProvider` (with `CurrentSession`/`CurrentRefreshToken` for the auth state provider) in working tree. Done 2026-07-06 — verified by full-sln build 0 warnings (f019081 report) |
 | S6-TASK-021 | Client.UI: `KpiCard`, `RiskBadge`, `ShiftCard`, `EscalationBanner`, `PatientInstructionCard` (patient-safe DTO param), `InstructionReviewCard`, `AuditTimeline` (+ `AuditTimelineEntry` record); StatusBadgeTones extended to 6 Transitions enums; aria labels/roles + native-button keyboard operability per D-S6-7 | Claude | S6-TASK-001 | Done 2026-07-06 — 9 files + `wwwroot/carepath-ui.css` (D-S6-9 tokens); verified by full-sln build 0 warnings; stylesheet linked by CarePath.Web (`f019081`) |
-| S6-TASK-022 | Client: `TransitionsClient.GetEscalationQueueAsync` for the D-S6-5 endpoint | Claude | S6-TASK-034 route shape | Pending |
+| S6-TASK-022 | Client: `TransitionsClient.GetEscalationQueueAsync` for the D-S6-5 endpoint | Claude | S6-TASK-034 route shape | Done 2026-07-08 — method in `TransitionsClient` (openOnly + paging); route shape pinned by `Sprint6TransitionsClientRouteAlignmentTests` |
 | S6-TASK-030 | Web: Overview page per wireframe (KPI cards, today's schedule, needs-attention list, quick actions). `+ Add caregiver` quick action must route to `page-caregiver-create`; schedule links route to Schedule. Uses typed clients only and renders ApiErrorAlert for network/API failures | Codex | S6-TASK-012, S6-TASK-021 | Pending |
 | S6-TASK-031 | Web: Schedule board + Coverage queue + Assign caregiver page per wireframe. Board shows open/unassigned styling; Coverage queue lists open shifts and best matches; Assign caregiver supports create assigned shift and update/reassign via `ShiftsClient`; guard errors (`shift.double_booked`, `caregiver.certification_expired`) surface through ApiErrorAlert | Codex | S6-TASK-012, S6-TASK-021, S6-TASK-038 | Pending |
 | S6-TASK-032 | Web: clinician review queue (clinical DTOs; low-confidence flags; source text visible per D-S5-3) | Codex | S6-TASK-012, S6-TASK-021 | Pending |
 | S6-TASK-033 | Web: activation screen (disabled until instructions terminal; ConfirmESignature; success -> plan Active state visible) | Codex | S6-TASK-032 | Pending |
-| S6-TASK-034 | WebApi: escalation queue endpoint per D-S6-5 + tests (scoping, audit, paged) | Codex | S6-TASK-001 | Pending |
+| S6-TASK-034 | WebApi: escalation queue endpoint per D-S6-5 + tests (scoping, audit, paged) | Codex | S6-TASK-001 | Done 2026-07-08 — `GetEscalationQueue` endpoint + `GetEscalationQueueAsync` service (openOnly predicate, `GetPagedAsync`, per-row read audit, Coordinator-only) verified in tree with service/controller/contract tests |
 | S6-TASK-035 | Web: escalation queue screen (acknowledge with resolution note + human-decision level) | Codex | S6-TASK-034, S6-TASK-022 | Pending |
 | S6-TASK-038 | Contracts/Client/WebApi/Application: shift assignment read/match APIs for the wireframe. Add paged Admin/Coordinator-safe endpoints/DTOs for open shifts, eligible caregivers for a shift, and eligible open shifts for a caregiver. Must use existing `CreateShiftRequest`/`UpdateShiftRequest` for writes, preserve double-booking/certification guards, avoid `GetAllAsync()` on shifts, and never log PHI shift/client values | Codex + Claude | S6-TASK-001 | In progress 2026-07-07 — contract surface locked (see "Final S6-TASK-038/039 contract surface"): 3 DTOs + `ShiftsClient.GetCoverageQueueAsync`/`GetEligibleCaregiversAsync` + `CaregiversClient.GetEligibleOpenShiftsAsync` + endpoints/eligibility in tree; route/role/shape tests added (`Sprint4ControllerContractTests`, `Sprint6ClientRouteAlignmentTests`, `DomainToContractMapperTests`) |
 | S6-TASK-039 | Contracts/Client/WebApi/Application: caregiver Admin/Coordinator profile detail contract aligned to the wireframe. Expose pay rate only in authorized profile detail, not roster summaries; add check-in-derived `Shifts (MTD)` and `BillableHours (MTD)`; keep certifications in detail; update stale contract docs that say detail cannot include compensation; tests prove roster DTO still excludes pay/certification/MTD columns | Codex + Claude | S6-TASK-001 | In progress 2026-07-07 — `CaregiverDetailDto` enriched (`IsActive`, `HourlyPayRate`, `ShiftsMtd`, `BillableHoursMtd`); stale "no compensation" doc comment replaced; `GetCaregiverAsync` wired to check-in-derived MTD + read audit (cross-ownership hardening edit by Claude — Codex please review); roster exact-shape, detail-shape, MTD-source, and cert-separation tests added |

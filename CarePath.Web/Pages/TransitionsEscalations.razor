@@ -1,0 +1,261 @@
+@page "/transitions/escalations"
+@using CarePath.Client.Api
+@using CarePath.Client.UI.Components
+@using CarePath.Contracts.Common
+@using CarePath.Contracts.Enumerations
+@using CarePath.Contracts.Transitions
+@using Microsoft.AspNetCore.Authorization
+@attribute [Authorize(Roles = "Admin,Coordinator")]
+@inject TransitionsClient TransitionsClient
+@inject NavigationManager Navigation
+
+<PageTitle>Transition Escalations</PageTitle>
+
+<div class="page-heading">
+    <div>
+        <p class="eyebrow">Transitions - Escalations</p>
+        <h1>Escalation queue</h1>
+        <p class="subtle">Coordinator review of missed tasks, warning symptoms, and failed-contact events.</p>
+    </div>
+    <button class="button button-secondary" type="button" @onclick="GoToDashboard">Dashboard</button>
+</div>
+
+@if (queueError is not null)
+{
+    <ApiErrorAlert Response="queueError" />
+}
+
+@if (actionError is not null)
+{
+    <ApiErrorAlert Response="actionError" />
+}
+
+@if (!string.IsNullOrWhiteSpace(successMessage))
+{
+    <div class="card transition-success" role="status">@successMessage</div>
+}
+
+<div class="transition-escalation-grid">
+    <section class="card" aria-labelledby="queue-heading">
+        <div class="section-header">
+            <div>
+                <h2 id="queue-heading">Open queue</h2>
+                <span class="subtle">@QueueSummary</span>
+            </div>
+            <label class="check-row transition-check-row">
+                <input type="checkbox" @bind="openOnly" @bind:after="ReloadQueueAsync" />
+                Open only
+            </label>
+        </div>
+
+        @if (isLoading)
+        {
+            <p class="empty-state" role="status">Loading escalation queue...</p>
+        }
+        else if (escalations.Count == 0)
+        {
+            <p class="empty-state">No escalations match the current filter.</p>
+        }
+        else
+        {
+            <div class="transition-instruction-list">
+                @foreach (var escalation in escalations)
+                {
+                    <div class="transition-escalation-item @(selectedEscalation?.Id == escalation.Id ? "selected-escalation" : null)">
+                        <EscalationBanner Escalation="escalation" OnAcknowledge="SelectEscalation" />
+                        <button class="text-link transition-link-action" type="button" @onclick="() => GoToPlan(escalation.TransitionPlanId)">Open plan</button>
+                    </div>
+                }
+            </div>
+        }
+
+        <div class="pager-row" aria-label="Escalation queue pages">
+            <button class="button button-secondary button-sm" type="button" disabled="@(!CanGoPrevious(queuePage) || isLoading)" @onclick="PreviousPageAsync">Previous</button>
+            <span class="meta">@PagingText(queuePage)</span>
+            <button class="button button-secondary button-sm" type="button" disabled="@(!CanGoNext(queuePage) || isLoading)" @onclick="NextPageAsync">Next</button>
+        </div>
+    </section>
+
+    <aside class="card transition-panel" aria-labelledby="ack-heading">
+        <h2 id="ack-heading">Acknowledge escalation</h2>
+        @if (selectedEscalation is null)
+        {
+            <p class="empty-state compact">Select an open escalation to document the coordinator decision.</p>
+        }
+        else
+        {
+            <div class="profile-row"><span class="subtle">Trigger</span><span>@selectedEscalation.TriggerType</span></div>
+            <div class="profile-row"><span class="subtle">Created</span><span>@selectedEscalation.EscalatedAt.ToLocalTime().ToString("g")</span></div>
+            <div class="profile-row"><span class="subtle">Plan</span><span>@ShortId(selectedEscalation.TransitionPlanId)</span></div>
+
+            <label class="form-field transition-textarea-field" for="ack-level">
+                Human decision level
+                <select id="ack-level" @bind="ackLevel" disabled="@actionInProgress">
+                    <option value="@EscalationLevel.CoordinatorAlert">Coordinator alert</option>
+                    <option value="@EscalationLevel.FamilyNotification">Family notification</option>
+                    <option value="@EscalationLevel.UrgentCare">Urgent care</option>
+                    <option value="@EscalationLevel.Emergency911">Emergency 911</option>
+                </select>
+            </label>
+            <label class="form-field transition-textarea-field" for="resolution-note">
+                Resolution note
+                <textarea id="resolution-note" class="transition-textarea" @bind="resolutionNote" disabled="@actionInProgress"></textarea>
+            </label>
+            <button class="button button-primary transition-full-button" type="button" disabled="@(!CanAcknowledge)" @onclick="AcknowledgeAsync">Document acknowledgement</button>
+            <p class="meta">The system records this human decision only; it does not autonomously contact family, urgent care, or emergency services.</p>
+        }
+    </aside>
+</div>
+
+@code {
+    private const int PageSize = 10;
+
+    private PagedResult<TransitionEscalationDto>? queuePage;
+    private IReadOnlyList<TransitionEscalationDto> escalations = [];
+    private TransitionEscalationDto? selectedEscalation;
+    private ApiResponse? queueError;
+    private ApiResponse? actionError;
+    private bool isLoading = true;
+    private bool actionInProgress;
+    private bool openOnly = true;
+    private int pageNumber = 1;
+    private string resolutionNote = string.Empty;
+    private string? successMessage;
+    private EscalationLevel ackLevel = EscalationLevel.CoordinatorAlert;
+
+    private string QueueSummary => queuePage is null
+        ? "Loading queue..."
+        : $"{queuePage.TotalCount} escalation records";
+
+    private bool CanAcknowledge =>
+        selectedEscalation is { AcknowledgedAt: null } &&
+        !string.IsNullOrWhiteSpace(resolutionNote) &&
+        !actionInProgress;
+
+    protected override async Task OnInitializedAsync() => await LoadQueueAsync();
+
+    private Task ReloadQueueAsync()
+    {
+        pageNumber = 1;
+        selectedEscalation = null;
+        return LoadQueueAsync();
+    }
+
+    private async Task LoadQueueAsync()
+    {
+        isLoading = true;
+        queueError = null;
+        successMessage = null;
+
+        try
+        {
+            var response = await TransitionsClient.GetEscalationQueueAsync(
+                new PagedRequest { PageNumber = pageNumber, PageSize = PageSize },
+                openOnly);
+
+            if (response is { Success: true, Data: not null })
+            {
+                queuePage = response.Data;
+                escalations = response.Data.Items;
+            }
+            else
+            {
+                queueError = response;
+                queuePage = null;
+                escalations = [];
+            }
+        }
+        catch (HttpRequestException)
+        {
+            queueError = ApiResponse.Fail(new ApiError("network.unreachable", "The server could not be reached."));
+            queuePage = null;
+            escalations = [];
+        }
+
+        isLoading = false;
+    }
+
+    private void SelectEscalation(Guid escalationId)
+    {
+        selectedEscalation = escalations.SingleOrDefault(escalation => escalation.Id == escalationId);
+        ackLevel = selectedEscalation?.EscalationLevel ?? EscalationLevel.CoordinatorAlert;
+        resolutionNote = string.Empty;
+        actionError = null;
+    }
+
+    private async Task AcknowledgeAsync()
+    {
+        if (selectedEscalation is null)
+        {
+            return;
+        }
+
+        actionInProgress = true;
+        actionError = null;
+        successMessage = null;
+
+        try
+        {
+            var response = await TransitionsClient.AcknowledgeEscalationAsync(selectedEscalation.Id, new AcknowledgeEscalationRequest
+            {
+                EscalationLevel = ackLevel,
+                ResolutionNote = resolutionNote
+            });
+
+            if (response is { Success: true })
+            {
+                successMessage = "Escalation acknowledgement recorded.";
+                selectedEscalation = null;
+                resolutionNote = string.Empty;
+                await LoadQueueAsync();
+            }
+            else
+            {
+                actionError = response;
+            }
+        }
+        catch (HttpRequestException)
+        {
+            actionError = ApiResponse.Fail(new ApiError("network.unreachable", "The request could not be completed."));
+        }
+        finally
+        {
+            actionInProgress = false;
+        }
+    }
+
+    private async Task PreviousPageAsync()
+    {
+        if (!CanGoPrevious(queuePage))
+        {
+            return;
+        }
+
+        pageNumber--;
+        await LoadQueueAsync();
+    }
+
+    private async Task NextPageAsync()
+    {
+        if (!CanGoNext(queuePage))
+        {
+            return;
+        }
+
+        pageNumber++;
+        await LoadQueueAsync();
+    }
+
+    private void GoToDashboard() => Navigation.NavigateTo("/transitions");
+
+    private void GoToPlan(Guid planId) => Navigation.NavigateTo($"/transitions/{planId}");
+
+    private static bool CanGoPrevious<T>(PagedResult<T>? page) => page?.HasPreviousPage == true;
+
+    private static bool CanGoNext<T>(PagedResult<T>? page) => page?.HasNextPage == true;
+
+    private static string PagingText<T>(PagedResult<T>? page) =>
+        page is null ? "Page 1" : $"Page {page.PageNumber} of {Math.Max(page.TotalPages, 1)}";
+
+    private static string ShortId(Guid id) => id.ToString("N")[..8];
+}

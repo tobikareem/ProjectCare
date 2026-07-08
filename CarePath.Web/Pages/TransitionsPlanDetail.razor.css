@@ -1,0 +1,45 @@
+.transition-success {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 18px;
+    background: var(--green-soft);
+}
+
+.transition-panel {
+    min-width: 0;
+}
+
+.transition-instruction-list {
+    display: grid;
+    gap: 10px;
+}
+
+.transition-window-card {
+    margin-bottom: 20px;
+}
+
+.transition-window-meta {
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+    margin-top: 8px;
+}
+
+.transition-progress-fill {
+    width: 0;
+}
+
+.transition-reminder-button {
+    width: 100%;
+    margin-top: 16px;
+}
+
+@media (max-width: 640px) {
+    .transition-window-meta,
+    .transition-success {
+        align-items: flex-start;
+        flex-direction: column;
+    }
+}

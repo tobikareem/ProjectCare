@@ -38,6 +38,7 @@ This file captures recurring mistakes, corrections, and hard-won patterns discov
 
 ## HIPAA / Compliance
 
+- **Admin is a platform-wide operational superuser** - If a workflow is available to Coordinator or Clinician in the staff web app, include Admin consistently in Web UI route/nav gates, WebApi role attributes, and Application service role helpers. Do not expose patient self-service actions to Admin unless the workflow explicitly supports staff acting on behalf of the patient with audit semantics.
 - **Two new fields that must never be logged**: `DischargeDocument.RawContent` (raw OCR/FHIR text) and `TransitionInstruction.SourceText` (original discharge document excerpt). Both are PHI. Add a comment in code on both properties: `// PHI — never log this field`.
 - **Reminders must not fire before `TransitionPlan.Status == Active`** — enforce this check in the Application command handler, not only at the API layer. Belt-and-suspenders.
 

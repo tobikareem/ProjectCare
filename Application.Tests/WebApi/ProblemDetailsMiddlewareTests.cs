@@ -12,6 +12,7 @@ using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.TestHost;
+using Microsoft.Extensions.Hosting;
 
 namespace CarePath.Application.Tests.WebApi;
 
@@ -25,8 +26,8 @@ public sealed class ProblemDetailsMiddlewareTests
         using var deniedServer = CreateServer(_ => throw new ResourceAccessDeniedException("NoGrant", isPhiResource: true));
 
         // Act
-        var missingResponse = await missingServer.CreateClient().GetAsync("/phi-resource");
-        var deniedResponse = await deniedServer.CreateClient().GetAsync("/phi-resource");
+        var missingResponse = await missingServer.GetTestClient().GetAsync("/phi-resource");
+        var deniedResponse = await deniedServer.GetTestClient().GetAsync("/phi-resource");
         var missingBody = await missingResponse.Content.ReadAsStringAsync();
         var deniedBody = await deniedResponse.Content.ReadAsStringAsync();
 
@@ -56,8 +57,8 @@ public sealed class ProblemDetailsMiddlewareTests
         using var deniedServer = CreateServer(_ => throw new ResourceAccessDeniedException("ResourceUnavailable", isPhiResource: true));
 
         // Act
-        var missingResponse = await missingServer.CreateClient().GetAsync($"/api/transitions/plans/{Guid.NewGuid():D}");
-        var deniedResponse = await deniedServer.CreateClient().GetAsync($"/api/transitions/plans/{Guid.NewGuid():D}");
+        var missingResponse = await missingServer.GetTestClient().GetAsync($"/api/transitions/plans/{Guid.NewGuid():D}");
+        var deniedResponse = await deniedServer.GetTestClient().GetAsync($"/api/transitions/plans/{Guid.NewGuid():D}");
         var missingBody = await missingResponse.Content.ReadAsByteArrayAsync();
         var deniedBody = await deniedResponse.Content.ReadAsByteArrayAsync();
         var bodyText = System.Text.Encoding.UTF8.GetString(missingBody);
@@ -84,7 +85,7 @@ public sealed class ProblemDetailsMiddlewareTests
         }));
 
         // Act
-        var response = await server.CreateClient().PostAsync("/validate", null);
+        var response = await server.GetTestClient().PostAsync("/validate", null);
         var body = await response.Content.ReadAsStringAsync();
 
         // Assert
@@ -107,7 +108,7 @@ public sealed class ProblemDetailsMiddlewareTests
         using var server = CreateServer(_ => throw new InvalidOperationException(exceptionText));
 
         // Act
-        var response = await server.CreateClient().GetAsync("/throws");
+        var response = await server.GetTestClient().GetAsync("/throws");
         var body = await response.Content.ReadAsStringAsync();
 
         // Assert
@@ -129,7 +130,7 @@ public sealed class ProblemDetailsMiddlewareTests
         using var server = CreateServer(_ => throw new ResourceConflictException("invoice.duplicate", "An invoice already exists for the requested billing period."));
 
         // Act
-        var response = await server.CreateClient().PostAsync("/invoices", null);
+        var response = await server.GetTestClient().PostAsync("/invoices", null);
         var body = await response.Content.ReadAsStringAsync();
 
         // Assert
@@ -171,21 +172,24 @@ public sealed class ProblemDetailsMiddlewareTests
         problem.ValidationErrors.Select(error => error.ErrorMessage).Should().NotContain(message => message.Contains(sensitiveValue, StringComparison.Ordinal));
     }
 
-    private static TestServer CreateServer(Action<HttpContext> endpoint)
+    private static IHost CreateServer(Action<HttpContext> endpoint)
     {
-        var builder = new WebHostBuilder()
-            .Configure(app =>
+        return new HostBuilder()
+            .ConfigureWebHost(webBuilder =>
             {
-                app.UseCarePathProblemDetails();
-                app.Run(context =>
+                webBuilder.UseTestServer();
+                webBuilder.Configure(app =>
                 {
-                    context.TraceIdentifier = Guid.NewGuid().ToString("N");
-                    endpoint(context);
-                    return Task.CompletedTask;
+                    app.UseCarePathProblemDetails();
+                    app.Run(context =>
+                    {
+                        context.TraceIdentifier = Guid.NewGuid().ToString("N");
+                        endpoint(context);
+                        return Task.CompletedTask;
+                    });
                 });
-            });
-
-        return new TestServer(builder);
+            })
+            .Start();
     }
 
     private static ApiProblemDetails DeserializeProblem(string body)

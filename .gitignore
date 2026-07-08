@@ -134,6 +134,7 @@ service-worker-assets.js
 # --------------------------------------------------------------------------
 appsettings.Local.json
 appsettings.Production.json
+!CarePath.Web/wwwroot/appsettings.Production.json
 appsettings.Staging.json
 secrets.json
 *.pfx
@@ -195,3 +196,8 @@ package-lock.json
 Documentation/Postman/CarePath-API.postman_collection.json
 Documentation/Postman/CarePath-Local.postman_environment.json
 Documentation/PwScript/Run-CarePathPostmanCollection.ps1
+/WebApi/Properties/PublishProfiles
+/WebApi/Properties/ServiceDependencies/carepath-api - Web Deploy
+/WebApi/Properties/serviceDependencies.carepath-api - Web Deploy.json
+/CarePath.Web/Properties/PublishProfiles
+/Documentation/PwScript

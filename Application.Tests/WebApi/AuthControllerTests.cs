@@ -18,6 +18,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
 using InfrastructureJwtTokenService = CarePath.Infrastructure.Auth.JwtTokenService;
 
 namespace CarePath.Application.Tests.WebApi;
@@ -30,7 +31,7 @@ public sealed class AuthControllerTests
         // Arrange
         var identity = new FakeIdentityService();
         using var server = CreateServer(identity);
-        var client = server.CreateClient();
+        var client = server.GetTestClient();
 
         // Act
         var response = await client.PostAsJsonAsync("/api/auth/login", new LoginRequest
@@ -58,7 +59,7 @@ public sealed class AuthControllerTests
     {
         // Arrange
         using var server = CreateServer(new FakeIdentityService());
-        var client = server.CreateClient();
+        var client = server.GetTestClient();
 
         var requests = new[]
         {
@@ -96,7 +97,7 @@ public sealed class AuthControllerTests
     {
         // Arrange
         using var server = CreateServer(new FakeIdentityService());
-        var client = server.CreateClient();
+        var client = server.GetTestClient();
         var loginResponse = await client.PostAsJsonAsync("/api/auth/login", new LoginRequest
         {
             Email = "clinician@example.test",
@@ -132,7 +133,7 @@ public sealed class AuthControllerTests
         // Arrange
         var identity = new FakeIdentityService(new HashSet<string>(StringComparer.Ordinal));
         using var server = CreateServer(identity);
-        var client = server.CreateClient();
+        var client = server.GetTestClient();
 
         // Act
         var response = await client.PostAsJsonAsync("/api/auth/login", new LoginRequest
@@ -161,29 +162,32 @@ public sealed class AuthControllerTests
         anonymousActions.Should().BeEquivalentTo(nameof(AuthController.Login), nameof(AuthController.Refresh));
     }
 
-    private static TestServer CreateServer(FakeIdentityService identityService)
+    private static IHost CreateServer(FakeIdentityService identityService)
     {
         var configuration = CreateJwtConfiguration();
-        var builder = new WebHostBuilder()
-            .ConfigureServices(services =>
+        return new HostBuilder()
+            .ConfigureWebHost(webBuilder =>
             {
-                services.AddSingleton<IIdentityService>(identityService);
-                services.AddSingleton<IJwtTokenService>(new InfrastructureJwtTokenService(configuration));
-                services.AddCarePathAuthentication(configuration);
-                services
-                    .AddControllers()
-                    .AddApplicationPart(typeof(AuthController).Assembly)
-                    .AddApplicationPart(typeof(AuthControllerTests).Assembly);
+                webBuilder.UseTestServer();
+                webBuilder.ConfigureServices(services =>
+                {
+                    services.AddSingleton<IIdentityService>(identityService);
+                    services.AddSingleton<IJwtTokenService>(new InfrastructureJwtTokenService(configuration));
+                    services.AddCarePathAuthentication(configuration);
+                    services
+                        .AddControllers()
+                        .AddApplicationPart(typeof(AuthController).Assembly)
+                        .AddApplicationPart(typeof(AuthControllerTests).Assembly);
+                });
+                webBuilder.Configure(app =>
+                {
+                    app.UseRouting();
+                    app.UseAuthentication();
+                    app.UseAuthorization();
+                    app.UseEndpoints(endpoints => endpoints.MapControllers());
+                });
             })
-            .Configure(app =>
-            {
-                app.UseRouting();
-                app.UseAuthentication();
-                app.UseAuthorization();
-                app.UseEndpoints(endpoints => endpoints.MapControllers());
-            });
-
-        return new TestServer(builder);
+            .Start();
     }
 
     private static IConfiguration CreateJwtConfiguration()

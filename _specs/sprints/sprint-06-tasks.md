@@ -18,7 +18,7 @@ This board is the normative implementation contract for Sprint 6.
 
 ### D-S6-1 - Project layout and ownership
 
-- New project `CarePath.Web` (Blazor WebAssembly standalone, net9.0): references
+- New project `CarePath.Web` (Blazor WebAssembly standalone, net10.0): references
   `CarePath.Contracts`, `CarePath.Client`, `CarePath.Client.UI` ONLY. Owner: **Codex** (pages,
   layouts, auth wiring, DI, routing are app-layer integration work).
 - `CarePath.Client.UI` (shared primitives) and `CarePath.Client` remain **Claude-owned**; new

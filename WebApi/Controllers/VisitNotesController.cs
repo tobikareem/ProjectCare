@@ -32,7 +32,7 @@ public sealed class VisitNotesController : ControllerBase
     [Authorize(Roles = "Caregiver")]
     public async Task<ActionResult<VisitPhotoDto>> AddPhoto(
         Guid id,
-        [FromForm] IFormFile file,
+        IFormFile file,
         [FromForm] string? caption,
         [FromForm] DateTime takenAtUtc,
         CancellationToken cancellationToken)

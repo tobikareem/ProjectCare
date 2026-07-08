@@ -1,5 +1,7 @@
 using CarePath.Application.Abstractions.Auth;
 using CarePath.Application.Abstractions.Billing;
+using CarePath.Application.Admin.Services;
+using CarePath.Application.Admin.Validators;
 using CarePath.Application.Auth;
 using CarePath.Application.Billing.Services;
 using CarePath.Application.Billing.Validators;
@@ -11,6 +13,7 @@ using CarePath.Application.Scheduling.Services;
 using CarePath.Application.Scheduling.Validators;
 using CarePath.Application.Transitions.Services;
 using CarePath.Application.Transitions.Validators;
+using CarePath.Contracts.Admin;
 using CarePath.Contracts.Clients;
 using CarePath.Contracts.Identity;
 using CarePath.Contracts.Billing;
@@ -37,8 +40,11 @@ public static class DependencyInjection
         services.AddScoped<IVisitDocumentationService, VisitDocumentationService>();
         services.AddScoped<IBillingOperationsService, BillingOperationsService>();
         services.AddScoped<ITransitionsService, TransitionsService>();
+        services.AddScoped<IAdminUserManagementService, AdminUserManagementService>();
 
         services.AddScoped<IValidator<CreateCaregiverRequest>, CreateCaregiverRequestValidator>();
+        services.AddScoped<IValidator<CreateStaffUserRequest>, CreateStaffUserRequestValidator>();
+        services.AddScoped<IValidator<UpdateUserRoleRequest>, UpdateUserRoleRequestValidator>();
         services.AddScoped<IValidator<UpdateCaregiverRequest>, UpdateCaregiverRequestValidator>();
         services.AddScoped<IValidator<AddCertificationRequest>, AddCertificationRequestValidator>();
         services.AddScoped<IValidator<CreateClientRequest>, CreateClientRequestValidator>();

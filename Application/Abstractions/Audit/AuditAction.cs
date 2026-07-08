@@ -9,5 +9,9 @@ public enum AuditAction
     AccessDenied = 5,
     BackgroundJobStarted = 6,
     BackgroundJobCompleted = 7,
-    BackgroundJobFailed = 8
+    BackgroundJobFailed = 8,
+    StaffProvisioned = 9,
+    RoleChanged = 10,
+    AccountActivated = 11,
+    AccountDeactivated = 12
 }

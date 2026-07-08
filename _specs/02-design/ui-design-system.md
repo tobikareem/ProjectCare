@@ -56,6 +56,8 @@ define is a STOP: flag for PM/wireframe update first, extract second, implement 
   max-width 520px, user menu right-aligned
 - Content: `--surface-alt` background; KPI row `repeat(4, minmax(0,1fr))`, gap 15px;
   two-column detail layouts `minmax(0,1.65fr) / minmax(280px,.75fr)`, gap 20px
+- User management access layout: directory/editor grid `minmax(0,1.35fr) / minmax(310px,.85fr)`;
+  search controls stack below 1050px and role cards stack below 780px
 - Cards: padding 20px, `--surface`, `--line` border, `--radius`, `--shadow`
 
 ## Interaction & Accessibility (pairs with D-S6-7)
@@ -86,7 +88,8 @@ never inline in pages.
 `StatusBadge`/`RiskBadge` (soft pill), `KpiCard`, `ShiftCard`, `EscalationBanner` (left accent
 bar: amber default, red for urgent/911), `PatientInstructionCard` (patient-safe DTO only),
 `InstructionReviewCard` (amber-soft when low confidence), `ValidationErrorList`,
-`ApiErrorAlert`, `PagedTable`, `AuditTimeline`. New shared visuals go in `CarePath.Client.UI`
+`ApiErrorAlert`, `PagedTable`, `AuditTimeline`, `UserAccessDirectory`, `RoleAssignmentPanel`,
+`RoleCatalog`. New shared visuals go in `CarePath.Client.UI`
 with tokens — never one-off styles in app projects.
 
 ## Consumption

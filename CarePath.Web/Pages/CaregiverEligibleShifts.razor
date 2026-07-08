@@ -1,0 +1,185 @@
+@page "/caregivers/{CaregiverId:guid}/eligible-shifts"
+@using CarePath.Client.Api
+@using CarePath.Client.UI.Components
+@using CarePath.Contracts.Common
+@using CarePath.Contracts.Scheduling
+@using Microsoft.AspNetCore.Authorization
+@attribute [Authorize(Roles = "Admin,Coordinator")]
+@inject CaregiversClient CaregiversClient
+@inject ShiftsClient ShiftsClient
+@inject NavigationManager Navigation
+
+<PageTitle>Schedule eligible shifts</PageTitle>
+
+<div class="page-heading">
+    <div>
+        <p class="eyebrow">People</p>
+        <h1>Schedule eligible shifts</h1>
+        <p class="subtle">Review open shifts that match the caregiver's credentials, skills, and availability.</p>
+    </div>
+    <button class="button button-secondary" type="button" @onclick="NavigateToCaregivers">Back to caregivers</button>
+</div>
+
+<div class="setup-steps" aria-label="Caregiver setup progress">
+    <div class="setup-step"><strong>Step 1</strong><span class="meta">Account and profile</span></div>
+    <div class="setup-step"><strong>Step 2</strong><span class="meta">Certifications</span></div>
+    <div class="setup-step active"><strong>Step 3</strong><span class="meta">Eligible shifts</span></div>
+</div>
+
+@if (error is not null)
+{
+    <ApiErrorAlert Response="error" />
+}
+
+<section class="match-grid" aria-label="Eligibility summary">
+    <article class="card">
+        <span class="metric-label">Eligible open shifts</span>
+        <div class="metric-value">@AssignableCount</div>
+        <span class="trend">@TotalCount total reviewed</span>
+    </article>
+    <article class="card">
+        <span class="metric-label">Credential fit</span>
+        <div class="metric-value">@CredentialFitText</div>
+        <span class="trend-muted">From saved certifications</span>
+    </article>
+    <article class="card">
+        <span class="metric-label">Availability fit</span>
+        <div class="metric-value">@AvailabilityFitPercent%</div>
+        <span class="trend-muted">Weekday, weekend, and night checks</span>
+    </article>
+</section>
+
+<section class="card table-card" aria-labelledby="eligible-shifts-heading">
+    <div class="section-header">
+        <div>
+            <h2 id="eligible-shifts-heading">Eligible open shifts</h2>
+            <span class="subtle">Matched from certification, availability, active status, weekly capacity, and overlap checks</span>
+        </div>
+    </div>
+
+    @if (isLoading)
+    {
+        <p class="empty-state">Loading eligible shifts...</p>
+    }
+    else if (eligibleShifts.Count == 0)
+    {
+        <p class="empty-state">No open shifts are available for review.</p>
+    }
+    else
+    {
+        <div class="data-table-wrap">
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th>Open shift</th>
+                        <th>Requirement</th>
+                        <th>When</th>
+                        <th>Match</th>
+                        <th>Action</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var shift in eligibleShifts)
+                    {
+                        <tr>
+                            <td><strong>@shift.ClientDisplayName</strong><span class="meta">@FormatServiceType(shift.ServiceType)</span></td>
+                            <td>@string.Join(", ", shift.RequirementLabels)</td>
+                            <td>@shift.ScheduledStartTime.ToLocalTime().ToString("MMM d, h:mm tt")</td>
+                            <td>
+                                @if (shift.IsAssignable)
+                                {
+                                    <StatusBadge Text="Assignable" Tone="@BadgeTone.Success" />
+                                    <span class="meta">@string.Join(", ", shift.MatchReasons)</span>
+                                }
+                                else
+                                {
+                                    <StatusBadge Text="Blocked" Tone="@BadgeTone.Danger" />
+                                    <span class="meta">@string.Join(", ", shift.BlockingReasons)</span>
+                                }
+                            </td>
+                            <td>
+                                <button class="text-link" type="button" disabled="@(!shift.IsAssignable || assigningShiftId == shift.ShiftId)" @onclick="() => AssignShiftAsync(shift)">Assign</button>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    }
+</section>
+
+@code {
+    [Parameter] public Guid CaregiverId { get; set; }
+
+    private IReadOnlyList<EligibleOpenShiftDto> eligibleShifts = [];
+    private ApiResponse? error;
+    private Guid? assigningShiftId;
+    private bool isLoading;
+
+    private int AssignableCount => eligibleShifts.Count(shift => shift.IsAssignable);
+
+    private int TotalCount => eligibleShifts.Count;
+
+    private string CredentialFitText => AssignableCount > 0
+        ? "Fit"
+        : eligibleShifts.Any(shift => shift.BlockingReasons.Any(reason => reason.Contains("Credential", StringComparison.OrdinalIgnoreCase))) ? "Blocked" : "Pending";
+
+    private int AvailabilityFitPercent => TotalCount == 0
+        ? 0
+        : (int)Math.Round(eligibleShifts.Count(shift => !shift.BlockingReasons.Any(reason => reason.Contains("Availability", StringComparison.OrdinalIgnoreCase))) * 100m / TotalCount);
+
+    protected override async Task OnInitializedAsync() => await LoadEligibleShiftsAsync();
+
+    private async Task LoadEligibleShiftsAsync()
+    {
+        isLoading = true;
+        error = null;
+        var response = await CaregiversClient.GetEligibleOpenShiftsAsync(CaregiverId, new PagedRequest { PageNumber = 1, PageSize = 20 });
+        if (response.Success && response.Data is not null)
+        {
+            eligibleShifts = response.Data.Items;
+        }
+        else
+        {
+            error = response;
+        }
+
+        isLoading = false;
+    }
+
+    private async Task AssignShiftAsync(EligibleOpenShiftDto shift)
+    {
+        assigningShiftId = shift.ShiftId;
+        error = null;
+
+        var request = new UpdateShiftRequest
+        {
+            CaregiverId = CaregiverId,
+            ScheduledStartUtc = shift.ScheduledStartTime,
+            ScheduledEndUtc = shift.ScheduledEndTime,
+            BreakMinutes = shift.BreakMinutes,
+            ServiceType = shift.ServiceType,
+        };
+
+        var response = await ShiftsClient.UpdateAsync(shift.ShiftId, request);
+        if (response.Success)
+        {
+            await LoadEligibleShiftsAsync();
+        }
+        else
+        {
+            error = response;
+        }
+
+        assigningShiftId = null;
+    }
+
+    private void NavigateToCaregivers() => Navigation.NavigateTo("/caregivers");
+
+    private static string FormatServiceType(CarePath.Contracts.Enumerations.ServiceType type) => type switch
+    {
+        CarePath.Contracts.Enumerations.ServiceType.InHomeCare => "In-home care",
+        CarePath.Contracts.Enumerations.ServiceType.FacilityStaffing => "Facility staffing",
+        _ => type.ToString()
+    };
+}

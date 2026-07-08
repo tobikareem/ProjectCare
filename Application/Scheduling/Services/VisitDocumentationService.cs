@@ -73,19 +73,14 @@ public sealed class VisitDocumentationService : IVisitDocumentationService
             note.TransitionPlanId = transitionPlan.Id;
         }
 
-        await unitOfWork.BeginTransactionAsync(cancellationToken);
-        try
-        {
-            await unitOfWork.VisitNotes.AddAsync(note, cancellationToken);
-            await unitOfWork.SaveChangesAsync(cancellationToken);
-            await AuditAsync(ProtectedResourceType.VisitNote, note.Id, AuditAction.Create, cancellationToken);
-            await unitOfWork.CommitTransactionAsync(cancellationToken);
-        }
-        catch
-        {
-            await unitOfWork.RollbackTransactionAsync(cancellationToken);
-            throw;
-        }
+        await unitOfWork.ExecuteInTransactionAsync(
+            async token =>
+            {
+                await unitOfWork.VisitNotes.AddAsync(note, token);
+                await unitOfWork.SaveChangesAsync(token);
+                await AuditAsync(ProtectedResourceType.VisitNote, note.Id, AuditAction.Create, token);
+            },
+            cancellationToken);
 
         return note.ToDetailDto();
     }
@@ -146,7 +141,6 @@ public sealed class VisitDocumentationService : IVisitDocumentationService
         }
 
         var objectId = await fileStorage.SaveAsync(new FileStorageWriteRequest(fileName, contentType, content), cancellationToken);
-        var committed = false;
         var photo = new VisitPhoto
         {
             VisitNoteId = note.Id,
@@ -156,26 +150,23 @@ public sealed class VisitDocumentationService : IVisitDocumentationService
             TakenAt = takenAtUtc,
         };
 
-        await unitOfWork.BeginTransactionAsync(cancellationToken);
         try
         {
-            await unitOfWork.VisitPhotos.AddAsync(photo, cancellationToken);
-            await unitOfWork.SaveChangesAsync(cancellationToken);
-            await AuditAsync(ProtectedResourceType.VisitPhoto, photo.Id, AuditAction.Create, cancellationToken);
-            await unitOfWork.CommitTransactionAsync(cancellationToken);
-            committed = true;
+            // The blob upload must stay outside this delegate: the retrying execution
+            // strategy may run it more than once, and re-uploading would orphan blobs.
+            await unitOfWork.ExecuteInTransactionAsync(
+                async token =>
+                {
+                    await unitOfWork.VisitPhotos.AddAsync(photo, token);
+                    await unitOfWork.SaveChangesAsync(token);
+                    await AuditAsync(ProtectedResourceType.VisitPhoto, photo.Id, AuditAction.Create, token);
+                },
+                cancellationToken);
         }
         catch
         {
-            await unitOfWork.RollbackTransactionAsync(cancellationToken);
+            await fileStorage.DeleteAsync(objectId, cancellationToken);
             throw;
-        }
-        finally
-        {
-            if (!committed)
-            {
-                await fileStorage.DeleteAsync(objectId, cancellationToken);
-            }
         }
 
         return photo.ToDto();

@@ -3,6 +3,7 @@ using CarePath.Application.Common.Exceptions;
 using CarePath.Application.Identity.Services;
 using CarePath.Contracts.Common;
 using CarePath.Contracts.Identity;
+using CarePath.Contracts.Scheduling;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
@@ -62,6 +63,14 @@ public sealed class CaregiversController : ControllerBase
     [Authorize(Roles = "Admin,Coordinator")]
     public async Task<ActionResult<PagedResult<CertificationDto>>> GetExpiringCertifications([FromQuery] PagedRequest request, CancellationToken cancellationToken)
         => Ok(await service.GetExpiringCertificationsAsync(request, cancellationToken));
+
+    [HttpGet("{id:guid}/eligible-shifts")]
+    [Authorize(Roles = "Admin,Coordinator")]
+    public async Task<ActionResult<PagedResult<EligibleOpenShiftDto>>> GetEligibleOpenShifts(Guid id, [FromQuery] PagedRequest request, CancellationToken cancellationToken)
+    {
+        await EnsureAuthorizedAsync(ProtectedResourceType.Caregiver, id, ObjectAccessAction.Read, cancellationToken);
+        return Ok(await service.GetEligibleOpenShiftsAsync(id, request, cancellationToken));
+    }
 
     private async Task EnsureAuthorizedAsync(ProtectedResourceType resourceType, Guid resourceId, ObjectAccessAction action, CancellationToken cancellationToken)
     {

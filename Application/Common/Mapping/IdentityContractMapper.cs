@@ -34,7 +34,10 @@ internal static class IdentityContractMapper
         };
     }
 
-    internal static CaregiverDetailDto ToDetailDto(this Caregiver caregiver)
+    internal static CaregiverDetailDto ToDetailDto(
+        this Caregiver caregiver,
+        int shiftsMtd = 0,
+        decimal billableHoursMtd = 0m)
     {
         return new CaregiverDetailDto
         {
@@ -44,6 +47,8 @@ internal static class IdentityContractMapper
             Email = caregiver.User?.Email ?? string.Empty,
             PhoneNumber = caregiver.User?.PhoneNumber ?? string.Empty,
             EmploymentType = (ContractEmploymentType)(int)caregiver.EmploymentType,
+            IsActive = caregiver.User?.IsActive ?? false,
+            HourlyPayRate = caregiver.HourlyPayRate,
             HireDate = caregiver.HireDate,
             TerminationDate = caregiver.TerminationDate,
             HasDementiaCare = caregiver.HasDementiaCare,
@@ -55,6 +60,8 @@ internal static class IdentityContractMapper
             AvailableNights = caregiver.AvailableNights,
             MaxWeeklyHours = caregiver.MaxWeeklyHours,
             AverageRating = caregiver.AverageRating,
+            ShiftsMtd = shiftsMtd,
+            BillableHoursMtd = billableHoursMtd,
             TotalShiftsCompleted = caregiver.TotalShiftsCompleted,
             NoShowCount = caregiver.NoShowCount,
             Certifications = caregiver.Certifications

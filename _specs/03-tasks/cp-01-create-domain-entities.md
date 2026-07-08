@@ -268,7 +268,7 @@ This tasks spec breaks down the domain layer implementation into 39 atomic tasks
 - **Files**: CREATE `Domain/Interfaces/Repositories/IUnitOfWork.cs`
 - **Implementation**: See design spec Section 4.2
 - **Properties**: Repository for each entity (IRepository<User>, IRepository<Caregiver>, etc.)
-- **Methods**: SaveChangesAsync, BeginTransactionAsync, CommitTransactionAsync, RollbackTransactionAsync
+- **Methods**: SaveChangesAsync, ExecuteInTransactionAsync (delegate-based, retry-compatible; with/without IsolationLevel and TResult overloads)
 
 ---
 

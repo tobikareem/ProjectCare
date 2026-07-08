@@ -8,6 +8,7 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <OverrideHtmlAssetPlaceholders>true</OverrideHtmlAssetPlaceholders>
     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <UserSecretsId>e21e29da-268f-4395-bfc8-f66f62a4e7bd</UserSecretsId>
   </PropertyGroup>
 
   <ItemGroup>

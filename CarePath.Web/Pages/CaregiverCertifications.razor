@@ -1,0 +1,214 @@
+@page "/caregivers/{CaregiverId:guid}/certifications"
+@using CarePath.Client.Api
+@using CarePath.Client.UI.Components
+@using CarePath.Contracts.Common
+@using CarePath.Contracts.Enumerations
+@using CarePath.Contracts.Identity
+@using Microsoft.AspNetCore.Authorization
+@attribute [Authorize(Roles = "Admin,Coordinator")]
+@inject CaregiversClient CaregiversClient
+@inject NavigationManager Navigation
+
+<PageTitle>Add certifications</PageTitle>
+
+<div class="page-heading">
+    <div>
+        <p class="eyebrow">People</p>
+        <h1>Add certifications</h1>
+        <p class="subtle">Attach one or more credentials to the saved caregiver profile.</p>
+    </div>
+    <button class="button button-secondary" type="button" @onclick="NavigateToCaregivers">Back to caregivers</button>
+</div>
+
+<div class="setup-steps" aria-label="Caregiver setup progress">
+    <div class="setup-step"><strong>Step 1</strong><span class="meta">Account and profile</span></div>
+    <div class="setup-step active"><strong>Step 2</strong><span class="meta">Certifications</span></div>
+    <div class="setup-step"><strong>Step 3</strong><span class="meta">Eligible shifts</span></div>
+</div>
+
+@if (error is not null)
+{
+    <ApiErrorAlert Response="error" />
+}
+
+<div class="caregiver-form-grid">
+    <section class="card form-section" aria-labelledby="certification-form-heading">
+        <div class="section-header">
+            <div>
+                <h2 id="certification-form-heading">Add next certification</h2>
+                <span class="subtle">Each saved credential becomes a certification record</span>
+            </div>
+            <StatusBadge Text="@($"{SavedCertifications.Count} saved")" Tone="@BadgeTone.Success" />
+        </div>
+
+        @if (caregiver is not null)
+        {
+            <div class="profile-header">
+                <div class="profile-identity">
+                    <span class="avatar-lg" aria-hidden="true">@Initials(caregiver.FullName)</span>
+                    <div>
+                        <strong>@caregiver.FullName</strong>
+                        <span class="meta">@FormatEmploymentType(caregiver.EmploymentType) - profile saved</span>
+                    </div>
+                </div>
+                <StatusBadge Text="Step 2" Tone="@BadgeTone.Info" />
+            </div>
+        }
+
+        <section aria-labelledby="saved-certifications-heading">
+            <div class="section-header compact-header">
+                <h3 id="saved-certifications-heading">Saved certifications</h3>
+                <button class="text-link" type="button" @onclick="ResetForm">Add another</button>
+            </div>
+            @if (SavedCertifications.Count == 0)
+            {
+                <p class="empty-state compact">No certifications saved yet.</p>
+            }
+            else
+            {
+                <div class="stacked-list">
+                    @foreach (var certification in SavedCertifications)
+                    {
+                        <div class="credential-row">
+                            <div><strong>@FormatCertificationType(certification.Type)</strong><span class="meta">@certification.CertificationNumber - expires @certification.ExpirationDate.ToLocalTime().ToString("MMM d, yyyy")</span></div>
+                            <StatusBadge Text="Saved" Tone="@BadgeTone.Success" />
+                        </div>
+                    }
+                </div>
+            }
+        </section>
+
+        <EditForm Model="form" OnValidSubmit="SaveCertificationAsync">
+            <div class="form-field-grid">
+                <label class="form-field">Certification type
+                    <InputSelect @bind-Value="form.Type">
+                        @foreach (var type in Enum.GetValues<CertificationType>())
+                        {
+                            <option value="@type">@FormatCertificationType(type)</option>
+                        }
+                    </InputSelect>
+                </label>
+                <label class="form-field">Certification number<InputText @bind-Value="form.CertificationNumber" /></label>
+                <label class="form-field">Issue date<InputDate @bind-Value="form.IssueDate" /></label>
+                <label class="form-field">Expiration date<InputDate @bind-Value="form.ExpirationDate" /></label>
+                <label class="form-field">Issuing authority<InputText @bind-Value="form.IssuingAuthority" /></label>
+            </div>
+
+            <div class="access-action-row">
+                <button class="button button-primary" type="submit" disabled="@isSaving">Save and add another</button>
+                <button class="button button-secondary" type="button" @onclick="ContinueToEligibleShifts">Continue to eligible shifts</button>
+                <button class="button button-secondary" type="button" @onclick="NavigateToCreate">Back</button>
+            </div>
+        </EditForm>
+    </section>
+
+    <aside class="card profile-panel" aria-labelledby="certification-next-heading">
+        <h2 id="certification-next-heading">Certification set</h2>
+        <div class="profile-row"><span class="subtle">Saved records</span><span>@SavedCertifications.Count certifications</span></div>
+        <div class="profile-row"><span class="subtle">Ready to schedule</span><span>@(SavedCertifications.Count == 0 ? "Pending" : "Review matches")</span></div>
+        <div class="profile-row"><span class="subtle">Next step</span><span>Review eligible open shifts</span></div>
+        <div class="warning-panel">
+            <strong>Add every active credential</strong>
+            <p class="meta">Use the saved list for CNA, HHA, RN/LPN, CPR, First Aid, dementia, and other training records before reviewing eligible shifts.</p>
+        </div>
+    </aside>
+</div>
+
+@code {
+    [Parameter] public Guid CaregiverId { get; set; }
+
+    private readonly CertificationForm form = new();
+    private ApiResponse? error;
+    private CaregiverDetailDto? caregiver;
+    private bool isSaving;
+
+    private IReadOnlyList<CertificationDto> SavedCertifications =>
+        caregiver?.Certifications ?? [];
+
+    protected override async Task OnInitializedAsync() => await LoadCaregiverAsync();
+
+    private async Task LoadCaregiverAsync()
+    {
+        var response = await CaregiversClient.GetAsync(CaregiverId);
+        if (response.Success && response.Data is not null)
+        {
+            caregiver = response.Data;
+        }
+        else
+        {
+            error = response;
+        }
+    }
+
+    private async Task SaveCertificationAsync()
+    {
+        isSaving = true;
+        error = null;
+        var request = new AddCertificationRequest
+        {
+            Type = form.Type,
+            CertificationNumber = form.CertificationNumber,
+            IssueDate = form.IssueDate,
+            ExpirationDate = form.ExpirationDate,
+            IssuingAuthority = form.IssuingAuthority,
+        };
+
+        var response = await CaregiversClient.AddCertificationAsync(CaregiverId, request);
+        if (response.Success)
+        {
+            ResetForm();
+            await LoadCaregiverAsync();
+        }
+        else
+        {
+            error = response;
+        }
+
+        isSaving = false;
+    }
+
+    private void ContinueToEligibleShifts() =>
+        Navigation.NavigateTo($"/caregivers/{CaregiverId}/eligible-shifts");
+
+    private void NavigateToCaregivers() => Navigation.NavigateTo("/caregivers");
+
+    private void NavigateToCreate() => Navigation.NavigateTo("/caregivers/create");
+
+    private void ResetForm()
+    {
+        form.Type = CertificationType.FirstAid;
+        form.CertificationNumber = string.Empty;
+        form.IssueDate = DateTime.UtcNow.Date;
+        form.ExpirationDate = DateTime.UtcNow.Date.AddYears(2);
+        form.IssuingAuthority = string.Empty;
+    }
+
+    private static string Initials(string fullName)
+    {
+        var parts = fullName.Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        return string.Concat(parts.Take(2).Select(part => char.ToUpperInvariant(part[0])));
+    }
+
+    private static string FormatEmploymentType(EmploymentType type) => type switch
+    {
+        EmploymentType.W2Employee => "W-2 Employee",
+        EmploymentType.Contractor1099 => "1099 Contractor",
+        _ => type.ToString()
+    };
+
+    private static string FormatCertificationType(CertificationType type) => type switch
+    {
+        CertificationType.FirstAid => "First Aid",
+        CertificationType.Alzheimers => "Alzheimer's",
+        _ => type.ToString()
+    };
+
+    private sealed class CertificationForm
+    {
+        public CertificationType Type { get; set; } = CertificationType.FirstAid;
+        public string? CertificationNumber { get; set; }
+        public DateTime IssueDate { get; set; } = DateTime.UtcNow.Date;
+        public DateTime ExpirationDate { get; set; } = DateTime.UtcNow.Date.AddYears(2);
+        public string? IssuingAuthority { get; set; }
+    }
+}

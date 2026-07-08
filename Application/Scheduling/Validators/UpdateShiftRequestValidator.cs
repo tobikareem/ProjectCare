@@ -12,7 +12,7 @@ public sealed class UpdateShiftRequestValidator : AbstractValidator<UpdateShiftR
         RuleFor(request => request.ScheduledEndUtc).GreaterThan(request => request.ScheduledStartUtc);
         RuleFor(request => request.BreakMinutes).GreaterThanOrEqualTo(0).When(request => request.BreakMinutes.HasValue);
         RuleFor(request => request).Must(HaveBreakShorterThanShift).WithMessage("BreakMinutes must be shorter than the scheduled shift duration.");
-        RuleFor(request => request.BillRate).GreaterThan(0m);
+        RuleFor(request => request.BillRate).GreaterThanOrEqualTo(0m);
         RuleFor(request => request.PayRate).GreaterThanOrEqualTo(0m);
         RuleFor(request => request.ServiceType).IsInEnum();
         RuleFor(request => request.Notes).MaximumLength(2000);

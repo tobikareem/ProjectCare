@@ -1,0 +1,228 @@
+@page "/schedule/assign/{ShiftId:guid}"
+@using CarePath.Client.Api
+@using CarePath.Client.UI.Components
+@using CarePath.Contracts.Common
+@using CarePath.Contracts.Scheduling
+@using Microsoft.AspNetCore.Authorization
+@attribute [Authorize(Roles = "Admin,Coordinator")]
+@inject ShiftsClient ShiftsClient
+@inject NavigationManager Navigation
+
+<PageTitle>Assign caregiver</PageTitle>
+
+<div class="page-heading">
+    <div>
+        <p class="eyebrow">Schedule</p>
+        <h1>Assign caregiver</h1>
+        <p class="subtle">Pick an eligible caregiver for an open shift or reassign a scheduled shift.</p>
+    </div>
+    <button class="button button-secondary" type="button" @onclick="NavigateToSchedule">Back to schedule</button>
+</div>
+
+@if (error is not null)
+{
+    <ApiErrorAlert Response="error" />
+}
+
+<div class="caregiver-workspace">
+    <section class="card form-section" aria-labelledby="shift-assignment-heading">
+        <div class="section-header">
+            <div>
+                <h2 id="shift-assignment-heading">Shift details</h2>
+                <span class="subtle">This uses the shift update assignment workflow.</span>
+            </div>
+            <StatusBadge Text="@(targetShift is null ? "Loading" : FormatStatus(targetShift.Status))" Tone="@(targetShift?.CaregiverId is null ? BadgeTone.Danger : BadgeTone.Info)" />
+        </div>
+
+        @if (targetShift is null)
+        {
+            <p class="empty-state">Loading shift details...</p>
+        }
+        else
+        {
+            <div class="form-field-grid">
+                <label class="form-field">Client or facility<input readonly value="@targetShift.ClientFullName" /></label>
+                <label class="form-field">Service type<input readonly value="@FormatServiceType(targetShift.ServiceType)" /></label>
+                <label class="form-field">Start<input readonly value="@FormatDateTime(targetShift.ScheduledStartTime)" /></label>
+                <label class="form-field">End<input readonly value="@FormatDateTime(targetShift.ScheduledEndTime)" /></label>
+                <label class="form-field">Bill rate<input readonly value="Preserved from shift" /></label>
+                <label class="form-field">Pay rate<input readonly value="Preserved from shift" /></label>
+            </div>
+
+            <section class="form-section" aria-labelledby="shift-requirements-heading">
+                <h3 id="shift-requirements-heading">Requirements</h3>
+                <div class="badge-row">
+                    @foreach (var requirement in RequirementLabels(targetShift))
+                    {
+                        <StatusBadge Text="@requirement" Tone="@BadgeTone.Info" />
+                    }
+                </div>
+            </section>
+
+            <div class="access-action-row">
+                <button class="button button-primary" type="button" disabled="@(selectedCaregiverId is null || isSaving)" @onclick="AssignSelectedCaregiverAsync">Assign selected caregiver</button>
+                <button class="button button-secondary" type="button" @onclick="NavigateToSchedule">Cancel</button>
+            </div>
+        }
+    </section>
+
+    <aside class="card profile-panel" aria-labelledby="eligible-caregivers-heading">
+        <div class="section-header">
+            <div>
+                <h2 id="eligible-caregivers-heading">Eligible caregivers</h2>
+                <span class="subtle">Filtered by credentials, availability, active status, and double-booking checks.</span>
+            </div>
+        </div>
+
+        @if (eligibleCaregivers.Count == 0)
+        {
+            <p class="empty-state">No caregivers available for review.</p>
+        }
+        else
+        {
+            @foreach (var caregiver in eligibleCaregivers)
+            {
+                <div class="credential-row">
+                    <div>
+                        <strong>@caregiver.FullName</strong>
+                        <span class="meta">@CandidateMeta(caregiver)</span>
+                    </div>
+                    @if (caregiver.IsAssignable)
+                    {
+                        <button class="text-link" type="button" @onclick="() => selectedCaregiverId = caregiver.CaregiverId">Select</button>
+                    }
+                    else
+                    {
+                        <StatusBadge Text="Blocked" Tone="@BadgeTone.Danger" />
+                    }
+                </div>
+            }
+        }
+    </aside>
+</div>
+
+@code {
+    [Parameter] public Guid ShiftId { get; set; }
+
+    private ShiftDetailDto? targetShift;
+    private IReadOnlyList<EligibleCaregiverDto> eligibleCaregivers = [];
+    private ApiResponse? error;
+    private Guid? selectedCaregiverId;
+    private bool isSaving;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadTargetShiftAsync();
+        await LoadEligibleCaregiversAsync();
+    }
+
+    private async Task LoadTargetShiftAsync()
+    {
+        var response = await ShiftsClient.GetAsync(ShiftId);
+        if (response.Success && response.Data is not null)
+        {
+            targetShift = response.Data;
+        }
+        else
+        {
+            error = response;
+        }
+    }
+
+    private async Task LoadEligibleCaregiversAsync()
+    {
+        var response = await ShiftsClient.GetEligibleCaregiversAsync(ShiftId, new PagedRequest { PageNumber = 1, PageSize = 20 });
+        if (response.Success && response.Data is not null)
+        {
+            eligibleCaregivers = response.Data.Items;
+        }
+        else
+        {
+            error = response;
+        }
+    }
+
+    private async Task AssignSelectedCaregiverAsync()
+    {
+        if (targetShift is null || selectedCaregiverId is null)
+        {
+            return;
+        }
+
+        isSaving = true;
+        error = null;
+        var request = new UpdateShiftRequest
+        {
+            CaregiverId = selectedCaregiverId,
+            ScheduledStartUtc = targetShift.ScheduledStartTime,
+            ScheduledEndUtc = targetShift.ScheduledEndTime,
+            BreakMinutes = targetShift.BreakMinutes,
+            ServiceType = targetShift.ServiceType,
+        };
+
+        var response = await ShiftsClient.UpdateAsync(targetShift.Id, request);
+        if (response.Success)
+        {
+            NavigateToSchedule();
+            return;
+        }
+
+        error = response;
+        isSaving = false;
+    }
+
+    private static string CandidateMeta(EligibleCaregiverDto caregiver)
+    {
+        var status = caregiver.IsAssignable
+            ? string.Join(", ", caregiver.MatchReasons)
+            : string.Join(", ", caregiver.BlockingReasons);
+        var rating = caregiver.AverageRating.HasValue ? $"{caregiver.AverageRating.Value:0.0} rating" : "new profile";
+        return $"{caregiver.ShiftsMtd} MTD shifts - {rating} - {status}";
+    }
+
+    private void NavigateToSchedule() => Navigation.NavigateTo("/schedule");
+
+    private static string FormatDateTime(DateTime value) =>
+        value.ToLocalTime().ToString("MMM d, h:mm tt");
+
+    private static string FormatStatus(CarePath.Contracts.Enumerations.ShiftStatus status) => status switch
+    {
+        CarePath.Contracts.Enumerations.ShiftStatus.Scheduled => "Scheduled",
+        CarePath.Contracts.Enumerations.ShiftStatus.InProgress => "In progress",
+        CarePath.Contracts.Enumerations.ShiftStatus.Completed => "Completed",
+        CarePath.Contracts.Enumerations.ShiftStatus.Cancelled => "Cancelled",
+        CarePath.Contracts.Enumerations.ShiftStatus.NoShow => "No-show",
+        _ => status.ToString()
+    };
+
+    private static IReadOnlyList<string> RequirementLabels(ShiftDetailDto shift)
+    {
+        var labels = new List<string>
+        {
+            shift.ServiceType == CarePath.Contracts.Enumerations.ServiceType.FacilityStaffing
+                ? "Facility staffing"
+                : "In-home care",
+            shift.ServiceType == CarePath.Contracts.Enumerations.ServiceType.FacilityStaffing
+                ? "Valid facility credential"
+                : "Valid direct-care credential",
+        };
+
+        labels.Add(shift.ScheduledStartTime.ToLocalTime().DayOfWeek is DayOfWeek.Saturday or DayOfWeek.Sunday
+            ? "Weekend availability"
+            : "Weekday availability");
+
+        if (shift.ScheduledStartTime.ToLocalTime().Hour < 6 || shift.ScheduledStartTime.ToLocalTime().Hour >= 20)
+        {
+            labels.Add("Night availability");
+        }
+
+        return labels;
+    }
+
+    private static string FormatServiceType(CarePath.Contracts.Enumerations.ServiceType type) => type switch
+    {
+        CarePath.Contracts.Enumerations.ServiceType.InHomeCare => "In-home care",
+        CarePath.Contracts.Enumerations.ServiceType.FacilityStaffing => "Facility staffing",
+        _ => type.ToString()
+    };
+}

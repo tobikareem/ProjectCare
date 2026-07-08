@@ -3,6 +3,7 @@ using CarePath.Domain.Entities.Clinical;
 using CarePath.Domain.Entities.Identity;
 using CarePath.Domain.Entities.Scheduling;
 using CarePath.Domain.Entities.Transitions;
+using System.Data;
 
 namespace CarePath.Domain.Interfaces.Repositories;
 
@@ -19,9 +20,10 @@ namespace CarePath.Domain.Interfaces.Repositories;
 /// <para>
 /// <b>Transactions:</b> For multi-aggregate operations that must be atomic (e.g., creating a
 /// <see cref="Shift"/> and updating a <see cref="Caregiver"/> counter in the same round-trip),
-/// wrap the operations with <see cref="BeginTransactionAsync"/> /
-/// <see cref="CommitTransactionAsync"/> / <see cref="RollbackTransactionAsync"/>.
-/// Only one transaction may be active per unit-of-work instance at a time.
+/// pass the work as a delegate to <c>ExecuteInTransactionAsync</c>. The implementation runs the
+/// delegate through the configured retrying execution strategy inside a transaction, committing
+/// on success and rolling back when the delegate throws. Only one transaction may be active per
+/// unit-of-work instance at a time.
 /// </para>
 /// <para>
 /// <b>Disposal:</b> Implement both <see cref="IDisposable"/> and <see cref="IAsyncDisposable"/>
@@ -106,33 +108,68 @@ public interface IUnitOfWork : IDisposable, IAsyncDisposable
     // â”€â”€ Transaction Management â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
     /// <summary>
-    /// Begins a new explicit database transaction. Use when multiple
-    /// <see cref="SaveChangesAsync"/> calls must be atomic across aggregates.
+    /// Executes <paramref name="operation"/> inside a database transaction that is compatible
+    /// with the configured retrying execution strategy, committing on success and rolling back
+    /// and rethrowing when the operation throws.
     /// </summary>
+    /// <remarks>
+    /// The delegate may be invoked more than once when the provider retries after a transient
+    /// failure. Between attempts the implementation rolls back and resets tracked state, so
+    /// reads inside the delegate always observe database truth on a retry — never a previous
+    /// attempt's in-memory mutations. Entities constructed or fetched outside the delegate are
+    /// detached by that reset; re-adding them replays cleanly on their client-generated keys or
+    /// fails with a key conflict, never silently no-ops. The wrapper never calls
+    /// <see cref="SaveChangesAsync"/> implicitly — the operation must persist its own changes
+    /// before returning.
+    /// </remarks>
+    /// <param name="operation">Transactional work; receives the token to pass to inner calls.</param>
     /// <param name="cancellationToken">Token to cancel the asynchronous operation.</param>
     /// <exception cref="InvalidOperationException">
     /// Thrown by the implementation if a transaction is already active on this unit-of-work instance.
     /// </exception>
-    Task BeginTransactionAsync(CancellationToken cancellationToken = default);
+    Task ExecuteInTransactionAsync(Func<CancellationToken, Task> operation, CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// Commits the current transaction, making all changes permanent.
-    /// Must be preceded by a call to <see cref="BeginTransactionAsync"/>.
+    /// Executes <paramref name="operation"/> inside a database transaction at the requested
+    /// isolation level. Use <see cref="IsolationLevel.Serializable"/> when enforcing aggregate
+    /// invariants that depend on counts or uniqueness checks. See
+    /// <see cref="ExecuteInTransactionAsync(Func{CancellationToken, Task}, CancellationToken)"/>
+    /// for retry semantics.
     /// </summary>
+    /// <param name="isolationLevel">Database isolation level for the transaction.</param>
+    /// <param name="operation">Transactional work; receives the token to pass to inner calls.</param>
     /// <param name="cancellationToken">Token to cancel the asynchronous operation.</param>
     /// <exception cref="InvalidOperationException">
-    /// Thrown by the implementation if no active transaction exists when this method is called.
+    /// Thrown by the implementation if a transaction is already active on this unit-of-work instance.
     /// </exception>
-    Task CommitTransactionAsync(CancellationToken cancellationToken = default);
+    Task ExecuteInTransactionAsync(IsolationLevel isolationLevel, Func<CancellationToken, Task> operation, CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// Rolls back the current transaction, discarding all uncommitted changes.
-    /// Call this in a <c>catch</c> block when an error occurs after
-    /// <see cref="BeginTransactionAsync"/> has been called.
+    /// Executes <paramref name="operation"/> inside a database transaction and returns its
+    /// result. Commits on success; rolls back and rethrows on failure. See
+    /// <see cref="ExecuteInTransactionAsync(Func{CancellationToken, Task}, CancellationToken)"/>
+    /// for retry semantics.
     /// </summary>
+    /// <typeparam name="TResult">Type of the value produced by the operation.</typeparam>
+    /// <param name="operation">Transactional work; receives the token to pass to inner calls.</param>
     /// <param name="cancellationToken">Token to cancel the asynchronous operation.</param>
     /// <exception cref="InvalidOperationException">
-    /// Thrown by the implementation if no active transaction exists when this method is called.
+    /// Thrown by the implementation if a transaction is already active on this unit-of-work instance.
     /// </exception>
-    Task RollbackTransactionAsync(CancellationToken cancellationToken = default);
+    Task<TResult> ExecuteInTransactionAsync<TResult>(Func<CancellationToken, Task<TResult>> operation, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Executes <paramref name="operation"/> inside a database transaction at the requested
+    /// isolation level and returns its result. See
+    /// <see cref="ExecuteInTransactionAsync(Func{CancellationToken, Task}, CancellationToken)"/>
+    /// for retry semantics.
+    /// </summary>
+    /// <typeparam name="TResult">Type of the value produced by the operation.</typeparam>
+    /// <param name="isolationLevel">Database isolation level for the transaction.</param>
+    /// <param name="operation">Transactional work; receives the token to pass to inner calls.</param>
+    /// <param name="cancellationToken">Token to cancel the asynchronous operation.</param>
+    /// <exception cref="InvalidOperationException">
+    /// Thrown by the implementation if a transaction is already active on this unit-of-work instance.
+    /// </exception>
+    Task<TResult> ExecuteInTransactionAsync<TResult>(IsolationLevel isolationLevel, Func<CancellationToken, Task<TResult>> operation, CancellationToken cancellationToken = default);
 }

@@ -41,6 +41,17 @@
     </NavLink>
 </nav>
 
+<AuthorizeView Roles="Admin">
+    <Authorized>
+        <p class="nav-label">Admin</p>
+        <nav class="side-nav" aria-label="Admin navigation">
+            <NavLink href="admin/users">
+                <span aria-hidden="true">@@</span><span>User management</span>
+            </NavLink>
+        </nav>
+    </Authorized>
+</AuthorizeView>
+
 <p class="nav-label">Transitions</p>
 <nav class="side-nav" aria-label="Transitions navigation">
     <NavLink href="transitions">

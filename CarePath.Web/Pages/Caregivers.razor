@@ -7,6 +7,7 @@
 @using Microsoft.AspNetCore.Authorization
 @attribute [Authorize(Roles = "Admin,Coordinator")]
 @inject CaregiversClient CaregiversClient
+@inject NavigationManager Navigation
 
 <PageTitle>Caregivers</PageTitle>
 
@@ -16,7 +17,7 @@
         <h1>Caregivers</h1>
         <p class="subtle">@CaregiverSummaryText</p>
     </div>
-    <button class="button button-primary" type="button">＋ Add caregiver</button>
+    <button class="button button-primary" type="button" @onclick="NavigateToCreate">+ Add caregiver</button>
 </div>
 
 <div class="filter-bar" role="search" aria-label="Caregiver filters">
@@ -38,11 +39,11 @@
     <ApiErrorAlert Response="caregiverError" />
 }
 
-<div class="workspace-grid">
-    <section class="card table-card" aria-labelledby="caregiver-list-heading">
+<div class="caregiver-workspace">
+    <section class="card table-card" aria-labelledby="caregiver-roster-heading">
         <div class="section-header">
             <div>
-                <h2 id="caregiver-list-heading">Caregiver roster</h2>
+                <h2 id="caregiver-roster-heading">Caregiver roster</h2>
                 <span class="subtle">Paged from the caregiver API</span>
             </div>
             <span class="meta">@PagingText(caregiverPage)</span>
@@ -66,7 +67,7 @@
                             <th>Type</th>
                             <th>Rating</th>
                             <th>Status</th>
-                            <th></th>
+                            <th>View</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -85,9 +86,7 @@
                                                  Tone="@(caregiver.IsActive ? BadgeTone.Success : BadgeTone.Neutral)" />
                                 </td>
                                 <td>
-                                    <button class="text-link" type="button" @onclick="() => SelectCaregiverAsync(caregiver.Id)">
-                                        View
-                                    </button>
+                                    <button class="text-link" type="button" @onclick="() => SelectCaregiverAsync(caregiver.Id)">View</button>
                                 </td>
                             </tr>
                         }
@@ -103,11 +102,11 @@
         </div>
     </section>
 
-    <aside class="card detail-card" aria-labelledby="caregiver-detail-heading">
+    <aside class="card profile-panel" aria-labelledby="caregiver-profile-heading">
         <div class="section-header">
             <div>
-                <h2 id="caregiver-detail-heading">Profile detail</h2>
-                <span class="subtle">Skills and credential status</span>
+                <h2 id="caregiver-profile-heading">Profile detail</h2>
+                <span class="subtle">Skills, credentials, and performance</span>
             </div>
         </div>
 
@@ -125,51 +124,84 @@
         }
         else
         {
-            <div class="detail-heading">
-                <span class="avatar-lg" aria-hidden="true">@Initials(selectedCaregiver.FullName)</span>
-                <div>
-                    <strong>@selectedCaregiver.FullName</strong>
-                    <span class="meta">@FormatEmploymentType(selectedCaregiver.EmploymentType) · @AvailabilityText(selectedCaregiver)</span>
+            <div class="profile-header">
+                <div class="profile-identity">
+                    <span class="avatar-lg" aria-hidden="true">@Initials(selectedCaregiver.FullName)</span>
+                    <div>
+                        <strong>@selectedCaregiver.FullName</strong>
+                        <span class="meta">@FormatEmploymentType(selectedCaregiver.EmploymentType) - @AvailabilityText(selectedCaregiver)</span>
+                    </div>
                 </div>
+                <StatusBadge Text="@(selectedCaregiver.IsActive ? "Active" : "Inactive")"
+                             Tone="@(selectedCaregiver.IsActive ? BadgeTone.Success : BadgeTone.Neutral)" />
             </div>
 
-            <dl class="detail-facts">
-                <div><dt>Max weekly hours</dt><dd>@selectedCaregiver.MaxWeeklyHours</dd></div>
-                <div><dt>Completed shifts</dt><dd>@selectedCaregiver.TotalShiftsCompleted</dd></div>
-                <div><dt>No-shows</dt><dd>@selectedCaregiver.NoShowCount</dd></div>
-            </dl>
+            <section aria-labelledby="profile-contact-heading">
+                <h3 id="profile-contact-heading">Contact</h3>
+                <div class="profile-row"><span class="subtle">Email</span><span>@selectedCaregiver.Email</span></div>
+                <div class="profile-row"><span class="subtle">Phone</span><span>@selectedCaregiver.PhoneNumber</span></div>
+            </section>
 
-            <h3>Skills</h3>
-            <div class="badge-row">
-                @foreach (var skill in CaregiverSkills(selectedCaregiver))
-                {
-                    <StatusBadge Text="@skill" Tone="@BadgeTone.Info" />
-                }
-                @if (CaregiverSkills(selectedCaregiver).Count == 0)
-                {
-                    <span class="subtle">No specialty skills recorded.</span>
-                }
-            </div>
+            <section aria-labelledby="profile-employment-heading">
+                <h3 id="profile-employment-heading">Employment and availability</h3>
+                <div class="profile-row"><span class="subtle">Hire date</span><span>@selectedCaregiver.HireDate.ToLocalTime().ToString("MMM d, yyyy")</span></div>
+                <div class="profile-row"><span class="subtle">Pay rate</span><span>@selectedCaregiver.HourlyPayRate.ToString("C")/hr</span></div>
+                <div class="profile-row"><span class="subtle">Max weekly hours</span><span>@selectedCaregiver.MaxWeeklyHours</span></div>
+                <div class="profile-row"><span class="subtle">Availability</span><span>@AvailabilityText(selectedCaregiver)</span></div>
+            </section>
 
-            <h3>Certifications</h3>
-            <div class="stacked-list">
-                @if (selectedCaregiver.Certifications.Count == 0)
-                {
-                    <p class="empty-state compact">No certifications recorded.</p>
-                }
-                else
-                {
-                    @foreach (var certification in selectedCaregiver.Certifications)
+            <section aria-labelledby="profile-skills-heading">
+                <h3 id="profile-skills-heading">Skills</h3>
+                <div class="badge-row">
+                    @foreach (var skill in CaregiverSkills(selectedCaregiver))
                     {
-                        <div class="credential-row">
-                            <div>
-                                <strong>@FormatCertificationType(certification.Type)</strong>
-                                <span class="meta">Expires @certification.ExpirationDate.ToLocalTime().ToString("MMM d, yyyy")</span>
-                            </div>
-                            <StatusBadge Text="@CertificationStatusText(certification)" Tone="@CertificationTone(certification)" />
-                        </div>
+                        <StatusBadge Text="@skill" Tone="@BadgeTone.Info" />
                     }
-                }
+                    @if (CaregiverSkills(selectedCaregiver).Count == 0)
+                    {
+                        <span class="subtle">No specialty skills recorded.</span>
+                    }
+                </div>
+            </section>
+
+            <section aria-labelledby="profile-certs-heading">
+                <div class="section-header compact-header">
+                    <h3 id="profile-certs-heading">Certifications</h3>
+                    <button class="text-link" type="button" @onclick="NavigateToCertification">Add certification</button>
+                </div>
+                <div class="stacked-list">
+                    @if (selectedCaregiver.Certifications.Count == 0)
+                    {
+                        <p class="empty-state compact">No certifications recorded.</p>
+                    }
+                    else
+                    {
+                        @foreach (var certification in selectedCaregiver.Certifications)
+                        {
+                            <div class="credential-row">
+                                <div>
+                                    <strong>@FormatCertificationType(certification.Type)</strong>
+                                    <span class="meta">@certification.IssuingAuthority - expires @certification.ExpirationDate.ToLocalTime().ToString("MMM d, yyyy")</span>
+                                </div>
+                                <StatusBadge Text="@CertificationStatusText(certification)" Tone="@CertificationTone(certification)" />
+                            </div>
+                        }
+                    }
+                </div>
+            </section>
+
+            <section aria-labelledby="profile-performance-heading">
+                <h3 id="profile-performance-heading">Performance</h3>
+                <div class="profile-row"><span class="subtle">Average rating</span><span>@FormatRating(selectedCaregiver.AverageRating)</span></div>
+                <div class="profile-row"><span class="subtle">Shifts (MTD)</span><span>@selectedCaregiver.ShiftsMtd checked in</span></div>
+                <div class="profile-row"><span class="subtle">Billable hours (MTD)</span><span>@selectedCaregiver.BillableHoursMtd.ToString("0.##") hrs</span></div>
+                <div class="profile-row"><span class="subtle">Completed shifts</span><span>@selectedCaregiver.TotalShiftsCompleted lifetime</span></div>
+                <div class="profile-row"><span class="subtle">No-shows</span><span>@selectedCaregiver.NoShowCount</span></div>
+            </section>
+
+            <div class="access-action-row">
+                <button class="button button-primary" type="button" @onclick="NavigateToEligibleShifts">Schedule eligible shifts</button>
+                <button class="button button-secondary" type="button" @onclick="NavigateToSchedule">Open schedule</button>
             </div>
         }
     </aside>
@@ -191,9 +223,7 @@
     private string statusFilter = string.Empty;
 
     private IReadOnlyList<CaregiverSummaryDto> FilteredCaregivers =>
-        caregiverPage?.Items
-            .Where(MatchesFilters)
-            .ToArray() ?? [];
+        caregiverPage?.Items.Where(MatchesFilters).ToArray() ?? [];
 
     private string CaregiverSummaryText
     {
@@ -300,6 +330,26 @@
         selectedCaregiver = null;
         caregiverDetailError = null;
     }
+
+    private void NavigateToCreate() => Navigation.NavigateTo("/caregivers/create");
+
+    private void NavigateToCertification()
+    {
+        if (selectedCaregiver is not null)
+        {
+            Navigation.NavigateTo($"/caregivers/{selectedCaregiver.Id}/certifications");
+        }
+    }
+
+    private void NavigateToEligibleShifts()
+    {
+        if (selectedCaregiver is not null)
+        {
+            Navigation.NavigateTo($"/caregivers/{selectedCaregiver.Id}/eligible-shifts");
+        }
+    }
+
+    private void NavigateToSchedule() => Navigation.NavigateTo("/schedule");
 
     private static bool CanGoPrevious<T>(PagedResult<T>? page) => page?.HasPreviousPage == true;
 

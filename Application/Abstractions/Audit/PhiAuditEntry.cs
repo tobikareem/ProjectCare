@@ -10,4 +10,5 @@ public sealed record PhiAuditEntry(
     ProtectedResourceType EntityType,
     Guid EntityId,
     string? CorrelationId,
-    string? BackgroundJobName = null);
+    string? BackgroundJobName = null,
+    IReadOnlyDictionary<string, string>? Attributes = null);

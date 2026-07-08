@@ -16,7 +16,9 @@ public sealed class TransitionCheckInConfiguration : IEntityTypeConfiguration<Tr
 
         builder.HasKey(checkIn => checkIn.Id);
 
-        builder.Property(checkIn => checkIn.ResponsesJson).HasColumnType("nvarchar(max)").IsRequired();
+        // Unbounded string; SQL Server infers nvarchar(max). No explicit column type so
+        // provider-agnostic test databases (SQLite) can create the schema.
+        builder.Property(checkIn => checkIn.ResponsesJson).IsRequired();
         builder.Property(checkIn => checkIn.CreatedBy).HasMaxLength(256);
         builder.Property(checkIn => checkIn.UpdatedBy).HasMaxLength(256);
 

@@ -1,4 +1,5 @@
 using System.Linq.Expressions;
+using System.Data;
 using CarePath.Application.Abstractions.Audit;
 using CarePath.Application.Abstractions.Auth;
 using CarePath.Application.Common.Exceptions;
@@ -17,6 +18,7 @@ using CarePath.Domain.Interfaces.Repositories;
 using FluentAssertions;
 using FluentValidation;
 using Moq;
+using DomainClient = global::CarePath.Domain.Entities.Identity.Client;
 using ContractDischargeDocumentSourceType = CarePath.Contracts.Enumerations.DischargeDocumentSourceType;
 using ContractReminderChannel = CarePath.Contracts.Enumerations.ReminderChannel;
 using ContractReminderType = CarePath.Contracts.Enumerations.ReminderType;
@@ -33,7 +35,7 @@ public sealed class TransitionsServiceTests
     {
         // Arrange
         var userId = Guid.NewGuid();
-        var client = new Client { Id = Guid.NewGuid(), UserId = Guid.NewGuid(), DateOfBirth = UtcDate(1940, 1, 1) };
+        var client = new DomainClient { Id = Guid.NewGuid(), UserId = Guid.NewGuid(), DateOfBirth = UtcDate(1940, 1, 1) };
         var unitOfWork = CreateUnitOfWork();
         unitOfWork.Clients.Setup(repository => repository.GetByIdAsync(client.Id, It.IsAny<CancellationToken>()))
             .ReturnsAsync(client);
@@ -64,7 +66,12 @@ public sealed class TransitionsServiceTests
         addedPlan!.Status.Should().Be(TransitionPlanStatus.Draft);
         addedPlan.HospitalName.Should().Be("Synthetic Hospital");
         addedPlan.DischargeDate.Should().Be(UtcDate(2026, 7, 1));
-        unitOfWork.Mock.Verify(work => work.CommitTransactionAsync(It.IsAny<CancellationToken>()), Times.Once);
+        unitOfWork.Mock.Verify(
+            work => work.ExecuteInTransactionAsync(
+                IsolationLevel.ReadCommitted,
+                It.IsAny<Func<CancellationToken, Task>>(),
+                It.IsAny<CancellationToken>()),
+            Times.Once);
         auditLogger.Verify(logger => logger.LogAsync(
             It.Is<PhiAuditEntry>(entry => entry.EntityType == ProtectedResourceType.DischargeDocument && entry.Action == AuditAction.Create),
             It.IsAny<CancellationToken>()), Times.Once);
@@ -108,7 +115,7 @@ public sealed class TransitionsServiceTests
             PhoneNumber = "555-0100",
             Role = UserRole.Client,
         };
-        var client = new Client { Id = Guid.NewGuid(), UserId = clientUser.Id, DateOfBirth = UtcDate(1940, 1, 1) };
+        var client = new DomainClient { Id = Guid.NewGuid(), UserId = clientUser.Id, DateOfBirth = UtcDate(1940, 1, 1) };
         var document = new DischargeDocument
         {
             Id = Guid.NewGuid(),
@@ -180,7 +187,12 @@ public sealed class TransitionsServiceTests
         addedInstruction.Should().NotBeNull();
         addedInstruction!.Status.Should().Be(TransitionInstructionStatus.Pending);
         dto.Instructions.Should().ContainSingle(instruction => instruction.SourceText == "Medication: take synthetic tablet daily");
-        unitOfWork.Mock.Verify(work => work.CommitTransactionAsync(It.IsAny<CancellationToken>()), Times.Once);
+        unitOfWork.Mock.Verify(
+            work => work.ExecuteInTransactionAsync(
+                IsolationLevel.ReadCommitted,
+                It.IsAny<Func<CancellationToken, Task>>(),
+                It.IsAny<CancellationToken>()),
+            Times.Once);
         auditLogger.Verify(logger => logger.LogAsync(
             It.Is<PhiAuditEntry>(entry => entry.EntityType == ProtectedResourceType.DischargeDocument && entry.EntityId == document.Id && entry.Action == AuditAction.Read),
             It.IsAny<CancellationToken>()), Times.Once);
@@ -229,7 +241,7 @@ public sealed class TransitionsServiceTests
             PhoneNumber = "555-0100",
             Role = UserRole.Client,
         };
-        var client = new Client
+        var client = new DomainClient
         {
             Id = Guid.NewGuid(),
             UserId = user.Id,
@@ -280,7 +292,7 @@ public sealed class TransitionsServiceTests
             .ReturnsAsync(instructions);
         unitOfWork.TransitionEscalations.Setup(repository => repository.FindAsync(It.IsAny<Expression<Func<TransitionEscalation, bool>>>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(escalations);
-        unitOfWork.Clients.Setup(repository => repository.FindAsync(It.IsAny<Expression<Func<Client, bool>>>(), It.IsAny<CancellationToken>()))
+        unitOfWork.Clients.Setup(repository => repository.FindAsync(It.IsAny<Expression<Func<DomainClient, bool>>>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(new[] { client });
         unitOfWork.Users.Setup(repository => repository.FindAsync(It.IsAny<Expression<Func<User, bool>>>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(new[] { user });
@@ -514,7 +526,7 @@ public sealed class TransitionsServiceTests
             PhoneNumber = "555-0100",
             Role = UserRole.Client,
         };
-        var client = new Client { Id = plan.ClientId, UserId = clientUser.Id, DateOfBirth = UtcDate(1940, 1, 1) };
+        var client = new DomainClient { Id = plan.ClientId, UserId = clientUser.Id, DateOfBirth = UtcDate(1940, 1, 1) };
         var unitOfWork = CreateUnitOfWork();
         unitOfWork.TransitionPlans.Setup(repository => repository.GetByIdAsync(plan.Id, It.IsAny<CancellationToken>()))
             .ReturnsAsync(plan);
@@ -648,7 +660,12 @@ public sealed class TransitionsServiceTests
         addedReminder.SentAt.Should().BeNull();
         dto.Id.Should().Be(addedReminder.Id);
         dto.TransitionInstructionId.Should().Be(instruction.Id);
-        unitOfWork.Mock.Verify(work => work.CommitTransactionAsync(It.IsAny<CancellationToken>()), Times.Once);
+        unitOfWork.Mock.Verify(
+            work => work.ExecuteInTransactionAsync(
+                IsolationLevel.ReadCommitted,
+                It.IsAny<Func<CancellationToken, Task>>(),
+                It.IsAny<CancellationToken>()),
+            Times.Once);
     }
 
     [Fact]
@@ -1147,7 +1164,7 @@ public sealed class TransitionsServiceTests
         public Mock<IRepository<User>> Users { get; } = new(MockBehavior.Strict);
         public Mock<IRepository<Caregiver>> Caregivers { get; } = new(MockBehavior.Strict);
         public Mock<IRepository<CaregiverCertification>> CaregiverCertifications { get; } = new(MockBehavior.Strict);
-        public Mock<IRepository<Client>> Clients { get; } = new(MockBehavior.Strict);
+        public Mock<IRepository<DomainClient>> Clients { get; } = new(MockBehavior.Strict);
         public Mock<IRepository<ClientAccessGrant>> ClientAccessGrants { get; } = new(MockBehavior.Strict);
         public Mock<IRepository<CarePlan>> CarePlans { get; } = new(MockBehavior.Strict);
         public Mock<IRepository<Shift>> Shifts { get; } = new(MockBehavior.Strict);
@@ -1165,16 +1182,18 @@ public sealed class TransitionsServiceTests
 
         public MockUnitOfWork()
         {
-            Mock.Setup(work => work.BeginTransactionAsync(It.IsAny<CancellationToken>())).Returns(Task.CompletedTask);
-            Mock.Setup(work => work.CommitTransactionAsync(It.IsAny<CancellationToken>())).Returns(Task.CompletedTask);
-            Mock.Setup(work => work.RollbackTransactionAsync(It.IsAny<CancellationToken>())).Returns(Task.CompletedTask);
+            Mock.Setup(work => work.ExecuteInTransactionAsync(
+                    It.IsAny<IsolationLevel>(),
+                    It.IsAny<Func<CancellationToken, Task>>(),
+                    It.IsAny<CancellationToken>()))
+                .Returns(Task.CompletedTask);
             Mock.Setup(work => work.SaveChangesAsync(It.IsAny<CancellationToken>())).ReturnsAsync(1);
         }
 
         IRepository<User> IUnitOfWork.Users => Users.Object;
         IRepository<Caregiver> IUnitOfWork.Caregivers => Caregivers.Object;
         IRepository<CaregiverCertification> IUnitOfWork.CaregiverCertifications => CaregiverCertifications.Object;
-        IRepository<Client> IUnitOfWork.Clients => Clients.Object;
+        IRepository<DomainClient> IUnitOfWork.Clients => Clients.Object;
         IRepository<ClientAccessGrant> IUnitOfWork.ClientAccessGrants => ClientAccessGrants.Object;
         IRepository<CarePlan> IUnitOfWork.CarePlans => CarePlans.Object;
         IRepository<Shift> IUnitOfWork.Shifts => Shifts.Object;
@@ -1190,9 +1209,21 @@ public sealed class TransitionsServiceTests
         IRepository<TransitionCheckIn> IUnitOfWork.TransitionCheckIns => TransitionCheckIns.Object;
         IRepository<TransitionEscalation> IUnitOfWork.TransitionEscalations => TransitionEscalations.Object;
         public Task<int> SaveChangesAsync(CancellationToken cancellationToken = default) => Mock.Object.SaveChangesAsync(cancellationToken);
-        public Task BeginTransactionAsync(CancellationToken cancellationToken = default) => Mock.Object.BeginTransactionAsync(cancellationToken);
-        public Task CommitTransactionAsync(CancellationToken cancellationToken = default) => Mock.Object.CommitTransactionAsync(cancellationToken);
-        public Task RollbackTransactionAsync(CancellationToken cancellationToken = default) => Mock.Object.RollbackTransactionAsync(cancellationToken);
+        public Task ExecuteInTransactionAsync(Func<CancellationToken, Task> operation, CancellationToken cancellationToken = default) =>
+            ExecuteInTransactionAsync(IsolationLevel.ReadCommitted, operation, cancellationToken);
+
+        public async Task ExecuteInTransactionAsync(IsolationLevel isolationLevel, Func<CancellationToken, Task> operation, CancellationToken cancellationToken = default)
+        {
+            await Mock.Object.ExecuteInTransactionAsync(isolationLevel, operation, cancellationToken);
+            await operation(cancellationToken);
+        }
+        public Task<TResult> ExecuteInTransactionAsync<TResult>(Func<CancellationToken, Task<TResult>> operation, CancellationToken cancellationToken = default) =>
+            ExecuteInTransactionAsync(IsolationLevel.ReadCommitted, operation, cancellationToken);
+        public async Task<TResult> ExecuteInTransactionAsync<TResult>(IsolationLevel isolationLevel, Func<CancellationToken, Task<TResult>> operation, CancellationToken cancellationToken = default)
+        {
+            await Mock.Object.ExecuteInTransactionAsync(isolationLevel, operation, cancellationToken);
+            return await operation(cancellationToken);
+        }
         public void Dispose() { }
         public ValueTask DisposeAsync() => ValueTask.CompletedTask;
     }

@@ -50,6 +50,13 @@ public sealed class AdminUsersClient : ApiClientBase
         return GetAsync<PagedResult<UserAccountDto>>(uri, cancellationToken);
     }
 
+    /// <summary>Gets the complete set of assignable application roles.</summary>
+    /// <param name="cancellationToken">Token to cancel the operation.</param>
+    /// <returns>The role list.</returns>
+    public Task<ApiResponse<IReadOnlyList<UserRole>>> GetRolesAsync(
+        CancellationToken cancellationToken = default) =>
+        GetAsync<IReadOnlyList<UserRole>>("api/admin/users/roles", cancellationToken);
+
     /// <summary>Provisions a staff account (Coordinator/Clinician/FacilityManager/Admin).</summary>
     /// <param name="request">The provisioning request. Never logged client-side.</param>
     /// <param name="cancellationToken">Token to cancel the operation.</param>

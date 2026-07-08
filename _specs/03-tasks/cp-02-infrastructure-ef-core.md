@@ -579,7 +579,7 @@ Each entity configuration task creates a Fluent API configuration class that:
   - Implements `IUnitOfWork` from Domain layer
   - Lazy-initialized repository properties for all 12 entities
   - `SaveChangesAsync()` persists all changes
-  - Transaction management: `BeginTransactionAsync`, `CommitTransactionAsync`, `RollbackTransactionAsync`
+  - Transaction management: retry-compatible `ExecuteInTransactionAsync` delegate overloads (required because `EnableRetryOnFailure` forbids user-initiated Begin/Commit/Rollback)
   - Implements `IDisposable` and `IAsyncDisposable`
   - Thread-safe access to repositories
 - **Files**:
@@ -601,9 +601,10 @@ Each entity configuration task creates a Fluent API configuration class that:
 - **Methods**:
   ```csharp
   Task<int> SaveChangesAsync(CancellationToken cancellationToken = default);
-  Task BeginTransactionAsync(CancellationToken cancellationToken = default);
-  Task CommitTransactionAsync(CancellationToken cancellationToken = default);
-  Task RollbackTransactionAsync(CancellationToken cancellationToken = default);
+  Task ExecuteInTransactionAsync(Func<CancellationToken, Task> operation, CancellationToken cancellationToken = default);
+  Task ExecuteInTransactionAsync(IsolationLevel isolationLevel, Func<CancellationToken, Task> operation, CancellationToken cancellationToken = default);
+  Task<TResult> ExecuteInTransactionAsync<TResult>(Func<CancellationToken, Task<TResult>> operation, CancellationToken cancellationToken = default);
+  Task<TResult> ExecuteInTransactionAsync<TResult>(IsolationLevel isolationLevel, Func<CancellationToken, Task<TResult>> operation, CancellationToken cancellationToken = default);
   ```
 - **Implementation Notes**:
   - Use lazy initialization pattern with backing fields and properties
@@ -1029,7 +1030,7 @@ Each entity configuration task creates a Fluent API configuration class that:
   - Repositories are lazily initialized (created on first access)
   - Same repository instance returned on repeated access
   - SaveChangesAsync persists changes to in-memory DbContext
-  - BeginTransactionAsync / CommitTransactionAsync / RollbackTransactionAsync work
+  - ExecuteInTransactionAsync commits on success, rolls back and rethrows on failure, rejects nested calls, and retries transient failures (SQLite in-memory; EF InMemory cannot exercise transactions)
   - Implement IDisposable correctly
 - **Implementation Notes**:
   - Use in-memory DbContext for UnitOfWork testing

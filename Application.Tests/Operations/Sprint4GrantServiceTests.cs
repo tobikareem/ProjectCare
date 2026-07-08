@@ -1,4 +1,5 @@
 using System.Linq.Expressions;
+using System.Data;
 using CarePath.Application.Abstractions.Audit;
 using CarePath.Application.Abstractions.Auth;
 using CarePath.Application.Clients.Services;
@@ -11,6 +12,7 @@ using CarePath.Domain.Enumerations;
 using CarePath.Domain.Interfaces.Repositories;
 using FluentAssertions;
 using Moq;
+using DomainClient = global::CarePath.Domain.Entities.Identity.Client;
 using ContractAccessScope = CarePath.Contracts.Enumerations.AccessScope;
 
 namespace CarePath.Application.Tests.Operations;
@@ -27,7 +29,7 @@ public sealed class Sprint4GrantServiceTests
         var revokedGrant = Grant(clientId, grantee.Id, revoked: true);
         var unitOfWork = CreateUnitOfWork();
         unitOfWork.Clients.Setup(repository => repository.GetByIdAsync(clientId, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new Client { Id = clientId, UserId = Guid.NewGuid(), DateOfBirth = new DateTime(1990, 1, 1, 0, 0, 0, DateTimeKind.Utc) });
+            .ReturnsAsync(new DomainClient { Id = clientId, UserId = Guid.NewGuid(), DateOfBirth = new DateTime(1990, 1, 1, 0, 0, 0, DateTimeKind.Utc) });
         unitOfWork.ClientAccessGrants.Setup(repository => repository.FindAsync(It.IsAny<Expression<Func<ClientAccessGrant, bool>>>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync((Expression<Func<ClientAccessGrant, bool>> predicate, CancellationToken _) => new[] { activeGrant, revokedGrant }.Where(predicate.Compile()).ToArray());
         unitOfWork.Users.Setup(repository => repository.GetByIdAsync(grantee.Id, It.IsAny<CancellationToken>())).ReturnsAsync(grantee);
@@ -86,7 +88,7 @@ public sealed class Sprint4GrantServiceTests
         public Mock<IRepository<User>> Users { get; } = new(MockBehavior.Strict);
         public Mock<IRepository<Caregiver>> Caregivers { get; } = new(MockBehavior.Strict);
         public Mock<IRepository<CaregiverCertification>> CaregiverCertifications { get; } = new(MockBehavior.Strict);
-        public Mock<IRepository<Client>> Clients { get; } = new(MockBehavior.Strict);
+        public Mock<IRepository<DomainClient>> Clients { get; } = new(MockBehavior.Strict);
         public Mock<IRepository<ClientAccessGrant>> ClientAccessGrants { get; } = new(MockBehavior.Strict);
         public Mock<IRepository<CarePlan>> CarePlans { get; } = new(MockBehavior.Strict);
         public Mock<IRepository<Shift>> Shifts { get; } = new(MockBehavior.Strict);
@@ -105,7 +107,7 @@ public sealed class Sprint4GrantServiceTests
         IRepository<User> IUnitOfWork.Users => Users.Object;
         IRepository<Caregiver> IUnitOfWork.Caregivers => Caregivers.Object;
         IRepository<CaregiverCertification> IUnitOfWork.CaregiverCertifications => CaregiverCertifications.Object;
-        IRepository<Client> IUnitOfWork.Clients => Clients.Object;
+        IRepository<DomainClient> IUnitOfWork.Clients => Clients.Object;
         IRepository<ClientAccessGrant> IUnitOfWork.ClientAccessGrants => ClientAccessGrants.Object;
         IRepository<CarePlan> IUnitOfWork.CarePlans => CarePlans.Object;
         IRepository<Shift> IUnitOfWork.Shifts => Shifts.Object;
@@ -121,11 +123,16 @@ public sealed class Sprint4GrantServiceTests
         IRepository<TransitionCheckIn> IUnitOfWork.TransitionCheckIns => TransitionCheckIns.Object;
         IRepository<TransitionEscalation> IUnitOfWork.TransitionEscalations => TransitionEscalations.Object;
         public Task<int> SaveChangesAsync(CancellationToken cancellationToken = default) => Task.FromResult(1);
-        public Task BeginTransactionAsync(CancellationToken cancellationToken = default) => Task.CompletedTask;
-        public Task CommitTransactionAsync(CancellationToken cancellationToken = default) => Task.CompletedTask;
-        public Task RollbackTransactionAsync(CancellationToken cancellationToken = default) => Task.CompletedTask;
+        public Task ExecuteInTransactionAsync(Func<CancellationToken, Task> operation, CancellationToken cancellationToken = default) =>
+            operation(cancellationToken);
+
+        public Task ExecuteInTransactionAsync(IsolationLevel isolationLevel, Func<CancellationToken, Task> operation, CancellationToken cancellationToken = default) =>
+            operation(cancellationToken);
+        public Task<TResult> ExecuteInTransactionAsync<TResult>(Func<CancellationToken, Task<TResult>> operation, CancellationToken cancellationToken = default) =>
+            operation(cancellationToken);
+        public Task<TResult> ExecuteInTransactionAsync<TResult>(IsolationLevel isolationLevel, Func<CancellationToken, Task<TResult>> operation, CancellationToken cancellationToken = default) =>
+            operation(cancellationToken);
         public void Dispose() { }
         public ValueTask DisposeAsync() => ValueTask.CompletedTask;
     }
 }
-

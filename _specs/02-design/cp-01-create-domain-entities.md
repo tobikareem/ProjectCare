@@ -831,9 +831,14 @@ public interface IUnitOfWork : IDisposable, IAsyncDisposable
     IRepository<Payment> Payments { get; }
 
     Task<int> SaveChangesAsync(CancellationToken cancellationToken = default);
-    Task BeginTransactionAsync(CancellationToken cancellationToken = default);
-    Task CommitTransactionAsync(CancellationToken cancellationToken = default);
-    Task RollbackTransactionAsync(CancellationToken cancellationToken = default);
+
+    // Retry-compatible transactions (delegate-based; EnableRetryOnFailure forbids
+    // user-initiated Begin/Commit/Rollback). Optional IsolationLevel overloads default
+    // to ReadCommitted; TResult overloads return the operation's result.
+    Task ExecuteInTransactionAsync(Func<CancellationToken, Task> operation, CancellationToken cancellationToken = default);
+    Task ExecuteInTransactionAsync(IsolationLevel isolationLevel, Func<CancellationToken, Task> operation, CancellationToken cancellationToken = default);
+    Task<TResult> ExecuteInTransactionAsync<TResult>(Func<CancellationToken, Task<TResult>> operation, CancellationToken cancellationToken = default);
+    Task<TResult> ExecuteInTransactionAsync<TResult>(IsolationLevel isolationLevel, Func<CancellationToken, Task<TResult>> operation, CancellationToken cancellationToken = default);
 }
 ```
 

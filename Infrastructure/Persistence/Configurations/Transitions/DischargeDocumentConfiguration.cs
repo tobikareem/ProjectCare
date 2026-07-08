@@ -16,7 +16,9 @@ public sealed class DischargeDocumentConfiguration : IEntityTypeConfiguration<Di
 
         builder.HasKey(document => document.Id);
 
-        builder.Property(document => document.RawContent).HasColumnType("nvarchar(max)");
+        // Unbounded string; SQL Server infers nvarchar(max). No explicit column type so
+        // provider-agnostic test databases (SQLite) can create the schema.
+        builder.Property(document => document.RawContent);
         builder.Property(document => document.SourceReference).HasMaxLength(200);
         builder.Property(document => document.CreatedBy).HasMaxLength(256);
         builder.Property(document => document.UpdatedBy).HasMaxLength(256);

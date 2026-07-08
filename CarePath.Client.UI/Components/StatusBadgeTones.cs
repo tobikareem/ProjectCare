@@ -7,6 +7,20 @@ namespace CarePath.Client.UI.Components;
 /// </summary>
 public static class StatusBadgeTones
 {
+    /// <summary>Tone for a user role.</summary>
+    /// <param name="role">The user role.</param>
+    /// <returns>The badge tone.</returns>
+    public static BadgeTone For(UserRole role) => role switch
+    {
+        UserRole.Admin => BadgeTone.Danger,
+        UserRole.Coordinator => BadgeTone.Info,
+        UserRole.Caregiver => BadgeTone.Success,
+        UserRole.Client => BadgeTone.Warning,
+        UserRole.FacilityManager => BadgeTone.Info,
+        UserRole.Clinician => BadgeTone.Info,
+        _ => BadgeTone.Neutral
+    };
+
     /// <summary>Tone for a shift status.</summary>
     /// <param name="status">The shift status.</param>
     /// <returns>The badge tone.</returns>

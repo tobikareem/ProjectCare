@@ -1,4 +1,5 @@
 using System.Linq.Expressions;
+using System.Data;
 using CarePath.Application.Abstractions.Audit;
 using CarePath.Application.Abstractions.Auth;
 using CarePath.Application.Abstractions.Storage;
@@ -15,6 +16,7 @@ using CarePath.Domain.Interfaces.Repositories;
 using FluentAssertions;
 using FluentValidation;
 using Moq;
+using DomainClient = global::CarePath.Domain.Entities.Identity.Client;
 using ContractServiceType = CarePath.Contracts.Enumerations.ServiceType;
 
 namespace CarePath.Application.Tests.Operations;
@@ -188,6 +190,60 @@ public sealed class Sprint4SchedulingServiceTests
     }
 
     [Fact]
+    public async Task UpdateShiftAsync_WhenAssigningWithoutNotes_PreservesExistingNotes()
+    {
+        // Arrange
+        var context = CreateContext(certifications: [Certification(WindowStart.Date.AddDays(10))]);
+        var shift = ExistingShift(WindowStart.AddDays(3), WindowEnd.AddDays(3), ShiftStatus.Scheduled);
+        shift.ClientId = context.Client.Id;
+        shift.CaregiverId = null;
+        shift.Notes = "Existing scheduling note.";
+        context.UnitOfWork.Shifts.Setup(repository => repository.GetByIdAsync(shift.Id, It.IsAny<CancellationToken>())).ReturnsAsync(shift);
+        Shift? updatedShift = null;
+        context.UnitOfWork.Shifts.Setup(repository => repository.UpdateAsync(It.IsAny<Shift>(), It.IsAny<CancellationToken>()))
+            .Callback<Shift, CancellationToken>((value, _) => updatedShift = value)
+            .Returns(Task.CompletedTask);
+        var request = new UpdateShiftRequest
+        {
+            CaregiverId = context.Caregiver.Id,
+            ScheduledStartUtc = WindowStart.AddDays(3),
+            ScheduledEndUtc = WindowEnd.AddDays(3),
+            BreakMinutes = 0,
+            ServiceType = ContractServiceType.InHomeCare,
+        };
+
+        // Act
+        _ = await context.Service.UpdateShiftAsync(shift.Id, request);
+
+        // Assert
+        updatedShift.Should().NotBeNull();
+        updatedShift!.Notes.Should().Be("Existing scheduling note.");
+    }
+
+    [Fact]
+    public async Task GetEligibleCaregiversAsync_WhenCertificationExpired_ReturnsBlockedCandidate()
+    {
+        // Arrange
+        var context = CreateContext(certifications: [Certification(WindowStart.Date.AddDays(-1))]);
+        var shift = ExistingShift(WindowStart, WindowEnd, ShiftStatus.Scheduled);
+        shift.ClientId = context.Client.Id;
+        shift.CaregiverId = null;
+        context.UnitOfWork.Shifts.Setup(repository => repository.GetByIdAsync(shift.Id, It.IsAny<CancellationToken>())).ReturnsAsync(shift);
+        context.UnitOfWork.Caregivers.Setup(repository => repository.GetPagedAsync(1, 10, It.IsAny<CancellationToken>()))
+            .ReturnsAsync((new[] { context.Caregiver }, 1));
+        context.UnitOfWork.Shifts.Setup(repository => repository.FindAsync(It.IsAny<Expression<Func<Shift, bool>>>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(Array.Empty<Shift>());
+
+        // Act
+        var result = await context.Service.GetEligibleCaregiversAsync(shift.Id, new CarePath.Contracts.Common.PagedRequest { PageNumber = 1, PageSize = 10 });
+
+        // Assert
+        var candidate = result.Items.Should().ContainSingle().Subject;
+        candidate.IsAssignable.Should().BeFalse();
+        candidate.BlockingReasons.Should().Contain("Credential expired or missing");
+    }
+
+    [Fact]
     public async Task GetShiftsAsync_WhenCaregiverScoped_UsesFilteredPagedRepository()
     {
         // Arrange
@@ -219,7 +275,7 @@ public sealed class Sprint4SchedulingServiceTests
         // Arrange
         var context = CreateContext();
         var grantedUser = User(UserRole.Client);
-        var grantedClient = new Client
+        var grantedClient = new DomainClient
         {
             Id = Guid.NewGuid(),
             UserId = grantedUser.Id,
@@ -236,7 +292,7 @@ public sealed class Sprint4SchedulingServiceTests
         var shift = ExistingShift(WindowStart, WindowEnd, ShiftStatus.Scheduled);
         shift.ClientId = grantedClient.Id;
         shift.CaregiverId = context.Caregiver.Id;
-        context.UnitOfWork.Clients.Setup(repository => repository.FindAsync(It.IsAny<Expression<Func<Client, bool>>>(), It.IsAny<CancellationToken>()))
+        context.UnitOfWork.Clients.Setup(repository => repository.FindAsync(It.IsAny<Expression<Func<DomainClient, bool>>>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(new[] { context.Client });
         context.UnitOfWork.ClientAccessGrants.Setup(repository => repository.FindAsync(It.IsAny<Expression<Func<ClientAccessGrant, bool>>>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(new[] { grant });
@@ -577,7 +633,7 @@ public sealed class Sprint4SchedulingServiceTests
         var currentUserId = Guid.NewGuid();
         var clientUser = User(UserRole.Client);
         var caregiverUser = User(UserRole.Caregiver);
-        var client = new Client
+        var client = new DomainClient
         {
             Id = Guid.NewGuid(),
             UserId = clientUser.Id,
@@ -611,6 +667,8 @@ public sealed class Sprint4SchedulingServiceTests
             .ReturnsAsync(certificationRows);
         unitOfWork.Shifts.Setup(repository => repository.ExistsAsync(It.IsAny<Expression<Func<Shift, bool>>>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync((Expression<Func<Shift, bool>> predicate, CancellationToken _) => (existingShifts ?? Array.Empty<Shift>()).Any(predicate.Compile()));
+        unitOfWork.Shifts.Setup(repository => repository.FindAsync(It.IsAny<Expression<Func<Shift, bool>>>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync((Expression<Func<Shift, bool>> predicate, CancellationToken _) => (existingShifts ?? Array.Empty<Shift>()).Where(predicate.Compile()).ToArray());
         unitOfWork.Shifts.Setup(repository => repository.AddAsync(It.IsAny<Shift>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync((Shift shift, CancellationToken _) =>
             {
@@ -675,7 +733,7 @@ public sealed class Sprint4SchedulingServiceTests
         ShiftOperationsService Service,
         Mock<IPhiAuditLogger> AuditLogger,
         Guid CurrentUserId,
-        Client Client,
+        DomainClient Client,
         Caregiver Caregiver);
 
     private sealed record TestCurrentUserContext(Guid? UserId, IReadOnlySet<string> Roles) : ICurrentUserContext
@@ -697,7 +755,7 @@ public sealed class Sprint4SchedulingServiceTests
 
         public Mock<IRepository<CaregiverCertification>> CaregiverCertifications { get; } = new(MockBehavior.Strict);
 
-        public Mock<IRepository<Client>> Clients { get; } = new(MockBehavior.Strict);
+        public Mock<IRepository<DomainClient>> Clients { get; } = new(MockBehavior.Strict);
 
         public Mock<IRepository<ClientAccessGrant>> ClientAccessGrants { get; } = new(MockBehavior.Strict);
 
@@ -723,9 +781,11 @@ public sealed class Sprint4SchedulingServiceTests
 
         public MockUnitOfWork()
         {
-            Mock.Setup(work => work.BeginTransactionAsync(It.IsAny<CancellationToken>())).Returns(Task.CompletedTask);
-            Mock.Setup(work => work.CommitTransactionAsync(It.IsAny<CancellationToken>())).Returns(Task.CompletedTask);
-            Mock.Setup(work => work.RollbackTransactionAsync(It.IsAny<CancellationToken>())).Returns(Task.CompletedTask);
+            Mock.Setup(work => work.ExecuteInTransactionAsync(
+                    It.IsAny<IsolationLevel>(),
+                    It.IsAny<Func<CancellationToken, Task>>(),
+                    It.IsAny<CancellationToken>()))
+                .Returns(Task.CompletedTask);
             Mock.Setup(work => work.SaveChangesAsync(It.IsAny<CancellationToken>())).ReturnsAsync(1);
             TransitionPlans.Setup(repository => repository.FindAsync(It.IsAny<Expression<Func<TransitionPlan, bool>>>(), It.IsAny<CancellationToken>()))
                 .ReturnsAsync(Array.Empty<TransitionPlan>());
@@ -737,7 +797,7 @@ public sealed class Sprint4SchedulingServiceTests
 
         IRepository<CaregiverCertification> IUnitOfWork.CaregiverCertifications => CaregiverCertifications.Object;
 
-        IRepository<Client> IUnitOfWork.Clients => Clients.Object;
+        IRepository<DomainClient> IUnitOfWork.Clients => Clients.Object;
 
         IRepository<ClientAccessGrant> IUnitOfWork.ClientAccessGrants => ClientAccessGrants.Object;
 
@@ -769,11 +829,23 @@ public sealed class Sprint4SchedulingServiceTests
 
         public Task<int> SaveChangesAsync(CancellationToken cancellationToken = default) => Mock.Object.SaveChangesAsync(cancellationToken);
 
-        public Task BeginTransactionAsync(CancellationToken cancellationToken = default) => Mock.Object.BeginTransactionAsync(cancellationToken);
+        public Task ExecuteInTransactionAsync(Func<CancellationToken, Task> operation, CancellationToken cancellationToken = default) =>
+            ExecuteInTransactionAsync(IsolationLevel.ReadCommitted, operation, cancellationToken);
 
-        public Task CommitTransactionAsync(CancellationToken cancellationToken = default) => Mock.Object.CommitTransactionAsync(cancellationToken);
+        public async Task ExecuteInTransactionAsync(IsolationLevel isolationLevel, Func<CancellationToken, Task> operation, CancellationToken cancellationToken = default)
+        {
+            await Mock.Object.ExecuteInTransactionAsync(isolationLevel, operation, cancellationToken);
+            await operation(cancellationToken);
+        }
 
-        public Task RollbackTransactionAsync(CancellationToken cancellationToken = default) => Mock.Object.RollbackTransactionAsync(cancellationToken);
+        public Task<TResult> ExecuteInTransactionAsync<TResult>(Func<CancellationToken, Task<TResult>> operation, CancellationToken cancellationToken = default) =>
+            ExecuteInTransactionAsync(IsolationLevel.ReadCommitted, operation, cancellationToken);
+
+        public async Task<TResult> ExecuteInTransactionAsync<TResult>(IsolationLevel isolationLevel, Func<CancellationToken, Task<TResult>> operation, CancellationToken cancellationToken = default)
+        {
+            await Mock.Object.ExecuteInTransactionAsync(isolationLevel, operation, cancellationToken);
+            return await operation(cancellationToken);
+        }
 
         public void Dispose()
         {

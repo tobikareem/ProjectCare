@@ -32,6 +32,7 @@ AddApiClient<ShiftsClient>(builder.Services, apiBaseUri);
 AddApiClient<VisitNotesClient>(builder.Services, apiBaseUri);
 AddApiClient<BillingClient>(builder.Services, apiBaseUri);
 AddApiClient<TransitionsClient>(builder.Services, apiBaseUri);
+AddApiClient<AdminUsersClient>(builder.Services, apiBaseUri);
 
 await builder.Build().RunAsync();
 

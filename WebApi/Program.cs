@@ -4,7 +4,9 @@ using CarePath.Infrastructure;
 using CarePath.Infrastructure.Identity;
 using CarePath.Infrastructure.Persistence;
 using CarePath.WebApi.Middleware;
+using CarePath.WebApi.ModelBinding;
 using CarePath.WebApi.Security;
+using CarePath.WebApi.Serialization;
 using CarePath.WebApi.Validation;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
@@ -19,8 +21,18 @@ builder.Services.AddScoped<ICurrentUserContext, HttpCurrentUserContext>();
 builder.Services.AddInfrastructure(builder.Configuration);
 builder.Services.AddCarePathAuthentication(builder.Configuration);
 
+// Application-layer validators require DateTimeKind.Utc; normalize every DateTime at the
+// HTTP boundary (JSON bodies via the converter, query/route values via the binder) so
+// offset-less client dates are treated as UTC instead of failing validation.
 builder.Services
-    .AddControllers()
+    .AddControllers(options =>
+    {
+        options.ModelBinderProviders.Insert(0, new UtcDateTimeModelBinderProvider());
+    })
+    .AddJsonOptions(options =>
+    {
+        options.JsonSerializerOptions.Converters.Add(new UtcDateTimeJsonConverter());
+    })
     .ConfigureApiBehaviorOptions(options =>
     {
         options.InvalidModelStateResponseFactory = InvalidModelStateProblemFactory.Create;

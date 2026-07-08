@@ -10,6 +10,7 @@ using CarePath.Domain.Entities.Identity;
 using CarePath.Domain.Entities.Scheduling;
 using CarePath.Domain.Enumerations;
 using FluentAssertions;
+using DomainClient = global::CarePath.Domain.Entities.Identity.Client;
 using ContractCertificationType = CarePath.Contracts.Enumerations.CertificationType;
 using ContractEmploymentType = CarePath.Contracts.Enumerations.EmploymentType;
 using ContractInvoiceStatus = CarePath.Contracts.Enumerations.InvoiceStatus;
@@ -122,6 +123,19 @@ public sealed class DomainToContractMapperTests
         dto.Certifications[0].Type.Should().Be(ContractCertificationType.CNA);
         dto.Certifications[0].IsExpired.Should().BeFalse();
         dto.Certifications[0].IsExpiringSoon.Should().BeTrue();
+    }
+
+    [Fact]
+    public void CaregiverSummaryDto_WhenUsedForRoster_ExcludesPayCertificationsAndMtdMetrics()
+    {
+        // Arrange / Act
+        var properties = typeof(CaregiverSummaryDto).GetProperties().Select(property => property.Name).ToArray();
+
+        // Assert
+        properties.Should().NotContain("HourlyPayRate");
+        properties.Should().NotContain("Certifications");
+        properties.Should().NotContain("ShiftsMtd");
+        properties.Should().NotContain("BillableHoursMtd");
     }
 
     [Fact]
@@ -287,10 +301,14 @@ public sealed class DomainToContractMapperTests
             "RatePerHour",
         };
         var dtoTypes = GetContractDtoTypes();
-        var approvedMarginRateMembers = new HashSet<string>(StringComparer.Ordinal)
+        var approvedRateMembers = new HashSet<string>(StringComparer.Ordinal)
         {
+            // Admin-gated margin DTO endpoint.
             $"{typeof(ShiftMarginDto).FullName}.BillRate",
             $"{typeof(ShiftMarginDto).FullName}.PayRate",
+            // D-S6-10: pay rate is an approved Admin/Coordinator profile-detail field;
+            // roster summaries stay rate-free (see the summary DTO test below).
+            $"{typeof(CaregiverDetailDto).FullName}.HourlyPayRate",
         };
 
         // Act
@@ -298,7 +316,7 @@ public sealed class DomainToContractMapperTests
             .SelectMany(type => type.GetProperties(BindingFlags.Public | BindingFlags.Instance)
                 .Where(property => forbiddenExactNames.Contains(property.Name))
                 .Select(property => $"{type.FullName}.{property.Name}"))
-            .Where(member => !approvedMarginRateMembers.Contains(member))
+            .Where(member => !approvedRateMembers.Contains(member))
             .ToArray();
 
         // Assert
@@ -351,6 +369,108 @@ public sealed class DomainToContractMapperTests
 
         // Assert
         forbiddenMembers.Should().BeEmpty();
+    }
+
+    [Fact]
+    public void CaregiverSummaryDto_WhenInspected_ExposesOnlyRosterSafeColumns()
+    {
+        // Arrange
+        var rosterSafeProperties = new[]
+        {
+            "Id",
+            "UserId",
+            "FullName",
+            "EmploymentType",
+            "AverageRating",
+            "IsActive",
+        };
+
+        // Act
+        var actualProperties = typeof(CaregiverSummaryDto)
+            .GetProperties(BindingFlags.Public | BindingFlags.Instance)
+            .Select(property => property.Name)
+            .ToArray();
+
+        // Assert
+        actualProperties.Should().BeEquivalentTo(rosterSafeProperties);
+    }
+
+    [Fact]
+    public void CaregiverDetailDto_WhenInspected_ExposesAuthorizedProfileFieldsIncludingPayAndMtdMetrics()
+    {
+        // Arrange
+        var properties = typeof(CaregiverDetailDto)
+            .GetProperties(BindingFlags.Public | BindingFlags.Instance)
+            .ToDictionary(property => property.Name, property => property.PropertyType, StringComparer.Ordinal);
+
+        // Assert
+        properties.Should().ContainKey("HourlyPayRate").WhoseValue.Should().Be(typeof(decimal));
+        properties.Should().ContainKey("ShiftsMtd").WhoseValue.Should().Be(typeof(int));
+        properties.Should().ContainKey("BillableHoursMtd").WhoseValue.Should().Be(typeof(decimal));
+        properties.Should().ContainKey("TotalShiftsCompleted").WhoseValue.Should().Be(typeof(int));
+        properties.Should().ContainKey("NoShowCount");
+        properties.Should().ContainKey("Certifications");
+        properties.Should().ContainKey("IsActive");
+    }
+
+    [Fact]
+    public void ShiftMatchingDtos_WhenInspected_DoNotExposeCompensationFields()
+    {
+        // Arrange
+        var matchingDtoTypes = new[] { typeof(OpenShiftCoverageDto), typeof(EligibleCaregiverDto) };
+
+        // Act
+        var rateOrMarginMembers = matchingDtoTypes
+            .SelectMany(type => type.GetProperties(BindingFlags.Public | BindingFlags.Instance)
+                .Where(property =>
+                    property.Name.Contains("Rate", StringComparison.Ordinal) ||
+                    property.Name.Contains("Margin", StringComparison.Ordinal) ||
+                    property.Name.Contains("Pay", StringComparison.Ordinal))
+                .Select(property => $"{type.FullName}.{property.Name}"))
+            .ToArray();
+
+        // Assert
+        rateOrMarginMembers.Should().BeEmpty();
+        typeof(EligibleCaregiverDto).GetProperty("AverageRating").Should().NotBeNull();
+    }
+
+    [Fact]
+    public void CreateCaregiverRequest_WhenInspected_RemainsSeparateFromCertificationCapture()
+    {
+        // Arrange
+        var createProperties = typeof(CreateCaregiverRequest)
+            .GetProperties(BindingFlags.Public | BindingFlags.Instance)
+            .ToArray();
+
+        // Assert
+        createProperties.Should().NotContain(property =>
+            property.Name.Contains("Certification", StringComparison.OrdinalIgnoreCase));
+        createProperties.Should().NotContain(property =>
+            property.PropertyType == typeof(ContractCertificationType));
+        typeof(AddCertificationRequest).GetProperty("CaregiverId").Should().BeNull(
+            "the caregiver id travels in the route, keeping certification capture a separate per-record request");
+    }
+
+    [Fact]
+    public void ToDetailDto_WhenMtdMetricsSupplied_DoesNotDeriveThemFromLifetimeCounters()
+    {
+        // Arrange
+        var caregiver = CreateCaregiver();
+        caregiver.RecordCompletedShift();
+        caregiver.RecordCompletedShift();
+        caregiver.RecordNoShow();
+
+        // Act
+        var dto = caregiver.ToDetailDto(shiftsMtd: 3, billableHoursMtd: 12.5m);
+        var dtoWithoutMetrics = caregiver.ToDetailDto();
+
+        // Assert
+        dto.ShiftsMtd.Should().Be(3);
+        dto.BillableHoursMtd.Should().Be(12.5m);
+        dto.TotalShiftsCompleted.Should().Be(2);
+        dto.NoShowCount.Should().Be(1);
+        dtoWithoutMetrics.ShiftsMtd.Should().Be(0, "MTD metrics come from check-in/out records, never from the lifetime counter");
+        dtoWithoutMetrics.BillableHoursMtd.Should().Be(0m);
     }
 
     [Fact]
@@ -435,11 +555,11 @@ public sealed class DomainToContractMapperTests
             .ToArray();
     }
 
-    private static Client CreateClient(DateTime dateOfBirth)
+    private static DomainClient CreateClient(DateTime dateOfBirth)
     {
         var userId = Guid.NewGuid();
 
-        return new Client
+        return new DomainClient
         {
             Id = Guid.NewGuid(),
             UserId = userId,

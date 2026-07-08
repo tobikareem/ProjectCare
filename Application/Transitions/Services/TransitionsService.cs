@@ -74,31 +74,27 @@ public sealed class TransitionsService : ITransitionsService
             UploadedAt = now,
         };
 
-        await unitOfWork.BeginTransactionAsync(cancellationToken);
-        try
+        var plan = new TransitionPlan
         {
-            await unitOfWork.DischargeDocuments.AddAsync(document, cancellationToken);
-            var plan = new TransitionPlan
+            ClientId = document.ClientId,
+            DischargeDocumentId = document.Id,
+            HospitalName = TrimToNull(request.HospitalName),
+            DischargeDate = request.DischargeDate,
+            TransitionWindowEnd = request.DischargeDate,
+            Status = TransitionPlanStatus.Draft,
+            RiskLevel = TransitionRiskLevel.Medium,
+        };
+
+        await unitOfWork.ExecuteInTransactionAsync(
+            async token =>
             {
-                ClientId = document.ClientId,
-                DischargeDocumentId = document.Id,
-                HospitalName = TrimToNull(request.HospitalName),
-                DischargeDate = request.DischargeDate,
-                TransitionWindowEnd = request.DischargeDate,
-                Status = TransitionPlanStatus.Draft,
-                RiskLevel = TransitionRiskLevel.Medium,
-            };
-            await unitOfWork.TransitionPlans.AddAsync(plan, cancellationToken);
-            await unitOfWork.SaveChangesAsync(cancellationToken);
-            await AuditAsync(ProtectedResourceType.DischargeDocument, document.Id, AuditAction.Create, cancellationToken);
-            await AuditAsync(ProtectedResourceType.TransitionPlan, plan.Id, AuditAction.Create, cancellationToken);
-            await unitOfWork.CommitTransactionAsync(cancellationToken);
-        }
-        catch
-        {
-            await unitOfWork.RollbackTransactionAsync(cancellationToken);
-            throw;
-        }
+                await unitOfWork.DischargeDocuments.AddAsync(document, token);
+                await unitOfWork.TransitionPlans.AddAsync(plan, token);
+                await unitOfWork.SaveChangesAsync(token);
+                await AuditAsync(ProtectedResourceType.DischargeDocument, document.Id, AuditAction.Create, token);
+                await AuditAsync(ProtectedResourceType.TransitionPlan, plan.Id, AuditAction.Create, token);
+            },
+            cancellationToken);
 
         return document.ToDto();
     }
@@ -153,57 +149,51 @@ public sealed class TransitionsService : ITransitionsService
             document.SourceType,
             cancellationToken);
 
-        await unitOfWork.BeginTransactionAsync(cancellationToken);
-        try
+        var instructions = extractedInstructions.Select(extracted => new TransitionInstruction
         {
-            await unitOfWork.DischargeDocuments.UpdateAsync(document, cancellationToken);
-            await unitOfWork.SaveChangesAsync(cancellationToken);
+            TransitionPlanId = plan.Id,
+            Category = extracted.Category,
+            InstructionText = extracted.InstructionText,
+            SourceText = extracted.SourceText,
+            ConfidenceScore = extracted.ConfidenceScore,
+            NeedsPharmacistReview = extracted.NeedsPharmacistReview,
+            Status = TransitionInstructionStatus.Pending,
+        }).ToArray();
 
-            var instructions = extractedInstructions.Select(extracted => new TransitionInstruction
+        await unitOfWork.ExecuteInTransactionAsync(
+            async token =>
             {
-                TransitionPlanId = plan.Id,
-                Category = extracted.Category,
-                InstructionText = extracted.InstructionText,
-                SourceText = extracted.SourceText,
-                ConfidenceScore = extracted.ConfidenceScore,
-                NeedsPharmacistReview = extracted.NeedsPharmacistReview,
-                Status = TransitionInstructionStatus.Pending,
-            }).ToArray();
+                await unitOfWork.DischargeDocuments.UpdateAsync(document, token);
+                await unitOfWork.SaveChangesAsync(token);
 
-            foreach (var instruction in instructions)
-            {
-                await unitOfWork.TransitionInstructions.AddAsync(instruction, cancellationToken);
-            }
+                foreach (var instruction in instructions)
+                {
+                    await unitOfWork.TransitionInstructions.AddAsync(instruction, token);
+                }
 
-            document.Status = DischargeDocumentStatus.AwaitingReview;
-            plan.Status = TransitionPlanStatus.PendingVerification;
-            await unitOfWork.DischargeDocuments.UpdateAsync(document, cancellationToken);
-            await unitOfWork.TransitionPlans.UpdateAsync(plan, cancellationToken);
-            await unitOfWork.SaveChangesAsync(cancellationToken);
+                document.Status = DischargeDocumentStatus.AwaitingReview;
+                plan.Status = TransitionPlanStatus.PendingVerification;
+                await unitOfWork.DischargeDocuments.UpdateAsync(document, token);
+                await unitOfWork.TransitionPlans.UpdateAsync(plan, token);
+                await unitOfWork.SaveChangesAsync(token);
 
-            await AuditAsync(ProtectedResourceType.DischargeDocument, document.Id, AuditAction.Update, cancellationToken);
-            await AuditAsync(ProtectedResourceType.TransitionPlan, plan.Id, AuditAction.Update, cancellationToken);
-            foreach (var instruction in instructions)
-            {
-                await AuditAsync(ProtectedResourceType.TransitionInstruction, instruction.Id, AuditAction.Create, cancellationToken);
-            }
+                await AuditAsync(ProtectedResourceType.DischargeDocument, document.Id, AuditAction.Update, token);
+                await AuditAsync(ProtectedResourceType.TransitionPlan, plan.Id, AuditAction.Update, token);
+                foreach (var instruction in instructions)
+                {
+                    await AuditAsync(ProtectedResourceType.TransitionInstruction, instruction.Id, AuditAction.Create, token);
+                }
+            },
+            cancellationToken);
 
-            await unitOfWork.CommitTransactionAsync(cancellationToken);
-
-            var client = await GetClientAsync(plan.ClientId, cancellationToken);
-            var user = await GetUserAsync(client.UserId, cancellationToken);
-            foreach (var instruction in instructions)
-            {
-                await AuditAsync(ProtectedResourceType.TransitionInstruction, instruction.Id, AuditAction.Read, cancellationToken);
-            }
-
-            return plan.ToClinicalDto(client, user, instructions);
-        }
-        catch
+        var client = await GetClientAsync(plan.ClientId, cancellationToken);
+        var user = await GetUserAsync(client.UserId, cancellationToken);
+        foreach (var instruction in instructions)
         {
-            await unitOfWork.RollbackTransactionAsync(cancellationToken);
-            throw;
+            await AuditAsync(ProtectedResourceType.TransitionInstruction, instruction.Id, AuditAction.Read, cancellationToken);
         }
+
+        return plan.ToClinicalDto(client, user, instructions);
     }
 
     public async Task<PagedResult<TransitionPlanSummaryDto>> GetPlansAsync(
@@ -393,20 +383,15 @@ public sealed class TransitionsService : ITransitionsService
         instruction.ClinicalNote = TrimToNull(request.ClinicalNote);
         instruction.NeedsPharmacistReview = request.NeedsPharmacistReview;
 
-        await unitOfWork.BeginTransactionAsync(cancellationToken);
-        try
-        {
-            await unitOfWork.TransitionInstructions.UpdateAsync(instruction, cancellationToken);
-            await unitOfWork.SaveChangesAsync(cancellationToken);
-            await AuditAsync(ProtectedResourceType.TransitionInstruction, instruction.Id, AuditAction.Update, cancellationToken);
-            await AuditAsync(ProtectedResourceType.TransitionInstruction, instruction.Id, AuditAction.Read, cancellationToken);
-            await unitOfWork.CommitTransactionAsync(cancellationToken);
-        }
-        catch
-        {
-            await unitOfWork.RollbackTransactionAsync(cancellationToken);
-            throw;
-        }
+        await unitOfWork.ExecuteInTransactionAsync(
+            async token =>
+            {
+                await unitOfWork.TransitionInstructions.UpdateAsync(instruction, token);
+                await unitOfWork.SaveChangesAsync(token);
+                await AuditAsync(ProtectedResourceType.TransitionInstruction, instruction.Id, AuditAction.Update, token);
+                await AuditAsync(ProtectedResourceType.TransitionInstruction, instruction.Id, AuditAction.Read, token);
+            },
+            cancellationToken);
 
         return instruction.ToClinicalDto();
     }
@@ -438,19 +423,14 @@ public sealed class TransitionsService : ITransitionsService
         plan.ActivatedAt = now;
         plan.TransitionWindowEnd = DateTime.SpecifyKind(plan.DischargeDate, DateTimeKind.Utc).AddDays(30);
 
-        await unitOfWork.BeginTransactionAsync(cancellationToken);
-        try
-        {
-            await unitOfWork.TransitionPlans.UpdateAsync(plan, cancellationToken);
-            await unitOfWork.SaveChangesAsync(cancellationToken);
-            await AuditAsync(ProtectedResourceType.TransitionPlan, plan.Id, AuditAction.Update, cancellationToken);
-            await unitOfWork.CommitTransactionAsync(cancellationToken);
-        }
-        catch
-        {
-            await unitOfWork.RollbackTransactionAsync(cancellationToken);
-            throw;
-        }
+        await unitOfWork.ExecuteInTransactionAsync(
+            async token =>
+            {
+                await unitOfWork.TransitionPlans.UpdateAsync(plan, token);
+                await unitOfWork.SaveChangesAsync(token);
+                await AuditAsync(ProtectedResourceType.TransitionPlan, plan.Id, AuditAction.Update, token);
+            },
+            cancellationToken);
 
         var client = await GetClientAsync(plan.ClientId, cancellationToken);
         var user = await GetUserAsync(client.UserId, cancellationToken);
@@ -504,19 +484,14 @@ public sealed class TransitionsService : ITransitionsService
             Status = ReminderStatus.Scheduled,
         };
 
-        await unitOfWork.BeginTransactionAsync(cancellationToken);
-        try
-        {
-            await unitOfWork.TransitionReminders.AddAsync(reminder, cancellationToken);
-            await unitOfWork.SaveChangesAsync(cancellationToken);
-            await AuditAsync(ProtectedResourceType.TransitionReminder, reminder.Id, AuditAction.Create, cancellationToken);
-            await unitOfWork.CommitTransactionAsync(cancellationToken);
-        }
-        catch
-        {
-            await unitOfWork.RollbackTransactionAsync(cancellationToken);
-            throw;
-        }
+        await unitOfWork.ExecuteInTransactionAsync(
+            async token =>
+            {
+                await unitOfWork.TransitionReminders.AddAsync(reminder, token);
+                await unitOfWork.SaveChangesAsync(token);
+                await AuditAsync(ProtectedResourceType.TransitionReminder, reminder.Id, AuditAction.Create, token);
+            },
+            cancellationToken);
 
         return reminder.ToDto();
     }
@@ -552,29 +527,23 @@ public sealed class TransitionsService : ITransitionsService
             };
         }
 
-        await unitOfWork.BeginTransactionAsync(cancellationToken);
-        try
-        {
-            await unitOfWork.TransitionCheckIns.AddAsync(checkIn, cancellationToken);
-            if (escalation is not null)
+        await unitOfWork.ExecuteInTransactionAsync(
+            async token =>
             {
-                await unitOfWork.TransitionEscalations.AddAsync(escalation, cancellationToken);
-            }
+                await unitOfWork.TransitionCheckIns.AddAsync(checkIn, token);
+                if (escalation is not null)
+                {
+                    await unitOfWork.TransitionEscalations.AddAsync(escalation, token);
+                }
 
-            await unitOfWork.SaveChangesAsync(cancellationToken);
-            await AuditAsync(ProtectedResourceType.TransitionCheckIn, checkIn.Id, AuditAction.Create, cancellationToken);
-            if (escalation is not null)
-            {
-                await AuditAsync(ProtectedResourceType.TransitionEscalation, escalation.Id, AuditAction.Create, cancellationToken);
-            }
-
-            await unitOfWork.CommitTransactionAsync(cancellationToken);
-        }
-        catch
-        {
-            await unitOfWork.RollbackTransactionAsync(cancellationToken);
-            throw;
-        }
+                await unitOfWork.SaveChangesAsync(token);
+                await AuditAsync(ProtectedResourceType.TransitionCheckIn, checkIn.Id, AuditAction.Create, token);
+                if (escalation is not null)
+                {
+                    await AuditAsync(ProtectedResourceType.TransitionEscalation, escalation.Id, AuditAction.Create, token);
+                }
+            },
+            cancellationToken);
 
         return checkIn.ToDto();
     }
@@ -639,19 +608,14 @@ public sealed class TransitionsService : ITransitionsService
         escalation.AcknowledgedBy = currentUser.UserId ?? throw new ResourceAccessDeniedException("Unauthenticated", isPhiResource: true);
         escalation.AcknowledgedAt = DateTime.UtcNow;
 
-        await unitOfWork.BeginTransactionAsync(cancellationToken);
-        try
-        {
-            await unitOfWork.TransitionEscalations.UpdateAsync(escalation, cancellationToken);
-            await unitOfWork.SaveChangesAsync(cancellationToken);
-            await AuditAsync(ProtectedResourceType.TransitionEscalation, escalation.Id, AuditAction.Update, cancellationToken);
-            await unitOfWork.CommitTransactionAsync(cancellationToken);
-        }
-        catch
-        {
-            await unitOfWork.RollbackTransactionAsync(cancellationToken);
-            throw;
-        }
+        await unitOfWork.ExecuteInTransactionAsync(
+            async token =>
+            {
+                await unitOfWork.TransitionEscalations.UpdateAsync(escalation, token);
+                await unitOfWork.SaveChangesAsync(token);
+                await AuditAsync(ProtectedResourceType.TransitionEscalation, escalation.Id, AuditAction.Update, token);
+            },
+            cancellationToken);
 
         return escalation.ToDto();
     }

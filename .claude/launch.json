@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "carepath-web",
+      "runtimeExecutable": "dotnet",
+      "runtimeArgs": ["run", "--project", "CarePath.Web", "--no-build", "--urls", "http://localhost:5297"],
+      "port": 5297
+    }
+  ]
+}

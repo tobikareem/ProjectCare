@@ -1,66 +1,71 @@
-<a class="brand" href="" aria-label="CarePath dashboard">
-    <span class="brand-mark" aria-hidden="true">C</span>
+<a class="brand" href="" aria-label="CarePath overview">
+    <span class="brand-mark" aria-hidden="true">CP</span>
     <span>
-        <span class="brand-name">CarePath</span>
-        <span class="brand-subtitle">Care coordination</span>
+        <strong>CarePath</strong>
+        <span>Operations</span>
     </span>
 </a>
 
-<button type="button" class="nav-toggle" @onclick="ToggleNavMenu" aria-expanded="@(!collapseNavMenu)">
-    Navigation
-</button>
+<p class="nav-label">Workspace</p>
+<nav class="side-nav" aria-label="Workspace navigation">
+    <NavLink href="" Match="NavLinkMatch.All">
+        <span aria-hidden="true">⌂</span><span>Overview</span>
+    </NavLink>
+    <NavLink href="schedule">
+        <span aria-hidden="true">▦</span><span>Schedule</span>
+        <span class="nav-count" aria-label="7 open shifts">7</span>
+    </NavLink>
+    <NavLink href="caregivers">
+        <span aria-hidden="true">♙</span><span>Caregivers</span>
+    </NavLink>
+    <NavLink href="clients">
+        <span aria-hidden="true">♡</span><span>Clients</span>
+    </NavLink>
+    <NavLink href="visit-notes">
+        <span aria-hidden="true">▤</span><span>Visit notes</span>
+        <span class="nav-count" aria-label="3 pending notes">3</span>
+    </NavLink>
+</nav>
 
-<div class="@NavMenuCssClass nav-scrollable">
-    <div class="nav-label">Coordinator</div>
-    <nav class="side-nav" aria-label="Coordinator navigation">
-        <NavLink class="nav-link" href="" Match="NavLinkMatch.All">
-            <span class="nav-glyph" aria-hidden="true">D</span>
-            <span>Dashboard</span>
-        </NavLink>
-        <NavLink class="nav-link" href="schedule">
-            <span class="nav-glyph" aria-hidden="true">S</span>
-            <span>Schedule</span>
-        </NavLink>
-        <NavLink class="nav-link" href="credentials">
-            <span class="nav-glyph" aria-hidden="true">C</span>
-            <span>Credentials</span>
-        </NavLink>
-        <NavLink class="nav-link" href="transitions/escalations">
-            <span class="nav-glyph" aria-hidden="true">E</span>
-            <span>Escalations</span>
-            <span class="nav-count">3</span>
-        </NavLink>
-    </nav>
+<p class="nav-label">Business</p>
+<nav class="side-nav" aria-label="Business navigation">
+    <NavLink href="billing">
+        <span aria-hidden="true">$</span><span>Billing</span>
+    </NavLink>
+    <NavLink href="analytics">
+        <span aria-hidden="true">↗</span><span>Analytics</span>
+    </NavLink>
+    <NavLink href="compliance">
+        <span aria-hidden="true">✓</span><span>Compliance</span>
+        <span class="nav-count" aria-label="4 compliance alerts">4</span>
+    </NavLink>
+</nav>
 
-    <div class="nav-label">Clinician</div>
-    <nav class="side-nav" aria-label="Clinician navigation">
-        <NavLink class="nav-link" href="transitions/review">
-            <span class="nav-glyph" aria-hidden="true">R</span>
-            <span>Review Queue</span>
-            <span class="nav-count">5</span>
-        </NavLink>
-    </nav>
+<AuthorizeView Roles="Admin">
+    <Authorized>
+        <p class="nav-label">Admin</p>
+        <nav class="side-nav" aria-label="Admin navigation">
+            <NavLink href="admin/users">
+                <span aria-hidden="true">@@</span><span>User management</span>
+            </NavLink>
+        </nav>
+    </Authorized>
+</AuthorizeView>
 
-    <div class="nav-label">Admin</div>
-    <nav class="side-nav" aria-label="Admin navigation">
-        <NavLink class="nav-link" href="admin/users">
-            <span class="nav-glyph" aria-hidden="true">U</span>
-            <span>Users</span>
-        </NavLink>
-        <NavLink class="nav-link" href="billing/margins">
-            <span class="nav-glyph" aria-hidden="true">M</span>
-            <span>Margin Snapshot</span>
-        </NavLink>
-    </nav>
-</div>
-
-@code {
-    private bool collapseNavMenu = true;
-
-    private string? NavMenuCssClass => collapseNavMenu ? "collapse" : null;
-
-    private void ToggleNavMenu()
-    {
-        collapseNavMenu = !collapseNavMenu;
-    }
-}
+<p class="nav-label">Transitions</p>
+<nav class="side-nav" aria-label="Transitions navigation">
+    <NavLink href="transitions">
+        <span aria-hidden="true">↻</span><span>Dashboard</span>
+        <span class="nav-count" aria-label="2 escalations">2</span>
+    </NavLink>
+    <NavLink href="transitions/upload">
+        <span aria-hidden="true">↑</span><span>Upload doc</span>
+    </NavLink>
+    <NavLink href="transitions/review">
+        <span aria-hidden="true">◇</span><span>Review queue</span>
+        <span class="nav-count" aria-label="1 awaiting review">1</span>
+    </NavLink>
+    <NavLink href="transitions/patient-plan">
+        <span aria-hidden="true">♡</span><span>Patient plan</span>
+    </NavLink>
+</nav>

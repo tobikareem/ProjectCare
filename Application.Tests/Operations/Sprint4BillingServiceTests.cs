@@ -16,6 +16,7 @@ using CarePath.Domain.Interfaces.Repositories;
 using FluentAssertions;
 using FluentValidation;
 using Moq;
+using DomainClient = global::CarePath.Domain.Entities.Identity.Client;
 using ContractPaymentMethod = CarePath.Contracts.Enumerations.PaymentMethod;
 using ContractServiceType = CarePath.Contracts.Enumerations.ServiceType;
 
@@ -128,7 +129,11 @@ public sealed class Sprint4BillingServiceTests
         // Assert
         var exception = await act.Should().ThrowAsync<ResourceConflictException>();
         exception.Which.Code.Should().Be("invoice.duplicate");
-        context.UnitOfWork.Verify(work => work.RollbackTransactionAsync(It.IsAny<CancellationToken>()), Times.Once);
+        context.UnitOfWork.Verify(
+            work => work.ExecuteInTransactionAsync(
+                It.IsAny<Func<CancellationToken, Task>>(),
+                It.IsAny<CancellationToken>()),
+            Times.Once);
     }
 
     [Fact]
@@ -286,7 +291,7 @@ public sealed class Sprint4BillingServiceTests
     private static TestContext CreateContext(IReadOnlySet<string>? roles = null)
     {
         var user = User(UserRole.Client);
-        var client = new Client
+        var client = new DomainClient
         {
             Id = Guid.NewGuid(),
             UserId = user.Id,
@@ -299,7 +304,7 @@ public sealed class Sprint4BillingServiceTests
         var currentUser = new TestCurrentUserContext(Guid.NewGuid(), roles ?? new HashSet<string>(StringComparer.Ordinal) { ApplicationRoles.Admin });
         var unitOfWork = new Mock<IUnitOfWork>(MockBehavior.Strict);
         var users = new Mock<IRepository<User>>(MockBehavior.Strict);
-        var clients = new Mock<IRepository<Client>>(MockBehavior.Strict);
+        var clients = new Mock<IRepository<DomainClient>>(MockBehavior.Strict);
         var shifts = new Mock<IRepository<Shift>>(MockBehavior.Strict);
         var invoices = new Mock<IRepository<Invoice>>(MockBehavior.Strict);
         var lineItems = new Mock<IRepository<InvoiceLineItem>>(MockBehavior.Strict);
@@ -314,13 +319,14 @@ public sealed class Sprint4BillingServiceTests
         unitOfWork.SetupGet(work => work.Invoices).Returns(invoices.Object);
         unitOfWork.SetupGet(work => work.InvoiceLineItems).Returns(lineItems.Object);
         unitOfWork.SetupGet(work => work.Payments).Returns(payments.Object);
-        unitOfWork.Setup(work => work.BeginTransactionAsync(It.IsAny<CancellationToken>())).Returns(Task.CompletedTask);
-        unitOfWork.Setup(work => work.CommitTransactionAsync(It.IsAny<CancellationToken>())).Returns(Task.CompletedTask);
-        unitOfWork.Setup(work => work.RollbackTransactionAsync(It.IsAny<CancellationToken>())).Returns(Task.CompletedTask);
+        unitOfWork.Setup(work => work.ExecuteInTransactionAsync(
+                It.IsAny<Func<CancellationToken, Task>>(),
+                It.IsAny<CancellationToken>()))
+            .Returns<Func<CancellationToken, Task>, CancellationToken>((operation, token) => operation(token));
         unitOfWork.Setup(work => work.SaveChangesAsync(It.IsAny<CancellationToken>())).ReturnsAsync(1);
 
         clients.Setup(repository => repository.GetByIdAsync(client.Id, It.IsAny<CancellationToken>())).ReturnsAsync(client);
-        clients.Setup(repository => repository.FindAsync(It.IsAny<Expression<Func<Client, bool>>>(), It.IsAny<CancellationToken>())).ReturnsAsync(Array.Empty<Client>());
+        clients.Setup(repository => repository.FindAsync(It.IsAny<Expression<Func<DomainClient, bool>>>(), It.IsAny<CancellationToken>())).ReturnsAsync(Array.Empty<DomainClient>());
         users.Setup(repository => repository.GetByIdAsync(user.Id, It.IsAny<CancellationToken>())).ReturnsAsync(user);
         invoices.Setup(repository => repository.ExistsAsync(It.IsAny<Expression<Func<Invoice, bool>>>(), It.IsAny<CancellationToken>())).ReturnsAsync(false);
         invoices.Setup(repository => repository.AddAsync(It.IsAny<Invoice>(), It.IsAny<CancellationToken>()))
@@ -420,10 +426,10 @@ public sealed class Sprint4BillingServiceTests
 
     private sealed record TestContext(
         BillingOperationsService Service,
-        Client Client,
+        DomainClient Client,
         Mock<IUnitOfWork> UnitOfWork,
         Mock<IRepository<User>> Users,
-        Mock<IRepository<Client>> Clients,
+        Mock<IRepository<DomainClient>> Clients,
         Mock<IRepository<Shift>> Shifts,
         Mock<IRepository<Invoice>> Invoices,
         Mock<IRepository<InvoiceLineItem>> InvoiceLineItems,

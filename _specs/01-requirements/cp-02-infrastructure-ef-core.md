@@ -195,10 +195,10 @@ Feature: Unit of Work Pattern for Transactional Operations
         - CarePlans, Shifts, VisitNotes, VisitPhotos
         - Invoices, InvoiceLineItems, Payments
       - Provide SaveChangesAsync(CancellationToken) to persist all changes
-      - Support transactional operations via:
-        - BeginTransactionAsync()
-        - CommitTransactionAsync()
-        - RollbackTransactionAsync()
+      - Support transactional operations via retry-compatible delegate overloads:
+        - ExecuteInTransactionAsync(operation)
+        - ExecuteInTransactionAsync(isolationLevel, operation)
+        - ExecuteInTransactionAsync<TResult>(operation) / (isolationLevel, operation)
 
   Scenario: Track changes across multiple repositories
     Given a UnitOfWork instance with multiple repositories accessed
@@ -207,10 +207,11 @@ Feature: Unit of Work Pattern for Transactional Operations
     And audit fields (CreatedBy, UpdatedBy) should be populated before save
 
   Scenario: Support transaction control
-    Given a UnitOfWork with an active business transaction
-    When BeginTransactionAsync, multiple operations, then CommitTransactionAsync are called
-    Then all changes should be committed atomically
-    And RollbackTransactionAsync should discard all pending changes if called instead
+    Given a UnitOfWork whose DbContext uses a retrying execution strategy (EnableRetryOnFailure)
+    When ExecuteInTransactionAsync runs a delegate containing multiple operations
+    Then all changes should be committed atomically when the delegate completes
+    And all pending changes should be rolled back and the exception rethrown if the delegate throws
+    And the whole delegate should be retried as one unit on transient failures
 ```
 
 ### Story 6: Audit Trail and Change Tracking
@@ -397,7 +398,7 @@ Feature: GetPagedAsync for Shift and VisitNote Tables
 | FR-012 | Add ExistsAsync and CountAsync to repository | High | Used by application validation and analytics |
 | FR-013 | Implement IUnitOfWork with 11 repository properties | Critical | Users, Caregivers, CaregiverCertifications, Clients, CarePlans, Shifts, VisitNotes, VisitPhotos, Invoices, InvoiceLineItems, Payments |
 | FR-014 | Implement SaveChangesAsync in UnitOfWork | Critical | Persists all repository changes in single DbContext batch |
-| FR-015 | Implement transaction support (BeginTransactionAsync, CommitTransactionAsync, RollbackTransactionAsync) | High | For atomic multi-entity updates |
+| FR-015 | Implement retry-compatible transaction support (ExecuteInTransactionAsync delegate overloads, with optional IsolationLevel and TResult) | High | For atomic multi-entity updates under EnableRetryOnFailure |
 | FR-016 | Implement IDisposable and IAsyncDisposable on UnitOfWork | Critical | Required for proper EF Core DbContext disposal |
 | FR-017 | Create SaveChangesInterceptor for audit trail logging | High | Logs CreatedBy, UpdatedBy, timestamps on all changes; NO PHI in logs |
 | FR-018 | Populate CreatedAt, CreatedBy on entity creation | High | Automatic via SaveChangesInterceptor |

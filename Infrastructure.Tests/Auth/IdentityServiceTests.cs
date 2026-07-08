@@ -179,6 +179,41 @@ public sealed class IdentityServiceTests
         result.FailureCode.Should().Be("InvalidCredentials");
     }
 
+    [Fact]
+    public async Task ReplaceUserRoleAsync_WhenUserExists_ReplacesExistingIdentityRole()
+    {
+        // Arrange
+        await using var fixture = await IdentityFixture.CreateAsync(isActive: true, isDeleted: false, UserRole.Coordinator);
+        var service = fixture.ServiceProvider.GetRequiredService<IdentityRoleManagementService>();
+        var userManager = fixture.ServiceProvider.GetRequiredService<UserManager<ApplicationUser>>();
+
+        // Act
+        var result = await service.ReplaceUserRoleAsync(fixture.UserId, UserRole.Clinician.ToString());
+
+        // Assert
+        result.Should().BeTrue();
+        var identityUser = await userManager.FindByIdAsync(fixture.UserId.ToString());
+        identityUser.Should().NotBeNull();
+        var roles = await userManager.GetRolesAsync(identityUser!);
+        roles.Should().ContainSingle(UserRole.Clinician.ToString());
+    }
+
+    [Fact]
+    public async Task ReplaceUserRoleAsync_WhenRoleIsUnknown_RejectsRoleWithoutCreatingIt()
+    {
+        // Arrange
+        await using var fixture = await IdentityFixture.CreateAsync(isActive: true, isDeleted: false, UserRole.Coordinator);
+        var service = fixture.ServiceProvider.GetRequiredService<IdentityRoleManagementService>();
+        var roleManager = fixture.ServiceProvider.GetRequiredService<RoleManager<IdentityRole<Guid>>>();
+
+        // Act
+        var result = await service.ReplaceUserRoleAsync(fixture.UserId, "999");
+
+        // Assert
+        result.Should().BeFalse();
+        (await roleManager.RoleExistsAsync("999")).Should().BeFalse();
+    }
+
     private sealed class IdentityFixture : IAsyncDisposable
     {
         private IdentityFixture(ServiceProvider rootProvider, IServiceScope scope, Guid userId, string email)
@@ -224,6 +259,7 @@ public sealed class IdentityServiceTests
                 .AddEntityFrameworkStores<CarePathDbContext>()
                 .AddDefaultTokenProviders();
             services.AddScoped<IdentityService>();
+            services.AddScoped<IdentityRoleManagementService>();
 
             var provider = services.BuildServiceProvider(new ServiceProviderOptions
             {

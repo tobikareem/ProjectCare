@@ -103,6 +103,7 @@ public static class DependencyInjection
         services.AddScoped<IUnitOfWork, UnitOfWork>();
         services.AddScoped<IClientAccessEvaluator, ClientAccessEvaluator>();
         services.AddScoped<IIdentityProvisioningService, IdentityProvisioningService>();
+        services.AddScoped<IIdentityRoleManagementService, IdentityRoleManagementService>();
         services.AddScoped<IPhiAuditLogger, LoggingPhiAuditLogger>();
         services.AddScoped<IFileStorageService, DisabledFileStorageService>();
         services.AddScoped<IShiftBillingQuery, ShiftBillingQuery>();

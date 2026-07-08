@@ -1,18 +1,140 @@
+.prototype-bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 20px;
+    padding: 14px clamp(16px, 3vw, 36px);
+    color: #fff;
+    background: var(--teal-900);
+}
+
+.prototype-bar strong {
+    letter-spacing: 0.02em;
+}
+
+.prototype-bar p {
+    margin: 2px 0 0;
+    color: #cce3e3;
+    font-size: 0.86rem;
+}
+
+.view-switcher {
+    display: flex;
+    gap: 4px;
+    padding: 4px;
+    border: 1px solid rgb(255 255 255 / 35%);
+    border-radius: 11px;
+}
+
+.view-switcher button {
+    min-height: 38px;
+    padding: 7px 13px;
+    color: #fff;
+    background: transparent;
+    border: 0;
+    border-radius: 8px;
+    cursor: pointer;
+}
+
+.view-switcher button[aria-selected="true"] {
+    color: var(--teal-900);
+    background: #fff;
+    font-weight: 750;
+}
+
 .web-app {
     display: grid;
     grid-template-columns: 250px minmax(0, 1fr);
-    min-height: 100vh;
+    min-height: calc(100vh - 70px);
     background: var(--surface-alt);
 }
 
 .sidebar {
     position: sticky;
     top: 0;
-    height: 100vh;
+    height: calc(100vh - 70px);
     padding: 24px 18px;
     overflow-y: auto;
-    color: var(--surface);
-    background: var(--teal-900);
+    color: #fff;
+    background: #0a4b4f;
+}
+
+.brand {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin: 0 8px 30px;
+    color: #fff;
+    text-decoration: none;
+}
+
+.brand-mark {
+    display: grid;
+    width: 38px;
+    height: 38px;
+    place-items: center;
+    color: var(--teal-900);
+    background: #fff;
+    border-radius: 12px;
+    font-weight: 900;
+}
+
+.brand span {
+    display: block;
+    font-size: 0.75rem;
+    color: #b8d5d4;
+}
+
+.brand strong {
+    display: block;
+    color: #fff;
+}
+
+.nav-label {
+    margin: 26px 10px 8px;
+    color: #a7cecc;
+    font-size: 0.72rem;
+    font-weight: 800;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+}
+
+.side-nav {
+    display: grid;
+    gap: 5px;
+}
+
+.side-nav a {
+    display: grid;
+    grid-template-columns: 24px 1fr auto;
+    align-items: center;
+    gap: 9px;
+    width: 100%;
+    min-height: 44px;
+    padding: 9px 11px;
+    color: #e9f5f4;
+    text-align: left;
+    text-decoration: none;
+    background: transparent;
+    border: 0;
+    border-radius: 9px;
+    cursor: pointer;
+}
+
+.side-nav a:hover,
+.side-nav a.active {
+    background: rgb(255 255 255 / 14%);
+}
+
+.nav-count {
+    min-width: 24px;
+    padding: 2px 7px;
+    color: #542408;
+    text-align: center;
+    background: #ffcfad;
+    border-radius: 999px;
+    font-size: 0.75rem;
+    font-weight: 800;
 }
 
 .desktop-main {
@@ -47,11 +169,21 @@
 .search input {
     width: 100%;
     min-height: 44px;
-    padding: 9px 14px;
+    padding: 9px 14px 9px 42px;
     color: var(--ink);
     background: var(--surface-alt);
     border: 1px solid transparent;
-    border-radius: var(--radius);
+    border-radius: 10px;
+}
+
+.search::before {
+    position: absolute;
+    z-index: 1;
+    top: 11px;
+    left: 14px;
+    content: "⌕";
+    color: var(--muted);
+    font-size: 1.25rem;
 }
 
 .user-menu {
@@ -66,21 +198,35 @@
     width: 38px;
     height: 38px;
     place-items: center;
-    color: var(--surface);
+    color: #fff;
     background: var(--teal-700);
-    border-radius: var(--radius);
+    border-radius: 50%;
     font-weight: 800;
 }
 
-.content {
+.web-page {
+    display: block;
     padding: clamp(24px, 3vw, 42px);
 }
 
-::deep .content h1:focus {
+::deep .web-page h1:focus {
     outline: none;
 }
 
-@media (max-width: 760px) {
+@media (max-width: 780px) {
+    .prototype-bar {
+        align-items: flex-start;
+        flex-direction: column;
+    }
+
+    .view-switcher {
+        width: 100%;
+    }
+
+    .view-switcher button {
+        flex: 1;
+    }
+
     .web-app {
         grid-template-columns: 1fr;
     }
@@ -88,20 +234,41 @@
     .sidebar {
         position: static;
         height: auto;
-        padding: 18px;
+        padding: 14px;
+    }
+
+    .brand {
+        margin-bottom: 12px;
+    }
+
+    .nav-label {
+        display: none;
+    }
+
+    .side-nav {
+        display: flex;
+        overflow-x: auto;
+    }
+
+    .side-nav a {
+        min-width: 120px;
+        grid-template-columns: 22px 1fr;
+    }
+
+    .side-nav .nav-count {
+        display: none;
     }
 
     .topbar {
-        align-items: stretch;
-        flex-direction: column;
-        min-height: auto;
+        padding: 12px 16px;
     }
 
-    .user-menu {
-        justify-content: space-between;
+    .user-menu strong,
+    .user-menu .meta {
+        display: none;
     }
 
-    .content {
-        padding: 20px 16px 28px;
+    .web-page {
+        padding: 22px 16px;
     }
 }

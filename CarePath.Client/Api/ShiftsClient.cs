@@ -25,6 +25,15 @@ public sealed class ShiftsClient : ApiClientBase
         CancellationToken cancellationToken = default) =>
         GetAsync<PagedResult<ShiftSummaryDto>>($"api/shifts?{paging.ToQueryString()}", cancellationToken);
 
+    /// <summary>Gets open shifts needing coverage (Admin/Coordinator).</summary>
+    /// <param name="paging">Paging parameters.</param>
+    /// <param name="cancellationToken">Token to cancel the operation.</param>
+    /// <returns>The paged coverage queue.</returns>
+    public Task<ApiResponse<PagedResult<OpenShiftCoverageDto>>> GetCoverageQueueAsync(
+        PagedRequest paging,
+        CancellationToken cancellationToken = default) =>
+        GetAsync<PagedResult<OpenShiftCoverageDto>>($"api/shifts/coverage?{paging.ToQueryString()}", cancellationToken);
+
     /// <summary>Gets a shift by ID.</summary>
     /// <param name="shiftId">Shift identifier.</param>
     /// <param name="cancellationToken">Token to cancel the operation.</param>
@@ -33,6 +42,18 @@ public sealed class ShiftsClient : ApiClientBase
         Guid shiftId,
         CancellationToken cancellationToken = default) =>
         GetAsync<ShiftDetailDto>($"api/shifts/{shiftId}", cancellationToken);
+
+    /// <summary>Gets caregiver candidates evaluated for a shift (Admin/Coordinator).</summary>
+    /// <param name="shiftId">Shift identifier.</param>
+    /// <param name="paging">Paging parameters.</param>
+    /// <param name="cancellationToken">Token to cancel the operation.</param>
+    /// <returns>The paged eligible caregiver list.</returns>
+    public Task<ApiResponse<PagedResult<EligibleCaregiverDto>>> GetEligibleCaregiversAsync(
+        Guid shiftId,
+        PagedRequest paging,
+        CancellationToken cancellationToken = default) =>
+        GetAsync<PagedResult<EligibleCaregiverDto>>(
+            $"api/shifts/{shiftId}/eligible-caregivers?{paging.ToQueryString()}", cancellationToken);
 
     /// <summary>Schedules a shift (Admin/Coordinator; passes the D-S4-4 guards server-side).</summary>
     /// <param name="request">The create request.</param>

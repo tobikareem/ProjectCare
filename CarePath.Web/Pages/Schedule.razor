@@ -1,0 +1,199 @@
+@page "/schedule"
+@using CarePath.Client.Api
+@using CarePath.Client.UI.Components
+@using CarePath.Contracts.Common
+@using CarePath.Contracts.Scheduling
+@using Microsoft.AspNetCore.Authorization
+@attribute [Authorize(Roles = "Admin,Coordinator")]
+@inject ShiftsClient ShiftsClient
+@inject NavigationManager Navigation
+
+<PageTitle>Schedule</PageTitle>
+
+<div class="page-heading">
+    <div>
+        <p class="eyebrow">Coverage</p>
+        <h1>Schedule</h1>
+        <p class="subtle">Weekly board and open shift coverage queue.</p>
+    </div>
+    <div class="button-row">
+        <button class="button button-secondary" type="button">List view</button>
+        <button class="button button-primary" type="button">+ New shift</button>
+    </div>
+</div>
+
+<div class="card calendar-card">
+    <div class="cal-header">
+        <span></span>
+        <span>Mon</span><span>Tue</span><span>Wed</span>
+        <span>Thu</span><span>Fri</span><span>Sat</span><span>Sun</span>
+    </div>
+    <div class="cal-grid">
+        @foreach (var hour in CalendarHours)
+        {
+            <div class="cal-time">@hour.Label</div>
+            @foreach (var day in Enumerable.Range(0, 7))
+            {
+                <div class="cal-cell">
+                    @foreach (var shift in ShiftsForCell(hour.Hour, day))
+                    {
+                        <button class="shift-block @ShiftBlockClass(shift)" type="button" @onclick="() => NavigateToAssign(shift.Id)">
+                            @ShiftLabel(shift)
+                        </button>
+                    }
+                </div>
+            }
+        }
+    </div>
+</div>
+
+<div class="schedule-legend">
+    <span><span class="legend-swatch legend-inhome"></span>In-home care</span>
+    <span><span class="legend-swatch legend-staffing"></span>Facility staffing</span>
+    <span><span class="legend-swatch legend-open"></span>Open / unassigned</span>
+</div>
+
+@if (error is not null)
+{
+    <ApiErrorAlert Response="error" />
+}
+
+<section class="card table-card section-offset" aria-labelledby="coverage-queue-heading">
+    <div class="section-header">
+        <div>
+            <h2 id="coverage-queue-heading">Coverage queue</h2>
+            <span class="subtle">Open shifts are assigned here; caregiver profiles link back to this workflow with caregiver filters applied.</span>
+        </div>
+    </div>
+
+    @if (isLoading)
+    {
+        <p class="empty-state">Loading open shifts...</p>
+    }
+    else if (coverageQueue.Count == 0)
+    {
+        <p class="empty-state">No open shifts need coverage.</p>
+    }
+    else
+    {
+        <div class="data-table-wrap">
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th>Open shift</th>
+                        <th>Requirement</th>
+                        <th>When</th>
+                        <th>Best matches</th>
+                        <th></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var shift in coverageQueue)
+                    {
+                        <tr>
+                            <td><strong>@shift.ClientDisplayName</strong><span class="meta">@FormatServiceType(shift.ServiceType)</span></td>
+                            <td>@string.Join(", ", shift.RequirementLabels)</td>
+                            <td>@shift.ScheduledStartTime.ToLocalTime().ToString("MMM d, h:mm tt")</td>
+                            <td>@(shift.BestMatches.Count == 0 ? "Review candidates" : string.Join(", ", shift.BestMatches))</td>
+                            <td><button class="text-link" type="button" @onclick="() => NavigateToAssign(shift.ShiftId)">Assign caregiver</button></td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    }
+</section>
+
+@code {
+    private static readonly (int Hour, string Label)[] CalendarHours =
+    [
+        (8, "8 AM"),
+        (10, "10 AM"),
+        (13, "1 PM"),
+        (18, "6 PM"),
+    ];
+
+    private IReadOnlyList<OpenShiftCoverageDto> coverageQueue = [];
+    private IReadOnlyList<ShiftSummaryDto> scheduleShifts = [];
+    private ApiResponse? error;
+    private bool isLoading;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadScheduleAsync();
+        await LoadCoverageQueueAsync();
+    }
+
+    private async Task LoadScheduleAsync()
+    {
+        var response = await ShiftsClient.GetPageAsync(new PagedRequest { PageNumber = 1, PageSize = 50 });
+        if (response.Success && response.Data is not null)
+        {
+            scheduleShifts = response.Data.Items;
+        }
+    }
+
+    private async Task LoadCoverageQueueAsync()
+    {
+        isLoading = true;
+        error = null;
+
+        var response = await ShiftsClient.GetCoverageQueueAsync(new PagedRequest { PageNumber = 1, PageSize = 20 });
+        if (response.Success && response.Data is not null)
+        {
+            coverageQueue = response.Data.Items;
+        }
+        else
+        {
+            error = response;
+        }
+
+        isLoading = false;
+    }
+
+    private IEnumerable<ShiftSummaryDto> ShiftsForCell(int hour, int dayOffset)
+    {
+        if (scheduleShifts.Count == 0)
+        {
+            return [];
+        }
+
+        var weekStart = StartOfWeek(scheduleShifts.Min(shift => shift.ScheduledStartTime));
+        var cellDate = weekStart.AddDays(dayOffset).Date;
+        return scheduleShifts.Where(shift => shift.ScheduledStartTime.Date == cellDate && shift.ScheduledStartTime.Hour == hour);
+    }
+
+    private static DateTime StartOfWeek(DateTime value)
+    {
+        var date = value.Date;
+        var offset = ((int)date.DayOfWeek + 6) % 7;
+        return date.AddDays(-offset);
+    }
+
+    private static string ShiftBlockClass(ShiftSummaryDto shift)
+    {
+        if (!shift.CaregiverId.HasValue)
+        {
+            return "shift-open";
+        }
+
+        return shift.ServiceType == CarePath.Contracts.Enumerations.ServiceType.FacilityStaffing
+            ? "shift-staffing"
+            : "shift-inhome";
+    }
+
+    private static string ShiftLabel(ShiftSummaryDto shift)
+    {
+        var caregiver = string.IsNullOrWhiteSpace(shift.CaregiverFullName) ? "Unassigned" : shift.CaregiverFullName;
+        return $"{shift.ClientFullName} - {caregiver}";
+    }
+
+    private void NavigateToAssign(Guid shiftId) => Navigation.NavigateTo($"/schedule/assign/{shiftId}");
+
+    private static string FormatServiceType(CarePath.Contracts.Enumerations.ServiceType type) => type switch
+    {
+        CarePath.Contracts.Enumerations.ServiceType.InHomeCare => "In-home care",
+        CarePath.Contracts.Enumerations.ServiceType.FacilityStaffing => "Facility staffing",
+        _ => type.ToString()
+    };
+}

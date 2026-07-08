@@ -18,4 +18,8 @@ public interface IShiftOperationsService
     Task<ShiftDetailDto> GetShiftAsync(Guid shiftId, CancellationToken cancellationToken = default);
 
     Task<PagedResult<ShiftSummaryDto>> GetShiftsAsync(PagedRequest request, CancellationToken cancellationToken = default);
+
+    Task<PagedResult<OpenShiftCoverageDto>> GetCoverageQueueAsync(PagedRequest request, CancellationToken cancellationToken = default);
+
+    Task<PagedResult<EligibleCaregiverDto>> GetEligibleCaregiversAsync(Guid shiftId, PagedRequest request, CancellationToken cancellationToken = default);
 }

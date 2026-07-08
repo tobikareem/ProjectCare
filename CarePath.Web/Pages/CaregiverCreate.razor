@@ -1,0 +1,167 @@
+@page "/caregivers/create"
+@using CarePath.Client.Api
+@using CarePath.Client.UI.Components
+@using CarePath.Contracts.Common
+@using CarePath.Contracts.Enumerations
+@using CarePath.Contracts.Identity
+@using Microsoft.AspNetCore.Authorization
+@attribute [Authorize(Roles = "Admin,Coordinator")]
+@inject CaregiversClient CaregiversClient
+@inject NavigationManager Navigation
+
+<PageTitle>Add caregiver</PageTitle>
+
+<div class="page-heading">
+    <div>
+        <p class="eyebrow">People</p>
+        <h1>Add caregiver</h1>
+        <p class="subtle">Create the account and caregiver profile before adding certifications.</p>
+    </div>
+    <button class="button button-secondary" type="button" @onclick="NavigateToCaregivers">Back to caregivers</button>
+</div>
+
+@if (createError is not null)
+{
+    <ApiErrorAlert Response="createError" />
+}
+
+<div class="caregiver-form-grid">
+    <section class="card form-section" aria-labelledby="caregiver-create-form-heading">
+        <div class="section-header">
+            <div>
+                <h2 id="caregiver-create-form-heading">Caregiver profile</h2>
+                <span class="subtle">Account, employment, skills, and availability</span>
+            </div>
+            <StatusBadge Text="Draft" Tone="@BadgeTone.Info" />
+        </div>
+
+        <EditForm Model="form" OnValidSubmit="CreateCaregiverAsync">
+            <section class="form-section" aria-labelledby="caregiver-account-heading">
+                <h3 id="caregiver-account-heading">Account</h3>
+                <div class="form-field-grid">
+                    <label class="form-field">First name<InputText @bind-Value="form.FirstName" /></label>
+                    <label class="form-field">Last name<InputText @bind-Value="form.LastName" /></label>
+                    <label class="form-field">Email<InputText type="email" @bind-Value="form.Email" /></label>
+                    <label class="form-field">Phone<InputText type="tel" @bind-Value="form.PhoneNumber" /></label>
+                    <label class="form-field">Temporary password<InputText type="password" @bind-Value="form.TemporaryPassword" /></label>
+                </div>
+            </section>
+
+            <section class="form-section" aria-labelledby="caregiver-employment-heading">
+                <h3 id="caregiver-employment-heading">Employment</h3>
+                <div class="form-field-grid">
+                    <label class="form-field">Employment type
+                        <InputSelect @bind-Value="form.EmploymentType">
+                            <option value="@EmploymentType.W2Employee">W-2 Employee</option>
+                            <option value="@EmploymentType.Contractor1099">1099 Contractor</option>
+                        </InputSelect>
+                    </label>
+                    <label class="form-field">Hire date<InputDate @bind-Value="form.HireDate" /></label>
+                    <label class="form-field">Hourly pay rate<InputNumber @bind-Value="form.HourlyPayRate" /></label>
+                    <label class="form-field">Max weekly hours<InputNumber @bind-Value="form.MaxWeeklyHours" /></label>
+                </div>
+            </section>
+
+            <section class="form-section" aria-labelledby="caregiver-skills-heading">
+                <h3 id="caregiver-skills-heading">Skills</h3>
+                <div class="check-grid">
+                    <label class="check-row"><InputCheckbox @bind-Value="form.HasDementiaCare" /> Dementia care</label>
+                    <label class="check-row"><InputCheckbox @bind-Value="form.HasAlzheimersCare" /> Alzheimer's care</label>
+                    <label class="check-row"><InputCheckbox @bind-Value="form.HasMobilityAssistance" /> Mobility assistance</label>
+                    <label class="check-row"><InputCheckbox @bind-Value="form.HasMedicationManagement" /> Medication management</label>
+                </div>
+            </section>
+
+            <section class="form-section" aria-labelledby="caregiver-availability-heading">
+                <h3 id="caregiver-availability-heading">Availability</h3>
+                <div class="check-grid">
+                    <label class="check-row"><InputCheckbox @bind-Value="form.AvailableWeekdays" /> Weekdays</label>
+                    <label class="check-row"><InputCheckbox @bind-Value="form.AvailableWeekends" /> Weekends</label>
+                    <label class="check-row"><InputCheckbox @bind-Value="form.AvailableNights" /> Nights</label>
+                </div>
+            </section>
+
+            <div class="access-action-row">
+                <button class="button button-primary" type="submit" disabled="@isSaving">Create caregiver</button>
+                <button class="button button-secondary" type="button" @onclick="NavigateToCaregivers">Cancel</button>
+            </div>
+        </EditForm>
+    </section>
+
+    <aside class="card profile-panel" aria-labelledby="caregiver-create-next-heading">
+        <h2 id="caregiver-create-next-heading">Profile setup</h2>
+        <div class="profile-row"><span class="subtle">Step 1</span><span>Account and profile</span></div>
+        <div class="profile-row"><span class="subtle">Step 2</span><span>Add certifications</span></div>
+        <div class="profile-row"><span class="subtle">Step 3</span><span>Schedule eligible shifts</span></div>
+        <div class="info-panel">
+            <strong>Create first, then certify</strong>
+            <p class="meta">Certifications are managed from the saved caregiver profile.</p>
+        </div>
+    </aside>
+</div>
+
+@code {
+    private readonly CreateCaregiverForm form = new();
+    private ApiResponse? createError;
+    private bool isSaving;
+
+    private async Task CreateCaregiverAsync()
+    {
+        isSaving = true;
+        createError = null;
+
+        var request = new CreateCaregiverRequest
+        {
+            FirstName = form.FirstName,
+            LastName = form.LastName,
+            Email = form.Email,
+            PhoneNumber = form.PhoneNumber,
+            TemporaryPassword = form.TemporaryPassword,
+            EmploymentType = form.EmploymentType,
+            HireDate = form.HireDate,
+            HourlyPayRate = form.HourlyPayRate,
+            HasDementiaCare = form.HasDementiaCare,
+            HasAlzheimersCare = form.HasAlzheimersCare,
+            HasMobilityAssistance = form.HasMobilityAssistance,
+            HasMedicationManagement = form.HasMedicationManagement,
+            AvailableWeekdays = form.AvailableWeekdays,
+            AvailableWeekends = form.AvailableWeekends,
+            AvailableNights = form.AvailableNights,
+            MaxWeeklyHours = form.MaxWeeklyHours,
+        };
+
+        var response = await CaregiversClient.CreateAsync(request);
+        form.TemporaryPassword = string.Empty;
+
+        if (response.Success && response.Data is not null)
+        {
+            Navigation.NavigateTo($"/caregivers/{response.Data.Id}/certifications");
+            return;
+        }
+
+        createError = response;
+        isSaving = false;
+    }
+
+    private void NavigateToCaregivers() => Navigation.NavigateTo("/caregivers");
+
+    private sealed class CreateCaregiverForm
+    {
+        public string FirstName { get; set; } = string.Empty;
+        public string LastName { get; set; } = string.Empty;
+        public string Email { get; set; } = string.Empty;
+        public string PhoneNumber { get; set; } = string.Empty;
+        public string? TemporaryPassword { get; set; }
+        public EmploymentType EmploymentType { get; set; } = EmploymentType.W2Employee;
+        public DateTime HireDate { get; set; } = DateTime.UtcNow.Date;
+        public decimal HourlyPayRate { get; set; }
+        public bool HasDementiaCare { get; set; }
+        public bool HasAlzheimersCare { get; set; }
+        public bool HasMobilityAssistance { get; set; }
+        public bool HasMedicationManagement { get; set; }
+        public bool AvailableWeekdays { get; set; } = true;
+        public bool AvailableWeekends { get; set; }
+        public bool AvailableNights { get; set; }
+        public int MaxWeeklyHours { get; set; } = 40;
+    }
+}

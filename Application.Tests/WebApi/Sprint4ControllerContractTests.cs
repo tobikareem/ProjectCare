@@ -17,6 +17,7 @@ public sealed class Sprint4ControllerContractTests
     [InlineData(typeof(CaregiversController), "UpdateCaregiver", "Admin,Coordinator")]
     [InlineData(typeof(CaregiversController), "AddCertification", "Admin,Coordinator")]
     [InlineData(typeof(CaregiversController), "GetExpiringCertifications", "Admin,Coordinator")]
+    [InlineData(typeof(CaregiversController), "GetEligibleOpenShifts", "Admin,Coordinator")]
     [InlineData(typeof(ClientsController), "GetClients", "Admin,Coordinator,Clinician")]
     [InlineData(typeof(ClientsController), "GetClient", "Admin,Coordinator,Clinician,Client,Caregiver")]
     [InlineData(typeof(ClientsController), "CreateClient", "Admin,Coordinator")]
@@ -29,6 +30,8 @@ public sealed class Sprint4ControllerContractTests
     [InlineData(typeof(CarePlansController), "UpdateCarePlan", "Admin,Coordinator,Clinician")]
     [InlineData(typeof(ShiftsController), "GetShifts", "Admin,Coordinator,Caregiver,Client,FacilityManager,Clinician")]
     [InlineData(typeof(ShiftsController), "GetShift", "Admin,Coordinator,Caregiver,Client,FacilityManager,Clinician")]
+    [InlineData(typeof(ShiftsController), "GetCoverageQueue", "Admin,Coordinator")]
+    [InlineData(typeof(ShiftsController), "GetEligibleCaregivers", "Admin,Coordinator")]
     [InlineData(typeof(ShiftsController), "CreateShift", "Admin,Coordinator")]
     [InlineData(typeof(ShiftsController), "UpdateShift", "Admin,Coordinator")]
     [InlineData(typeof(ShiftsController), "CheckIn", "Caregiver")]
@@ -43,6 +46,11 @@ public sealed class Sprint4ControllerContractTests
     [InlineData(typeof(InvoicesController), "RecordPayment", "Admin,Coordinator")]
     [InlineData(typeof(BillingMarginsController), "GetMarginSummary", "Admin")]
     [InlineData(typeof(BillingMarginsController), "GetShiftMargins", "Admin")]
+    [InlineData(typeof(AdminUsersController), "GetUsers", "Admin")]
+    [InlineData(typeof(AdminUsersController), "GetAvailableRoles", "Admin")]
+    [InlineData(typeof(AdminUsersController), "CreateStaffUser", "Admin")]
+    [InlineData(typeof(AdminUsersController), "UpdateRole", "Admin")]
+    [InlineData(typeof(AdminUsersController), "UpdateStatus", "Admin")]
     [InlineData(typeof(TransitionsController), "CreateDischargeDocument", "Coordinator")]
     [InlineData(typeof(TransitionsController), "GetDischargeDocument", "Coordinator,Clinician")]
     [InlineData(typeof(TransitionsController), "GetDischargeDocumentContent", "Coordinator,Clinician")]
@@ -81,6 +89,7 @@ public sealed class Sprint4ControllerContractTests
     [InlineData(typeof(VisitNotesController), "api/visit-notes")]
     [InlineData(typeof(InvoicesController), "api/invoices")]
     [InlineData(typeof(BillingMarginsController), "api/billing/margins")]
+    [InlineData(typeof(AdminUsersController), "api/admin/users")]
     [InlineData(typeof(TransitionsController), "api/transitions")]
     public void Controller_WhenSprint4EndpointSurface_HasApiControllerAndRoute(Type controllerType, string route)
     {
@@ -95,6 +104,7 @@ public sealed class Sprint4ControllerContractTests
     [InlineData(typeof(CaregiversController), "UpdateCaregiver", typeof(HttpPutAttribute), "{id:guid}")]
     [InlineData(typeof(CaregiversController), "AddCertification", typeof(HttpPostAttribute), "{id:guid}/certifications")]
     [InlineData(typeof(CaregiversController), "GetExpiringCertifications", typeof(HttpGetAttribute), "certifications/expiring")]
+    [InlineData(typeof(CaregiversController), "GetEligibleOpenShifts", typeof(HttpGetAttribute), "{id:guid}/eligible-shifts")]
     [InlineData(typeof(ClientsController), "GetClients", typeof(HttpGetAttribute), null)]
     [InlineData(typeof(ClientsController), "GetClient", typeof(HttpGetAttribute), "{id:guid}")]
     [InlineData(typeof(ClientsController), "CreateClient", typeof(HttpPostAttribute), null)]
@@ -107,6 +117,8 @@ public sealed class Sprint4ControllerContractTests
     [InlineData(typeof(CarePlansController), "UpdateCarePlan", typeof(HttpPutAttribute), "{id:guid}")]
     [InlineData(typeof(ShiftsController), "GetShifts", typeof(HttpGetAttribute), null)]
     [InlineData(typeof(ShiftsController), "GetShift", typeof(HttpGetAttribute), "{id:guid}")]
+    [InlineData(typeof(ShiftsController), "GetCoverageQueue", typeof(HttpGetAttribute), "coverage")]
+    [InlineData(typeof(ShiftsController), "GetEligibleCaregivers", typeof(HttpGetAttribute), "{id:guid}/eligible-caregivers")]
     [InlineData(typeof(ShiftsController), "CreateShift", typeof(HttpPostAttribute), null)]
     [InlineData(typeof(ShiftsController), "UpdateShift", typeof(HttpPutAttribute), "{id:guid}")]
     [InlineData(typeof(ShiftsController), "CheckIn", typeof(HttpPostAttribute), "{id:guid}/check-in")]
@@ -121,6 +133,11 @@ public sealed class Sprint4ControllerContractTests
     [InlineData(typeof(InvoicesController), "RecordPayment", typeof(HttpPostAttribute), "{id:guid}/payments")]
     [InlineData(typeof(BillingMarginsController), "GetMarginSummary", typeof(HttpGetAttribute), null)]
     [InlineData(typeof(BillingMarginsController), "GetShiftMargins", typeof(HttpGetAttribute), "shifts")]
+    [InlineData(typeof(AdminUsersController), "GetUsers", typeof(HttpGetAttribute), null)]
+    [InlineData(typeof(AdminUsersController), "GetAvailableRoles", typeof(HttpGetAttribute), "roles")]
+    [InlineData(typeof(AdminUsersController), "CreateStaffUser", typeof(HttpPostAttribute), null)]
+    [InlineData(typeof(AdminUsersController), "UpdateRole", typeof(HttpPutAttribute), "{id:guid}/role")]
+    [InlineData(typeof(AdminUsersController), "UpdateStatus", typeof(HttpPutAttribute), "{id:guid}/status")]
     [InlineData(typeof(TransitionsController), "CreateDischargeDocument", typeof(HttpPostAttribute), "documents")]
     [InlineData(typeof(TransitionsController), "GetDischargeDocument", typeof(HttpGetAttribute), "documents/{id:guid}")]
     [InlineData(typeof(TransitionsController), "GetDischargeDocumentContent", typeof(HttpGetAttribute), "documents/{id:guid}/content")]
@@ -168,6 +185,7 @@ public sealed class Sprint4ControllerContractTests
             typeof(VisitNotesController),
             typeof(InvoicesController),
             typeof(BillingMarginsController),
+            typeof(AdminUsersController),
             typeof(TransitionsController),
         };
 

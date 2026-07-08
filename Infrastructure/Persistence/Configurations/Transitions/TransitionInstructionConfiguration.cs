@@ -17,7 +17,9 @@ public sealed class TransitionInstructionConfiguration : IEntityTypeConfiguratio
         builder.HasKey(instruction => instruction.Id);
 
         builder.Property(instruction => instruction.InstructionText).HasMaxLength(2000).IsRequired();
-        builder.Property(instruction => instruction.SourceText).HasColumnType("nvarchar(max)");
+        // Unbounded string; SQL Server infers nvarchar(max). No explicit column type so
+        // provider-agnostic test databases (SQLite) can create the schema.
+        builder.Property(instruction => instruction.SourceText);
         builder.Property(instruction => instruction.ConfidenceScore).HasPrecision(5, 4);
         builder.Property(instruction => instruction.ClinicalNote).HasMaxLength(2000);
         builder.Property(instruction => instruction.CreatedBy).HasMaxLength(256);

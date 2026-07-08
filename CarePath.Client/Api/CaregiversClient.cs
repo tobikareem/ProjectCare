@@ -1,6 +1,7 @@
 using CarePath.Client.Http;
 using CarePath.Contracts.Common;
 using CarePath.Contracts.Identity;
+using CarePath.Contracts.Scheduling;
 
 namespace CarePath.Client.Api;
 
@@ -78,4 +79,16 @@ public sealed class CaregiversClient : ApiClientBase
         CancellationToken cancellationToken = default) =>
         GetAsync<PagedResult<CertificationDto>>(
             $"api/caregivers/certifications/expiring?{paging.ToQueryString()}", cancellationToken);
+
+    /// <summary>Gets open shifts evaluated for one caregiver.</summary>
+    /// <param name="caregiverId">Caregiver identifier.</param>
+    /// <param name="paging">Paging parameters.</param>
+    /// <param name="cancellationToken">Token to cancel the operation.</param>
+    /// <returns>The paged eligible open shift list.</returns>
+    public Task<ApiResponse<PagedResult<EligibleOpenShiftDto>>> GetEligibleOpenShiftsAsync(
+        Guid caregiverId,
+        PagedRequest paging,
+        CancellationToken cancellationToken = default) =>
+        GetAsync<PagedResult<EligibleOpenShiftDto>>(
+            $"api/caregivers/{caregiverId}/eligible-shifts?{paging.ToQueryString()}", cancellationToken);
 }

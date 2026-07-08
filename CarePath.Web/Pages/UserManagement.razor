@@ -1,0 +1,565 @@
+@page "/admin/users"
+@attribute [Authorize(Roles = "Admin")]
+@using CarePath.Client.Api
+@using CarePath.Client.UI.Components
+@using CarePath.Contracts.Admin
+@using CarePath.Contracts.Common
+@using CarePath.Contracts.Enumerations
+@inject AdminUsersClient AdminUsers
+
+<PageTitle>User Management</PageTitle>
+
+<div class="page-heading">
+    <div>
+        <p class="eyebrow">Admin only</p>
+        <h1>User management</h1>
+        <p class="subtle">Assign roles and revoke account access for people with CarePath accounts.</p>
+    </div>
+    <button class="button button-secondary" type="button" disabled title="Coming soon">Export role audit</button>
+</div>
+
+<div class="card access-guard">
+    <strong>Access guard</strong>
+    <p>Only active Admin users can use these actions. Role changes apply at next sign-in.</p>
+</div>
+
+<section class="metric-grid" aria-label="User management totals">
+    <article class="card metric-card">
+        <span class="metric-label">Account users</span>
+        <div class="metric-value">@(_users?.TotalCount ?? 0)</div>
+        <span class="trend">Loaded from app users API</span>
+    </article>
+    <article class="card metric-card">
+        <span class="metric-label">Recently signed in</span>
+        <div class="metric-value">@RecentSignInCount</div>
+        <span class="trend">Within 30 minutes</span>
+    </article>
+    <article class="card metric-card">
+        <span class="metric-label">Available roles</span>
+        <div class="metric-value">@_roles.Count</div>
+        <span class="trend">Server role set</span>
+    </article>
+    <article class="card metric-card">
+        <span class="metric-label">Inactive accounts</span>
+        <div class="metric-value">@InactivePageCount</div>
+        <span class="trend">This page</span>
+    </article>
+</section>
+
+@if (_error is not null)
+{
+    <ApiErrorAlert Response="_error" />
+}
+
+<div class="cp-access-grid">
+    <section class="card table-card" aria-labelledby="account-directory-heading">
+        <div class="section-header">
+            <div>
+                <h2 id="account-directory-heading">Account directory</h2>
+                <span class="subtle">Search by display name or email. Role and status use server filters.</span>
+            </div>
+            <span class="meta">@PagingText</span>
+        </div>
+
+        <div class="cp-access-search" role="search" aria-label="User account search">
+            <input type="search" placeholder="Search account users..." @bind="_searchText" aria-label="Search account users" />
+            <select @bind="_searchCriterion" aria-label="Search criteria">
+                <option value="@SearchCriterion.Text">Name or email</option>
+                <option value="@SearchCriterion.Role">Current role</option>
+                <option value="@SearchCriterion.Status">Account status</option>
+            </select>
+            @if (_searchCriterion == SearchCriterion.Role)
+            {
+                <select @bind="_roleFilter" aria-label="Role filter">
+                    <option value="">All roles</option>
+                    @foreach (var role in _roles)
+                    {
+                        <option value="@role">@RoleLabel(role)</option>
+                    }
+                </select>
+            }
+            else if (_searchCriterion == SearchCriterion.Status)
+            {
+                <select @bind="_statusFilter" aria-label="Account status filter">
+                    <option value="">All statuses</option>
+                    <option value="active">Active</option>
+                    <option value="inactive">Inactive</option>
+                </select>
+            }
+            else
+            {
+                <select value="@_selectedUserIdText" aria-label="Matching users dropdown" @onchange="OnSelectedUserChanged">
+                    <option value="">Select matching user</option>
+                    @foreach (var user in _users?.Items ?? Array.Empty<UserAccountDto>())
+                    {
+                        <option value="@user.Id">@user.DisplayName - @RoleLabel(user.Role) - @SignInStatus(user)</option>
+                    }
+                </select>
+            }
+        </div>
+
+        <div class="button-row user-filter-actions">
+            <button class="button button-primary" type="button" @onclick="ApplyFiltersAsync" disabled="@_loading">Search</button>
+            <button class="button button-secondary" type="button" @onclick="ClearFiltersAsync" disabled="@_loading">Clear</button>
+        </div>
+
+        @if (_loading)
+        {
+            <p class="empty-state" role="status">Loading users...</p>
+        }
+        else if (_users is null || _users.Items.Count == 0)
+        {
+            <p class="empty-state">No account users match the current filters.</p>
+        }
+        else
+        {
+            <div class="data-table-wrap">
+                <table class="data-table" aria-label="Users with CarePath accounts">
+                    <thead>
+                        <tr>
+                            <th>User</th>
+                            <th>Signed in</th>
+                            <th>Current role</th>
+                            <th>Account</th>
+                            <th></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var user in _users.Items)
+                        {
+                            <tr class="@(_selectedUser?.Id == user.Id ? "selected-row" : null)">
+                                <td>
+                                    <span class="avatar-sm" aria-hidden="true">@Initials(user.DisplayName)</span>
+                                    <strong>@user.DisplayName</strong>
+                                    <span class="meta">@user.Email</span>
+                                </td>
+                                <td><StatusBadge Text="@SignInStatus(user)" Tone="@SignInTone(user)" /></td>
+                                <td><StatusBadge Text="@RoleLabel(user.Role)" Tone="@StatusBadgeTones.For(user.Role)" /></td>
+                                <td><StatusBadge Text="@(user.IsActive ? "Active" : "Inactive")" Tone="@(user.IsActive ? BadgeTone.Success : BadgeTone.Neutral)" /></td>
+                                <td>
+                                    <button class="text-link" type="button" @onclick="() => SelectUser(user)">Manage roles</button>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+
+            <div class="pager-row" aria-label="User pages">
+                <button class="button button-secondary button-sm" type="button" disabled="@(!_users.HasPreviousPage || _loading)" @onclick="() => LoadUsersAsync(_users.PageNumber - 1)">Previous</button>
+                <span class="meta">@PagingText</span>
+                <button class="button button-secondary button-sm" type="button" disabled="@(!_users.HasNextPage || _loading)" @onclick="() => LoadUsersAsync(_users.PageNumber + 1)">Next</button>
+            </div>
+        }
+    </section>
+
+    <aside class="card detail-card" aria-labelledby="role-editor-heading">
+        <div class="section-header">
+            <div>
+                <h2 id="role-editor-heading">Selected user</h2>
+                <span class="subtle">@(_selectedUser is null ? "Choose an account user to manage access." : $"{_selectedUser.DisplayName} - {SignInStatus(_selectedUser)}")</span>
+            </div>
+            <span class="avatar-lg" aria-hidden="true">@Initials(_selectedUser?.DisplayName)</span>
+        </div>
+
+        @if (_actionError is not null)
+        {
+            <ApiErrorAlert Response="_actionError" />
+        }
+
+        @if (_selectedUser is null)
+        {
+            <p class="empty-state compact">Select a user from the directory.</p>
+        }
+        else
+        {
+            <div class="stacked-list">
+                <div class="credential-row">
+                    <div>
+                        <strong>Current role</strong>
+                        <span class="meta">Single-role model</span>
+                    </div>
+                    <StatusBadge Text="@RoleLabel(_selectedUser.Role)" Tone="@StatusBadgeTones.For(_selectedUser.Role)" />
+                </div>
+                @if (!string.IsNullOrWhiteSpace(_selectedUser.DisabledReason))
+                {
+                    <div class="alert-item">
+                        <strong>Action limited</strong>
+                        <p>@_selectedUser.DisabledReason</p>
+                    </div>
+                }
+            </div>
+
+            <label class="form-label" for="assign-role">Assign role</label>
+            <select id="assign-role" class="cp-role-select" @bind="_roleToAssign" disabled="@(!_selectedUser.CanChangeRole || _actionInProgress)">
+                @foreach (var role in _roles)
+                {
+                    <option value="@role">@RoleLabel(role)</option>
+                }
+            </select>
+            <div class="cp-access-action-row">
+                <button class="button button-primary" type="button" disabled="@(!CanAssignRole)" @onclick="AssignRoleAsync">Assign selected role</button>
+                <button class="button button-secondary" type="button" disabled="@(!CanDeactivate)" @onclick="DeactivateSelectedAsync">Revoke account access</button>
+                <button class="button button-secondary" type="button" disabled="@(!CanActivate)" @onclick="ActivateSelectedAsync">Activate account</button>
+            </div>
+        }
+
+        <section class="section-offset" aria-labelledby="role-catalog-heading">
+            <h2 id="role-catalog-heading">All available roles</h2>
+            <div class="cp-role-card-grid">
+                @foreach (var role in _roles)
+                {
+                    <div class="cp-role-card">
+                        <strong>@RoleLabel(role)</strong>
+                        <p>@RoleDescription(role)</p>
+                    </div>
+                }
+            </div>
+        </section>
+
+        <section class="section-offset" aria-labelledby="provision-staff-heading">
+            <h2 id="provision-staff-heading">Provision staff account</h2>
+            @if (_createError is not null)
+            {
+                <ApiErrorAlert Response="_createError" />
+            }
+            <div class="staff-form">
+                <input class="auth-input" placeholder="First name" aria-label="First name" @bind="_createFirstName" />
+                <input class="auth-input" placeholder="Last name" aria-label="Last name" @bind="_createLastName" />
+                <input class="auth-input" placeholder="Email" aria-label="Email" @bind="_createEmail" />
+                <input class="auth-input" placeholder="Phone" aria-label="Phone" @bind="_createPhoneNumber" />
+                <input class="auth-input" placeholder="Temporary password" aria-label="Temporary password" type="password" @bind="_createTemporaryPassword" />
+                <select class="auth-input" aria-label="Staff role" @bind="_createRole">
+                    <option value="@UserRole.Admin">Admin</option>
+                    <option value="@UserRole.Coordinator">Coordinator</option>
+                    <option value="@UserRole.FacilityManager">Facility manager</option>
+                    <option value="@UserRole.Clinician">Clinician</option>
+                </select>
+                <button class="button button-primary" type="button" disabled="@_createInProgress" @onclick="CreateStaffUserAsync">Create staff account</button>
+            </div>
+        </section>
+    </aside>
+</div>
+
+@code {
+    private const int PageSize = 10;
+    private static readonly TimeSpan RecentSignInWindow = TimeSpan.FromMinutes(30);
+
+    private PagedResult<UserAccountDto>? _users;
+    private IReadOnlyList<UserRole> _roles = [];
+    private UserAccountDto? _selectedUser;
+    private ApiResponse? _error;
+    private ApiResponse? _actionError;
+    private ApiResponse? _createError;
+    private bool _loading = true;
+    private bool _actionInProgress;
+    private bool _createInProgress;
+    private string _searchText = string.Empty;
+    private SearchCriterion _searchCriterion = SearchCriterion.Text;
+    private string _roleFilter = string.Empty;
+    private string _statusFilter = string.Empty;
+    private string _selectedUserIdText = string.Empty;
+    private UserRole _roleToAssign = UserRole.Coordinator;
+    private string _createFirstName = string.Empty;
+    private string _createLastName = string.Empty;
+    private string _createEmail = string.Empty;
+    private string _createPhoneNumber = string.Empty;
+    private string? _createTemporaryPassword;
+    private UserRole _createRole = UserRole.Coordinator;
+
+    private int RecentSignInCount => _users?.Items.Count(IsRecentlySignedIn) ?? 0;
+
+    private int InactivePageCount => _users?.Items.Count(user => !user.IsActive) ?? 0;
+
+    private string PagingText => _users is null
+        ? "Page 1"
+        : $"Page {_users.PageNumber} of {Math.Max(_users.TotalPages, 1)}";
+
+    private bool CanAssignRole =>
+        _selectedUser is not null &&
+        _selectedUser.CanChangeRole &&
+        _selectedUser.Role != _roleToAssign &&
+        !_actionInProgress;
+
+    private bool CanDeactivate =>
+        _selectedUser is { IsActive: true, CanDeactivate: true } &&
+        !_actionInProgress;
+
+    private bool CanActivate =>
+        _selectedUser is { IsActive: false } &&
+        !_actionInProgress;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadRolesAsync();
+        await LoadUsersAsync(1);
+    }
+
+    private async Task LoadRolesAsync()
+    {
+        var response = await AdminUsers.GetRolesAsync();
+        if (response is { Success: true, Data: not null })
+        {
+            _roles = response.Data;
+        }
+        else
+        {
+            _error = response;
+            _roles = Enum.GetValues<UserRole>();
+        }
+    }
+
+    private async Task LoadUsersAsync(int pageNumber)
+    {
+        _loading = true;
+        _error = null;
+
+        try
+        {
+            var response = await AdminUsers.GetPageAsync(
+                new PagedRequest { PageNumber = pageNumber, PageSize = PageSize },
+                ParsedRoleFilter(),
+                ParsedStatusFilter(),
+                _searchCriterion == SearchCriterion.Text ? _searchText : null);
+
+            if (response is { Success: true, Data: not null })
+            {
+                _users = response.Data;
+                RefreshSelectionFromPage();
+            }
+            else
+            {
+                _error = response;
+            }
+        }
+        catch (HttpRequestException)
+        {
+            _error = ApiResponse.Fail(new ApiError("network.unreachable", "The server could not be reached."));
+        }
+
+        _loading = false;
+    }
+
+    private async Task ApplyFiltersAsync()
+    {
+        _selectedUser = null;
+        _selectedUserIdText = string.Empty;
+        await LoadUsersAsync(1);
+    }
+
+    private async Task ClearFiltersAsync()
+    {
+        _searchText = string.Empty;
+        _roleFilter = string.Empty;
+        _statusFilter = string.Empty;
+        _selectedUserIdText = string.Empty;
+        _searchCriterion = SearchCriterion.Text;
+        _selectedUser = null;
+        await LoadUsersAsync(1);
+    }
+
+    private void SelectUser(UserAccountDto user)
+    {
+        _selectedUser = user;
+        _selectedUserIdText = user.Id.ToString();
+        _roleToAssign = user.Role;
+        _actionError = null;
+    }
+
+    private void OnSelectedUserChanged(ChangeEventArgs args)
+    {
+        _selectedUserIdText = args.Value?.ToString() ?? string.Empty;
+        if (Guid.TryParse(_selectedUserIdText, out var userId))
+        {
+            var user = _users?.Items.SingleOrDefault(item => item.Id == userId);
+            if (user is not null)
+            {
+                SelectUser(user);
+            }
+        }
+    }
+
+    private async Task AssignRoleAsync()
+    {
+        if (_selectedUser is null)
+        {
+            return;
+        }
+
+        _actionInProgress = true;
+        _actionError = null;
+        try
+        {
+            var response = await AdminUsers.UpdateRoleAsync(
+                _selectedUser.Id,
+                new UpdateUserRoleRequest { Role = _roleToAssign });
+            await ApplyActionResponseAsync(response);
+        }
+        catch (HttpRequestException)
+        {
+            _actionError = ApiResponse<UserAccountDto>.Fail(new ApiError("network.unreachable", "The request could not be completed."));
+        }
+        finally
+        {
+            _actionInProgress = false;
+        }
+    }
+
+    private Task DeactivateSelectedAsync() => UpdateSelectedStatusAsync(isActive: false);
+
+    private Task ActivateSelectedAsync() => UpdateSelectedStatusAsync(isActive: true);
+
+    private async Task UpdateSelectedStatusAsync(bool isActive)
+    {
+        if (_selectedUser is null)
+        {
+            return;
+        }
+
+        _actionInProgress = true;
+        _actionError = null;
+        try
+        {
+            var response = await AdminUsers.UpdateStatusAsync(
+                _selectedUser.Id,
+                new UpdateUserStatusRequest { IsActive = isActive });
+            await ApplyActionResponseAsync(response);
+        }
+        catch (HttpRequestException)
+        {
+            _actionError = ApiResponse<UserAccountDto>.Fail(new ApiError("network.unreachable", "The request could not be completed."));
+        }
+        finally
+        {
+            _actionInProgress = false;
+        }
+    }
+
+    private async Task ApplyActionResponseAsync(ApiResponse<UserAccountDto> response)
+    {
+        if (response is { Success: true, Data: not null })
+        {
+            _selectedUser = response.Data;
+            _roleToAssign = response.Data.Role;
+            await LoadUsersAsync(_users?.PageNumber ?? 1);
+        }
+        else
+        {
+            _actionError = response;
+        }
+    }
+
+    private async Task CreateStaffUserAsync()
+    {
+        _createInProgress = true;
+        _createError = null;
+        try
+        {
+            var response = await AdminUsers.CreateStaffUserAsync(new CreateStaffUserRequest
+            {
+                FirstName = _createFirstName,
+                LastName = _createLastName,
+                Email = _createEmail,
+                PhoneNumber = _createPhoneNumber,
+                TemporaryPassword = _createTemporaryPassword,
+                Role = _createRole,
+            });
+            if (response is { Success: true, Data: not null })
+            {
+                ClearCreateForm();
+                _selectedUser = response.Data;
+                _roleToAssign = response.Data.Role;
+                await LoadUsersAsync(1);
+            }
+            else
+            {
+                _createError = response;
+            }
+        }
+        catch (HttpRequestException)
+        {
+            _createError = ApiResponse<UserAccountDto>.Fail(new ApiError("network.unreachable", "The request could not be completed."));
+        }
+        finally
+        {
+            _createInProgress = false;
+        }
+    }
+
+    private void ClearCreateForm()
+    {
+        _createFirstName = string.Empty;
+        _createLastName = string.Empty;
+        _createEmail = string.Empty;
+        _createPhoneNumber = string.Empty;
+        _createTemporaryPassword = null;
+        _createRole = UserRole.Coordinator;
+    }
+
+    private UserRole? ParsedRoleFilter() =>
+        _searchCriterion == SearchCriterion.Role && Enum.TryParse<UserRole>(_roleFilter, out var role)
+            ? role
+            : null;
+
+    private bool? ParsedStatusFilter() => _searchCriterion switch
+    {
+        SearchCriterion.Status when _statusFilter == "active" => true,
+        SearchCriterion.Status when _statusFilter == "inactive" => false,
+        _ => null
+    };
+
+    private void RefreshSelectionFromPage()
+    {
+        if (_selectedUser is null || _users is null)
+        {
+            return;
+        }
+
+        _selectedUser = _users.Items.SingleOrDefault(user => user.Id == _selectedUser.Id) ?? _selectedUser;
+    }
+
+    private static bool IsRecentlySignedIn(UserAccountDto user) =>
+        user.LastLoginAt.HasValue &&
+        DateTime.UtcNow - user.LastLoginAt.Value <= RecentSignInWindow;
+
+    private static string SignInStatus(UserAccountDto user) =>
+        IsRecentlySignedIn(user) ? "Recent" : "Offline";
+
+    private static BadgeTone SignInTone(UserAccountDto user) =>
+        IsRecentlySignedIn(user) ? BadgeTone.Success : BadgeTone.Info;
+
+    private static string RoleLabel(UserRole role) => role switch
+    {
+        UserRole.FacilityManager => "Facility manager",
+        _ => role.ToString()
+    };
+
+    private static string RoleDescription(UserRole role) => role switch
+    {
+        UserRole.Admin => "Full system administration and role management.",
+        UserRole.Coordinator => "Schedules care, manages exceptions, reviews operations.",
+        UserRole.Caregiver => "Mobile shifts, visit notes, assigned client workflows.",
+        UserRole.Client => "Client or approved proxy account access.",
+        UserRole.FacilityManager => "Facility staffing visibility and requests.",
+        UserRole.Clinician => "Clinical review and transition plan verification.",
+        _ => "Application access role."
+    };
+
+    private static string Initials(string? displayName)
+    {
+        if (string.IsNullOrWhiteSpace(displayName))
+        {
+            return "?";
+        }
+
+        var parts = displayName.Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        return string.Concat(parts.Take(2).Select(part => char.ToUpperInvariant(part[0])));
+    }
+
+    private enum SearchCriterion
+    {
+        Text,
+        Role,
+        Status
+    }
+}

@@ -17,5 +17,6 @@ public enum ProtectedResourceType
     Invoice = 13,
     Payment = 14,
     Caregiver = 15,
-    ClientAccessGrant = 16
+    ClientAccessGrant = 16,
+    UserAccount = 17
 }

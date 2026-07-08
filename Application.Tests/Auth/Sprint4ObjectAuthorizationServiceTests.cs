@@ -10,6 +10,7 @@ using CarePath.Domain.Enumerations;
 using CarePath.Domain.Interfaces.Repositories;
 using FluentAssertions;
 using Moq;
+using DomainClient = global::CarePath.Domain.Entities.Identity.Client;
 
 namespace CarePath.Application.Tests.Auth;
 
@@ -48,7 +49,7 @@ public sealed class Sprint4ObjectAuthorizationServiceTests
         var userId = Guid.NewGuid();
         var clientId = Guid.NewGuid();
         var unitOfWork = new MockUnitOfWork();
-        unitOfWork.Clients.Setup(repository => repository.ExistsAsync(It.IsAny<Expression<Func<Client, bool>>>(), It.IsAny<CancellationToken>()))
+        unitOfWork.Clients.Setup(repository => repository.ExistsAsync(It.IsAny<Expression<Func<DomainClient, bool>>>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(false);
         var evaluator = new Mock<IClientAccessEvaluator>(MockBehavior.Strict);
         evaluator.Setup(service => service.EvaluateAsync(userId, clientId, AccessScope.Full, It.IsAny<CancellationToken>()))
@@ -195,7 +196,7 @@ public sealed class Sprint4ObjectAuthorizationServiceTests
                 ClientId = clientId,
                 DischargeDocumentId = Guid.NewGuid(),
             });
-        unitOfWork.Clients.Setup(repository => repository.ExistsAsync(It.IsAny<Expression<Func<Client, bool>>>(), It.IsAny<CancellationToken>()))
+        unitOfWork.Clients.Setup(repository => repository.ExistsAsync(It.IsAny<Expression<Func<DomainClient, bool>>>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(false);
         var evaluator = new Mock<IClientAccessEvaluator>(MockBehavior.Strict);
         evaluator.Setup(service => service.EvaluateAsync(userId, clientId, AccessScope.Full, It.IsAny<CancellationToken>()))
@@ -227,7 +228,7 @@ public sealed class Sprint4ObjectAuthorizationServiceTests
         public Mock<IRepository<User>> Users { get; } = new(MockBehavior.Strict);
         public Mock<IRepository<Caregiver>> Caregivers { get; } = new(MockBehavior.Strict);
         public Mock<IRepository<CaregiverCertification>> CaregiverCertifications { get; } = new(MockBehavior.Strict);
-        public Mock<IRepository<Client>> Clients { get; } = new(MockBehavior.Strict);
+        public Mock<IRepository<DomainClient>> Clients { get; } = new(MockBehavior.Strict);
         public Mock<IRepository<ClientAccessGrant>> ClientAccessGrants { get; } = new(MockBehavior.Strict);
         public Mock<IRepository<CarePlan>> CarePlans { get; } = new(MockBehavior.Strict);
         public Mock<IRepository<Shift>> Shifts { get; } = new(MockBehavior.Strict);

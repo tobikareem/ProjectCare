@@ -15,6 +15,7 @@ In scope:
 - Login and secure token storage.
 - Caregiver shift list/detail.
 - GPS check-in/out.
+- Caregiver month-to-date shift metrics derived from successful check-in/out records.
 - VisitNote entry with photos/signatures.
 - Patient reminder acknowledgement and symptom check-ins.
 - Basic offline queue for VisitNotes/check-ins.
@@ -143,6 +144,7 @@ Feature: Secure attachment storage
 - [ ] Add mobile app shell and role-aware navigation.
 - [ ] Implement caregiver shift list/detail.
 - [ ] Implement GPS check-in/out service and permissions.
+- [ ] Add caregiver `Shifts (MTD)` metrics from successful caregiver check-ins/check-outs: query current-month checked-in/completed shifts by caregiver, return Admin/Coordinator-safe profile metrics, and avoid using lifetime `TotalShiftsCompleted` as the MTD source.
 - [ ] Implement VisitNote form, photo upload, and signatures.
 - [ ] Implement offline queue for VisitNotes/check-ins.
 - [ ] Implement patient reminders/check-ins UI.
@@ -157,6 +159,7 @@ Feature: Secure attachment storage
 ## Exit Gate
 
 - [ ] Caregiver can complete a shift from mobile.
+- [ ] Admin/Coordinator caregiver profile shows `Shifts (MTD)` from check-in-derived shift data.
 - [ ] Patient can acknowledge reminders/check-ins.
 - [ ] Twilio delivery and webhooks are verified in non-production mode.
 - [ ] SMS consent and opt-out flow is implemented or explicitly blocked before production.

@@ -102,42 +102,37 @@ public sealed class ClientOperationsService : IClientOperationsService
             EstimatedWeeklyHours = request.EstimatedWeeklyHours,
         };
 
-        await unitOfWork.BeginTransactionAsync(cancellationToken);
-        try
-        {
-            if (isNewUser)
+        await unitOfWork.ExecuteInTransactionAsync(
+            async token =>
             {
-                await unitOfWork.Users.AddAsync(domainUser, cancellationToken);
-            }
-            else
-            {
-                await unitOfWork.Users.UpdateAsync(domainUser, cancellationToken);
-            }
-            await unitOfWork.Clients.AddAsync(client, cancellationToken);
-            await unitOfWork.SaveChangesAsync(cancellationToken);
+                if (isNewUser)
+                {
+                    await unitOfWork.Users.AddAsync(domainUser, token);
+                }
+                else
+                {
+                    await unitOfWork.Users.UpdateAsync(domainUser, token);
+                }
+                await unitOfWork.Clients.AddAsync(client, token);
+                await unitOfWork.SaveChangesAsync(token);
 
-            var provisioningResult = await identityProvisioning.ProvisionUserAsync(
-                new IdentityProvisioningRequest(
-                    domainUser.Id,
-                    domainUser.Email,
-                    domainUser.PhoneNumber,
-                    request.TemporaryPassword!,
-                    ApplicationRoles.Client),
-                cancellationToken);
+                var provisioningResult = await identityProvisioning.ProvisionUserAsync(
+                    new IdentityProvisioningRequest(
+                        domainUser.Id,
+                        domainUser.Email,
+                        domainUser.PhoneNumber,
+                        request.TemporaryPassword!,
+                        ApplicationRoles.Client),
+                    token);
 
-            if (!provisioningResult.Succeeded)
-            {
-                throw new ValidationException("The account could not be provisioned.");
-            }
+                if (!provisioningResult.Succeeded)
+                {
+                    throw new ValidationException("The account could not be provisioned.");
+                }
 
-            await AuditAsync(ProtectedResourceType.Client, client.Id, AuditAction.Create, cancellationToken);
-            await unitOfWork.CommitTransactionAsync(cancellationToken);
-        }
-        catch
-        {
-            await unitOfWork.RollbackTransactionAsync(cancellationToken);
-            throw;
-        }
+                await AuditAsync(ProtectedResourceType.Client, client.Id, AuditAction.Create, token);
+            },
+            cancellationToken);
 
         return client.ToDetailDto(includeOperationalFields: HasOperationalClientDetailAccess());
     }
@@ -169,20 +164,15 @@ public sealed class ClientOperationsService : IClientOperationsService
         client.HourlyBillRate = request.HourlyBillRate;
         client.EstimatedWeeklyHours = request.EstimatedWeeklyHours;
 
-        await unitOfWork.BeginTransactionAsync(cancellationToken);
-        try
-        {
-            await unitOfWork.Users.UpdateAsync(user, cancellationToken);
-            await unitOfWork.Clients.UpdateAsync(client, cancellationToken);
-            await unitOfWork.SaveChangesAsync(cancellationToken);
-            await AuditAsync(ProtectedResourceType.Client, client.Id, AuditAction.Update, cancellationToken);
-            await unitOfWork.CommitTransactionAsync(cancellationToken);
-        }
-        catch
-        {
-            await unitOfWork.RollbackTransactionAsync(cancellationToken);
-            throw;
-        }
+        await unitOfWork.ExecuteInTransactionAsync(
+            async token =>
+            {
+                await unitOfWork.Users.UpdateAsync(user, token);
+                await unitOfWork.Clients.UpdateAsync(client, token);
+                await unitOfWork.SaveChangesAsync(token);
+                await AuditAsync(ProtectedResourceType.Client, client.Id, AuditAction.Update, token);
+            },
+            cancellationToken);
 
         return client.ToDetailDto(includeOperationalFields: HasOperationalClientDetailAccess());
     }
@@ -272,24 +262,19 @@ public sealed class ClientOperationsService : IClientOperationsService
             Notes = request.Notes,
         };
 
-        await unitOfWork.BeginTransactionAsync(cancellationToken);
-        try
-        {
-            await unitOfWork.CarePlans.AddAsync(carePlan, cancellationToken);
-            await unitOfWork.SaveChangesAsync(cancellationToken);
-            foreach (var activePlan in activePlans)
+        await unitOfWork.ExecuteInTransactionAsync(
+            async token =>
             {
-                await AuditAsync(ProtectedResourceType.CarePlan, activePlan.Id, AuditAction.Update, cancellationToken);
-            }
+                await unitOfWork.CarePlans.AddAsync(carePlan, token);
+                await unitOfWork.SaveChangesAsync(token);
+                foreach (var activePlan in activePlans)
+                {
+                    await AuditAsync(ProtectedResourceType.CarePlan, activePlan.Id, AuditAction.Update, token);
+                }
 
-            await AuditAsync(ProtectedResourceType.CarePlan, carePlan.Id, AuditAction.Create, cancellationToken);
-            await unitOfWork.CommitTransactionAsync(cancellationToken);
-        }
-        catch
-        {
-            await unitOfWork.RollbackTransactionAsync(cancellationToken);
-            throw;
-        }
+                await AuditAsync(ProtectedResourceType.CarePlan, carePlan.Id, AuditAction.Create, token);
+            },
+            cancellationToken);
 
         return carePlan.ToDto();
     }
@@ -318,19 +303,14 @@ public sealed class ClientOperationsService : IClientOperationsService
         carePlan.Interventions = request.Interventions;
         carePlan.Notes = request.Notes;
 
-        await unitOfWork.BeginTransactionAsync(cancellationToken);
-        try
-        {
-            await unitOfWork.CarePlans.UpdateAsync(carePlan, cancellationToken);
-            await unitOfWork.SaveChangesAsync(cancellationToken);
-            await AuditAsync(ProtectedResourceType.CarePlan, carePlan.Id, AuditAction.Update, cancellationToken);
-            await unitOfWork.CommitTransactionAsync(cancellationToken);
-        }
-        catch
-        {
-            await unitOfWork.RollbackTransactionAsync(cancellationToken);
-            throw;
-        }
+        await unitOfWork.ExecuteInTransactionAsync(
+            async token =>
+            {
+                await unitOfWork.CarePlans.UpdateAsync(carePlan, token);
+                await unitOfWork.SaveChangesAsync(token);
+                await AuditAsync(ProtectedResourceType.CarePlan, carePlan.Id, AuditAction.Update, token);
+            },
+            cancellationToken);
 
         return carePlan.ToDto();
     }

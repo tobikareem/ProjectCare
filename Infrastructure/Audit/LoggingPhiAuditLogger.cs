@@ -23,13 +23,14 @@ public sealed class LoggingPhiAuditLogger : IPhiAuditLogger
     public Task LogAsync(PhiAuditEntry entry, CancellationToken cancellationToken = default)
     {
         logger.LogInformation(
-            "PHI audit {Action} {EntityType} {EntityId} actor {ActorUserId} actorType {ActorType} trace {TraceId}",
+            "PHI audit {Action} {EntityType} {EntityId} actor {ActorUserId} actorType {ActorType} trace {TraceId} attributes {Attributes}",
             entry.Action,
             entry.EntityType,
             entry.EntityId,
             entry.ActorUserId,
             entry.ActorType,
-            entry.CorrelationId);
+            entry.CorrelationId,
+            entry.Attributes);
 
         return Task.CompletedTask;
     }

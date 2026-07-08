@@ -29,12 +29,25 @@ public sealed class ShiftsController : ControllerBase
     public async Task<ActionResult<PagedResult<ShiftSummaryDto>>> GetShifts([FromQuery] PagedRequest request, CancellationToken cancellationToken)
         => Ok(await shiftService.GetShiftsAsync(request, cancellationToken));
 
+    [HttpGet("coverage")]
+    [Authorize(Roles = "Admin,Coordinator")]
+    public async Task<ActionResult<PagedResult<OpenShiftCoverageDto>>> GetCoverageQueue([FromQuery] PagedRequest request, CancellationToken cancellationToken)
+        => Ok(await shiftService.GetCoverageQueueAsync(request, cancellationToken));
+
     [HttpGet("{id:guid}")]
     [Authorize(Roles = "Admin,Coordinator,Caregiver,Client,FacilityManager,Clinician")]
     public async Task<ActionResult<ShiftDetailDto>> GetShift(Guid id, CancellationToken cancellationToken)
     {
         await EnsureAuthorizedAsync(ProtectedResourceType.Shift, id, ObjectAccessAction.Read, cancellationToken);
         return Ok(await shiftService.GetShiftAsync(id, cancellationToken));
+    }
+
+    [HttpGet("{id:guid}/eligible-caregivers")]
+    [Authorize(Roles = "Admin,Coordinator")]
+    public async Task<ActionResult<PagedResult<EligibleCaregiverDto>>> GetEligibleCaregivers(Guid id, [FromQuery] PagedRequest request, CancellationToken cancellationToken)
+    {
+        await EnsureAuthorizedAsync(ProtectedResourceType.Shift, id, ObjectAccessAction.Read, cancellationToken);
+        return Ok(await shiftService.GetEligibleCaregiversAsync(id, request, cancellationToken));
     }
 
     [HttpPost]

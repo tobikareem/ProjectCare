@@ -4,7 +4,8 @@ namespace CarePath.Contracts.Identity;
 
 /// <summary>
 /// Full caregiver view for Admin/Coordinator screens. Endpoints returning this DTO must be
-/// role-gated and must not include compensation data.
+/// role-gated; compensation and MTD metrics are authorized detail-only fields and must not
+/// appear on caregiver summary DTOs.
 /// </summary>
 public class CaregiverDetailDto
 {
@@ -26,6 +27,11 @@ public class CaregiverDetailDto
     /// <summary>W-2 employee or 1099 contractor.</summary>
     public EmploymentType EmploymentType { get; init; }
 
+    /// <summary>False when the caregiver's user account is deactivated.</summary>
+    public bool IsActive { get; init; }
+
+    /// <summary>Hourly pay rate. Admin/Coordinator detail-only; never returned on roster summaries.</summary>
+    public decimal HourlyPayRate { get; init; }
 
     /// <summary>Hire date (UTC).</summary>
     public DateTime HireDate { get; init; }
@@ -59,6 +65,12 @@ public class CaregiverDetailDto
 
     /// <summary>Average client rating, when available.</summary>
     public decimal? AverageRating { get; init; }
+
+    /// <summary>Current-month completed shifts derived from check-in/out records.</summary>
+    public int ShiftsMtd { get; init; }
+
+    /// <summary>Current-month billable hours derived from check-in/out records.</summary>
+    public decimal BillableHoursMtd { get; init; }
 
     /// <summary>Count of completed shifts.</summary>
     public int TotalShiftsCompleted { get; init; }

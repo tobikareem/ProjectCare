@@ -9,6 +9,10 @@ namespace CarePath.WebApi.Middleware;
 public sealed class ProblemDetailsMiddleware
 {
     private const string ResourceNotFoundCode = "resource.not_found";
+
+    // Intentionally separate from MVC's AddJsonOptions pipeline. Error payloads carry no
+    // DateTime fields today; if one is ever added, register UtcDateTimeJsonConverter here too
+    // or the value will serialize without UTC normalization, unlike every success response.
     private static readonly JsonSerializerOptions ProblemJsonOptions = new(JsonSerializerDefaults.Web)
     {
         DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,

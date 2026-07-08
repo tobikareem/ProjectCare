@@ -115,28 +115,25 @@ public sealed class BillingOperationsService : IBillingOperationsService
             });
         }
 
-        await unitOfWork.BeginTransactionAsync(cancellationToken);
         try
         {
-            await unitOfWork.Invoices.AddAsync(invoice, cancellationToken);
-            foreach (var lineItem in invoice.LineItems)
-            {
-                await unitOfWork.InvoiceLineItems.AddAsync(lineItem, cancellationToken);
-            }
+            await unitOfWork.ExecuteInTransactionAsync(
+                async token =>
+                {
+                    await unitOfWork.Invoices.AddAsync(invoice, token);
+                    foreach (var lineItem in invoice.LineItems)
+                    {
+                        await unitOfWork.InvoiceLineItems.AddAsync(lineItem, token);
+                    }
 
-            await unitOfWork.SaveChangesAsync(cancellationToken);
-            await AuditAsync(ProtectedResourceType.Invoice, invoice.Id, AuditAction.Create, cancellationToken);
-            await unitOfWork.CommitTransactionAsync(cancellationToken);
+                    await unitOfWork.SaveChangesAsync(token);
+                    await AuditAsync(ProtectedResourceType.Invoice, invoice.Id, AuditAction.Create, token);
+                },
+                cancellationToken);
         }
         catch (Exception exception) when (persistenceConflictDetector.IsUniqueConstraintConflict(exception, InvoicePeriodIndexName))
         {
-            await unitOfWork.RollbackTransactionAsync(cancellationToken);
             throw DuplicateInvoiceConflict();
-        }
-        catch
-        {
-            await unitOfWork.RollbackTransactionAsync(cancellationToken);
-            throw;
         }
 
         await AttachClientUserAsync(invoice, cancellationToken);
@@ -169,21 +166,16 @@ public sealed class BillingOperationsService : IBillingOperationsService
             invoice.PaidDate = request.PaymentDate;
         }
 
-        await unitOfWork.BeginTransactionAsync(cancellationToken);
-        try
-        {
-            await unitOfWork.Payments.AddAsync(payment, cancellationToken);
-            await unitOfWork.Invoices.UpdateAsync(invoice, cancellationToken);
-            await unitOfWork.SaveChangesAsync(cancellationToken);
-            await AuditAsync(ProtectedResourceType.Payment, payment.Id, AuditAction.Create, cancellationToken);
-            await AuditAsync(ProtectedResourceType.Invoice, invoice.Id, AuditAction.Update, cancellationToken);
-            await unitOfWork.CommitTransactionAsync(cancellationToken);
-        }
-        catch
-        {
-            await unitOfWork.RollbackTransactionAsync(cancellationToken);
-            throw;
-        }
+        await unitOfWork.ExecuteInTransactionAsync(
+            async token =>
+            {
+                await unitOfWork.Payments.AddAsync(payment, token);
+                await unitOfWork.Invoices.UpdateAsync(invoice, token);
+                await unitOfWork.SaveChangesAsync(token);
+                await AuditAsync(ProtectedResourceType.Payment, payment.Id, AuditAction.Create, token);
+                await AuditAsync(ProtectedResourceType.Invoice, invoice.Id, AuditAction.Update, token);
+            },
+            cancellationToken);
 
         await AttachClientUserAsync(invoice, cancellationToken);
         return invoice.ToDetailDto();

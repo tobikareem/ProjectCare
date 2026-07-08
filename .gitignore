@@ -192,3 +192,6 @@ package-lock.json
 *.mdf
 *.ldf
 *.ndf
+Documentation/Postman/CarePath-API.postman_collection.json
+Documentation/Postman/CarePath-Local.postman_environment.json
+Documentation/PwScript/Run-CarePathPostmanCollection.ps1

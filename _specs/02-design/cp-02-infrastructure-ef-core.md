@@ -1493,7 +1493,7 @@ namespace CarePath.Infrastructure.Persistence.Repositories;
 /// <summary>
 /// Unit of Work implementation grouping all repository instances under a single transactional boundary.
 /// Repositories are lazily initialized (created on first access).
-/// Supports manual transaction management via BeginTransactionAsync, CommitTransactionAsync, RollbackTransactionAsync.
+/// Supports retry-compatible transactions via ExecuteInTransactionAsync (delegate-based; see below).
 /// </summary>
 public class UnitOfWork : IUnitOfWork
 {
@@ -1537,37 +1537,62 @@ public class UnitOfWork : IUnitOfWork
         return await _context.SaveChangesAsync(cancellationToken);
     }
 
-    public async Task BeginTransactionAsync(CancellationToken cancellationToken = default)
+    // Transactions: because AddInfrastructure enables EnableRetryOnFailure
+    // (SqlServerRetryingExecutionStrategy), user-initiated Begin/Commit/Rollback calls throw
+    // InvalidOperationException. The unit of work therefore exposes delegate-based
+    // ExecuteInTransactionAsync overloads that run the whole unit through
+    // Database.CreateExecutionStrategy(), so a transient failure retries the entire
+    // transaction atomically. Four overloads: with/without IsolationLevel (default
+    // ReadCommitted), void and TResult-returning. The wrapper never calls SaveChangesAsync
+    // implicitly - the delegate persists its own changes. Nested calls throw.
+    public async Task<TResult> ExecuteInTransactionAsync<TResult>(
+        IsolationLevel isolationLevel,
+        Func<CancellationToken, Task<TResult>> operation,
+        CancellationToken cancellationToken = default)
     {
-        await _context.Database.BeginTransactionAsync(cancellationToken);
-    }
+        ArgumentNullException.ThrowIfNull(operation);
+        if (_currentTransaction is not null)
+        {
+            throw new InvalidOperationException("A transaction is already active for this unit of work.");
+        }
 
-    public async Task CommitTransactionAsync(CancellationToken cancellationToken = default)
-    {
-        try
-        {
-            await _context.SaveChangesAsync(cancellationToken);
-            await _context.Database.CommitTransactionAsync(cancellationToken);
-        }
-        catch
-        {
-            await _context.Database.RollbackTransactionAsync(cancellationToken);
-            throw;
-        }
-    }
+        var strategy = _context.Database.CreateExecutionStrategy();
+        return await strategy.ExecuteAsync(
+            operation,
+            async (op, token) =>
+            {
+                _currentTransaction = await _context.Database.BeginTransactionAsync(isolationLevel, token);
+                try
+                {
+                    var result = await op(token);
+                    await _currentTransaction.CommitAsync(token);
+                    return result;
+                }
+                catch
+                {
+                    try
+                    {
+                        await _currentTransaction.RollbackAsync(token);
+                    }
+                    catch
+                    {
+                        // Rollback can fail on the same broken connection; keep the original
+                        // exception flowing to the strategy's transient classification.
+                    }
 
-    public async Task RollbackTransactionAsync(CancellationToken cancellationToken = default)
-    {
-        try
-        {
-            await _context.Database.RollbackTransactionAsync(cancellationToken);
-        }
-        finally
-        {
-            // Dispose of current transaction
-            await _context.Database.GetCurrentTransactionAsync()?.DisposeAsync() ?? ValueTask.CompletedTask;
-        }
+                    // Reset tracked state so a retried delegate re-reads database truth
+                    // instead of the previous attempt's mutated instances.
+                    _context.ChangeTracker.Clear();
+                    throw;
+                }
+                finally
+                {
+                    await DisposeCurrentTransactionAsync(); // resets between retry attempts
+                }
+            },
+            cancellationToken);
     }
+    // (plus three thin delegating overloads: no-isolation -> ReadCommitted, void -> TResult=object?)
 
     public void Dispose()
     {

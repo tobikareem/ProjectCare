@@ -310,6 +310,108 @@
     }
     .filter-bar input { width: 240px; }
 
+    .caregiver-workspace {
+      display: grid;
+      grid-template-columns: minmax(0,1.55fr) minmax(320px,.8fr);
+      gap: 20px;
+      align-items: start;
+    }
+    .profile-panel { display: grid; gap: 16px; }
+    .profile-panel h3 { margin-bottom: 8px; }
+    .profile-header {
+      display: flex; align-items: center; justify-content: space-between;
+      gap: 12px; margin-bottom: 8px;
+    }
+    .profile-identity { display: flex; align-items: center; gap: 10px; min-width: 0; }
+    .avatar-lg {
+      display: grid; width: 46px; height: 46px; place-items: center;
+      color: #fff; background: var(--teal-700); border-radius: 50%;
+      font-weight: 850;
+    }
+    .profile-row {
+      display: flex; justify-content: space-between; gap: 14px;
+      padding: 8px 0; border-bottom: 1px solid var(--line);
+    }
+    .profile-row:last-child { border-bottom: 0; }
+    .profile-row span:last-child { text-align: right; font-weight: 750; }
+    .badge-row { display: flex; flex-wrap: wrap; gap: 7px; }
+    .credential-row {
+      display: flex; align-items: center; justify-content: space-between;
+      gap: 12px; padding: 10px 0; border-bottom: 1px solid var(--line);
+    }
+    .credential-row:last-child { border-bottom: 0; }
+    .empty-state {
+      min-height: 120px; display: grid; place-items: center;
+      margin: 0; color: var(--muted); text-align: center;
+    }
+    .caregiver-form-grid {
+      display: grid;
+      grid-template-columns: minmax(0,1.35fr) minmax(300px,.75fr);
+      gap: 20px; align-items: start;
+    }
+    .form-section { display: grid; gap: 14px; }
+    .form-field-grid {
+      display: grid; grid-template-columns: repeat(2,minmax(0,1fr));
+      gap: 12px;
+    }
+    .form-field {
+      display: grid; gap: 6px; color: var(--muted);
+      font-size: .78rem; font-weight: 800;
+    }
+    .form-field input,
+    .form-field select {
+      width: 100%; min-height: 42px; padding: 8px 12px;
+      border: 1px solid var(--line); border-radius: 9px;
+      background: var(--surface); color: var(--ink); font-weight: 500;
+    }
+    .check-grid {
+      display: grid; grid-template-columns: repeat(2,minmax(0,1fr));
+      gap: 10px;
+    }
+    .check-row {
+      display: flex; align-items: center; gap: 9px;
+      padding: 10px 12px; border: 1px solid var(--line);
+      border-radius: 10px; background: var(--surface-alt);
+      font-weight: 750;
+    }
+    .check-row input { width: 18px; height: 18px; accent-color: var(--teal-700); }
+
+    /* User management */
+    .access-grid {
+      display: grid;
+      grid-template-columns: minmax(0,1.35fr) minmax(310px,.85fr);
+      gap: 20px; align-items: start;
+    }
+    .access-grid > * { min-width: 0; }
+    .access-search {
+      display: grid;
+      grid-template-columns: minmax(220px,1.2fr) minmax(150px,.55fr) minmax(220px,.9fr);
+      gap: 10px; margin-bottom: 16px;
+    }
+    .access-search input,
+    .access-search select,
+    .role-select {
+      width: 100%; min-width: 0;
+      min-height: 42px; padding: 8px 12px;
+      border: 1px solid var(--line); border-radius: 9px;
+      background: var(--surface); color: var(--ink);
+    }
+    .role-chip-list { display: flex; flex-wrap: wrap; gap: 7px; }
+    .role-card-grid {
+      display: grid; grid-template-columns: repeat(2,minmax(0,1fr));
+      gap: 10px;
+    }
+    .role-card {
+      padding: 12px; border: 1px solid var(--line);
+      border-radius: 10px; background: var(--surface-alt);
+    }
+    .role-card strong { display: block; margin-bottom: 3px; }
+    .role-card p { margin: 0; color: var(--muted); font-size: .78rem; }
+    .access-action-row {
+      display: flex; align-items: center; gap: 10px;
+      flex-wrap: wrap; margin-top: 14px;
+    }
+
     /* ── Calendar / schedule grid ── */
     .cal-header {
       display: grid; grid-template-columns: 70px repeat(7,1fr);
@@ -538,6 +640,44 @@
     .mobile-nav button span:first-child { font-size: 1.15rem; }
     .mobile-nav button[aria-current="page"] { color: var(--teal-700); font-weight: 850; }
 
+    .profile-panel .profile-row,
+    .caregiver-form-grid .profile-row {
+      display: flex; justify-content: space-between; gap: 14px;
+      padding: 8px 0; border-bottom: 1px solid var(--line);
+      font-size: .88rem;
+    }
+    .profile-panel .profile-row:last-child,
+    .caregiver-form-grid .profile-row:last-child { border-bottom: 0; }
+    .profile-panel .profile-row span:last-child,
+    .caregiver-form-grid .profile-row span:last-child {
+      text-align: right; font-weight: 750;
+    }
+    .caregiver-form-grid .check-row {
+      display: flex; align-items: center; gap: 9px;
+      padding: 10px 12px; margin: 0;
+      border: 1px solid var(--line); border-radius: 10px;
+      background: var(--surface-alt); font-size: .88rem; font-weight: 750;
+    }
+    .caregiver-form-grid .check-row input[type="checkbox"] {
+      width: 18px; height: 18px; accent-color: var(--teal-700);
+    }
+    .setup-steps {
+      display: grid; grid-template-columns: repeat(3,minmax(0,1fr));
+      gap: 10px; margin-bottom: 18px;
+    }
+    .setup-step {
+      padding: 12px; border: 1px solid var(--line);
+      border-radius: 10px; background: var(--surface);
+    }
+    .setup-step strong { display: block; margin-bottom: 3px; }
+    .setup-step.active {
+      border-color: var(--teal-700); background: var(--teal-100);
+    }
+    .match-grid {
+      display: grid; grid-template-columns: repeat(3,minmax(0,1fr));
+      gap: 12px; margin-bottom: 16px;
+    }
+
     .toast {
       position: fixed; z-index: 200; right: 22px; bottom: 22px;
       max-width: 360px; padding: 14px 18px; color: #fff;
@@ -549,7 +689,12 @@
     @media (max-width: 1050px) {
       .metric-grid { grid-template-columns: repeat(2,minmax(0,1fr)); }
       .dashboard-grid { grid-template-columns: 1fr; }
+      .access-grid { grid-template-columns: 1fr; }
+      .access-search { grid-template-columns: 1fr; }
       .analytics-grid { grid-template-columns: repeat(2,minmax(0,1fr)); }
+      .caregiver-workspace,
+      .caregiver-form-grid,
+      .match-grid { grid-template-columns: 1fr; }
     }
 
     @media (max-width: 780px) {
@@ -577,7 +722,11 @@
       .cert-row > :nth-child(2), .cert-row > :nth-child(4) { display: none; }
       .mobile-stage { grid-template-columns: 1fr; padding-top: 20px; }
       .mobile-notes { position: static; max-width: 560px; margin: auto; }
+      .role-card-grid { grid-template-columns: 1fr; }
       .analytics-grid { grid-template-columns: 1fr; }
+      .form-field-grid,
+      .check-grid,
+      .setup-steps { grid-template-columns: 1fr; }
     }
 
     @media (max-width: 480px) {
@@ -653,6 +802,13 @@
             <button type="button" data-web-page="compliance">
               <span aria-hidden="true">✓</span><span>Compliance</span>
               <span class="nav-count" aria-label="4 compliance alerts">4</span>
+            </button>
+          </nav>
+
+          <p class="nav-label">Admin</p>
+          <nav class="side-nav" aria-label="Admin navigation">
+            <button type="button" data-web-page="user-management">
+              <span aria-hidden="true">@</span><span>User management</span>
             </button>
           </nav>
 
@@ -801,7 +957,7 @@
                   <h2 id="actions-heading">Quick actions</h2>
                   <div class="quick-actions">
                     <button type="button" data-web-page="clients">＋ Add client</button>
-                    <button type="button" data-web-page="caregivers">＋ Add caregiver</button>
+                    <button type="button" data-web-page="caregiver-create">＋ Add caregiver</button>
                     <button type="button" data-web-page="billing">$ Generate invoices</button>
                     <button type="button" data-web-page="compliance">✓ Review credentials</button>
                   </div>
@@ -820,7 +976,7 @@
               </div>
               <div style="display:flex;gap:10px">
                 <button class="button button-secondary" type="button" data-message="List view selected">List view</button>
-                <button class="button button-primary" type="button" data-message="New shift opened">＋ New shift</button>
+                <button class="button button-primary" type="button" data-web-page="shift-assign">＋ New shift</button>
               </div>
             </div>
 
@@ -874,6 +1030,128 @@
               <span style="display:flex;align-items:center;gap:6px"><span style="width:12px;height:12px;border-radius:3px;background:var(--orange-soft);display:inline-block"></span>Facility staffing</span>
               <span style="display:flex;align-items:center;gap:6px"><span style="width:12px;height:12px;border-radius:3px;background:var(--red-soft);display:inline-block"></span>Open / unassigned</span>
             </div>
+
+            <section class="card" style="margin-top:20px;padding:0" aria-labelledby="coverage-queue-heading">
+              <div style="padding:20px 20px 0">
+                <div class="section-header">
+                  <div>
+                    <h2 id="coverage-queue-heading">Coverage queue</h2>
+                    <span class="subtle">Open shifts are assigned here; caregiver profiles link back to this workflow with caregiver filters applied.</span>
+                  </div>
+                  <button class="button button-secondary button-sm" type="button" data-web-page="caregiver-eligible-shifts">View by caregiver</button>
+                </div>
+              </div>
+              <div class="data-table-wrap">
+                <table class="data-table">
+                  <thead>
+                    <tr>
+                      <th>Open shift</th>
+                      <th>Requirement</th>
+                      <th>When</th>
+                      <th>Best matches</th>
+                      <th></th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr>
+                      <td><strong>Harborview RN coverage</strong><span class="meta">Facility staffing</span></td>
+                      <td>RN license</td>
+                      <td>Mon 10:00 AM</td>
+                      <td>Soo-Jin Park, Maria Johnson</td>
+                      <td><button class="text-link" type="button" data-web-page="shift-assign">Assign caregiver</button></td>
+                    </tr>
+                    <tr>
+                      <td><strong>Open CNA evening</strong><span class="meta">In-home care</span></td>
+                      <td>CNA, medication</td>
+                      <td>Tue 6:00 PM</td>
+                      <td>Amara Williams, Casey Caregiver</td>
+                      <td><button class="text-link" type="button" data-web-page="shift-assign">Assign caregiver</button></td>
+                    </tr>
+                    <tr>
+                      <td><strong>Northside LPN coverage</strong><span class="meta">Facility staffing</span></td>
+                      <td>LPN license</td>
+                      <td>Thu 10:00 AM</td>
+                      <td>Maria Johnson</td>
+                      <td><button class="text-link" type="button" data-web-page="shift-assign">Assign caregiver</button></td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </section>
+          </div>
+
+          <!-- ── Shift Assignment ── -->
+          <div id="page-shift-assign" class="web-page">
+            <div class="page-heading">
+              <div>
+                <p class="eyebrow">Schedule</p>
+                <h1>Assign caregiver</h1>
+                <p class="subtle">Pick an eligible caregiver for an open shift or reassign a scheduled shift.</p>
+              </div>
+              <button class="button button-secondary" type="button" data-web-page="schedule">← Back to schedule</button>
+            </div>
+
+            <div class="caregiver-workspace">
+              <section class="card form-section" aria-labelledby="shift-assignment-heading">
+                <div class="section-header">
+                  <div>
+                    <h2 id="shift-assignment-heading">Shift details</h2>
+                    <span class="subtle">This maps to the shift create/update assignment workflow.</span>
+                  </div>
+                  <span class="status status-red">Open</span>
+                </div>
+
+                <div class="form-field-grid">
+                  <label class="form-field">Client or facility<select><option>Jordan M. - in-home care</option><option>Harborview - facility staffing</option><option>Northside Rehab - facility staffing</option></select></label>
+                  <label class="form-field">Service type<select><option>In-home care</option><option>Facility staffing</option></select></label>
+                  <label class="form-field">Start<input type="datetime-local" value="2026-06-23T18:00"></label>
+                  <label class="form-field">End<input type="datetime-local" value="2026-06-23T22:00"></label>
+                  <label class="form-field">Bill rate<input type="number" value="32.00" step="0.01"></label>
+                  <label class="form-field">Pay rate<input type="number" value="18.50" step="0.01"></label>
+                </div>
+
+                <section class="form-section" aria-labelledby="shift-requirements-heading">
+                  <h3 id="shift-requirements-heading">Requirements</h3>
+                  <div class="check-grid">
+                    <label class="check-row"><input type="checkbox" checked> CNA required</label>
+                    <label class="check-row"><input type="checkbox" checked> Medication support</label>
+                    <label class="check-row"><input type="checkbox"> Dementia experience</label>
+                    <label class="check-row"><input type="checkbox"> Weekend availability</label>
+                  </div>
+                </section>
+
+                <div class="access-action-row">
+                  <button class="button button-primary" type="button" data-message="Shift saved and caregiver assigned">Assign selected caregiver</button>
+                  <button class="button button-secondary" type="button" data-web-page="schedule">Cancel</button>
+                </div>
+              </section>
+
+              <aside class="card profile-panel" aria-labelledby="eligible-caregivers-heading">
+                <div class="section-header">
+                  <div>
+                    <h2 id="eligible-caregivers-heading">Eligible caregivers</h2>
+                    <span class="subtle">Filtered by credentials, availability, active status, and double-booking checks.</span>
+                  </div>
+                </div>
+
+                <div class="credential-row">
+                  <div><strong>Amara Williams</strong><span class="meta">CNA, medication · 18 MTD shifts · 4.8 rating</span></div>
+                  <button class="text-link" type="button" data-message="Amara Williams selected">Select</button>
+                </div>
+                <div class="credential-row">
+                  <div><strong>Casey Caregiver</strong><span class="meta">CNA, mobility · 0 MTD shifts · new profile</span></div>
+                  <button class="text-link" type="button" data-message="Casey Caregiver selected">Select</button>
+                </div>
+                <div class="credential-row">
+                  <div><strong>David Okafor</strong><span class="meta">HHA · credential mismatch for CNA-required shift</span></div>
+                  <button class="text-link" type="button" data-message="David Okafor reviewed">Review</button>
+                </div>
+                <div class="credential-row">
+                  <div><strong>Tunde Adeyemi</strong><span class="meta">CNA expired · blocked until renewed</span></div>
+                  <span class="status status-red">Blocked</span>
+                </div>
+              </aside>
+            </div>
           </div>
 
           <!-- ── Caregivers ── -->
@@ -884,79 +1162,443 @@
                 <h1>Caregivers</h1>
                 <p class="subtle">24 active · 3 inactive · 2 certifications expiring</p>
               </div>
-              <button class="button button-primary" type="button" data-message="Add caregiver opened">＋ Add caregiver</button>
+              <button class="button button-primary" type="button" data-web-page="caregiver-create">＋ Add caregiver</button>
             </div>
 
             <div class="filter-bar">
-              <input type="search" placeholder="Search by name or certification…">
+              <input type="search" placeholder="Search by name…">
               <select aria-label="Employment type"><option>All types</option><option>W-2 Employee</option><option>1099 Contractor</option></select>
               <select aria-label="Status"><option>All statuses</option><option>Active</option><option>Inactive</option></select>
-              <select aria-label="Certification"><option>All certifications</option><option>CNA</option><option>LPN</option><option>RN</option><option>HHA</option></select>
             </div>
 
-            <div class="card" style="padding:0">
-              <div class="data-table-wrap">
-                <table class="data-table">
-                  <thead>
-                    <tr>
-                      <th>Name</th>
-                      <th>Type</th>
-                      <th>Certifications</th>
-                      <th>Pay rate</th>
-                      <th>Shifts (MTD)</th>
-                      <th>Status</th>
-                      <th></th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    <tr>
-                      <td><span class="avatar-sm">AW</span><strong>Amara Williams</strong><span class="meta">CNA · hire date Jan 2025</span></td>
-                      <td>W-2 Employee</td>
-                      <td><span class="status status-green" style="font-size:.7rem">CNA</span> <span class="status status-green" style="font-size:.7rem">CPR</span></td>
-                      <td>$18.50/hr</td>
-                      <td>44 hrs</td>
-                      <td><span class="status status-green">Active</span></td>
-                      <td><button class="text-link" data-message="Caregiver profile opened">View</button></td>
-                    </tr>
-                    <tr>
-                      <td><span class="avatar-sm">DO</span><strong>David Okafor</strong><span class="meta">HHA · hire date Mar 2025</span></td>
-                      <td>W-2 Employee</td>
-                      <td><span class="status status-green" style="font-size:.7rem">HHA</span> <span class="status status-green" style="font-size:.7rem">Dementia</span></td>
-                      <td>$17.00/hr</td>
-                      <td>51 hrs</td>
-                      <td><span class="status status-green">Active</span></td>
-                      <td><button class="text-link" data-message="Caregiver profile opened">View</button></td>
-                    </tr>
-                    <tr>
-                      <td><span class="avatar-sm">MJ</span><strong>Maria Johnson</strong><span class="meta">LPN · hire date Sep 2024</span></td>
-                      <td>1099 Contractor</td>
-                      <td><span class="status status-green" style="font-size:.7rem">LPN</span> <span class="status status-amber" style="font-size:.7rem">CPR expiring</span></td>
-                      <td>$38.00/hr</td>
-                      <td>72 hrs</td>
-                      <td><span class="status status-amber">Cert warning</span></td>
-                      <td><button class="text-link" data-web-page="compliance">Review certs</button></td>
-                    </tr>
-                    <tr>
-                      <td><span class="avatar-sm">SP</span><strong>Soo-Jin Park</strong><span class="meta">RN · hire date Jun 2024</span></td>
-                      <td>1099 Contractor</td>
-                      <td><span class="status status-green" style="font-size:.7rem">RN</span> <span class="status status-green" style="font-size:.7rem">CPR</span></td>
-                      <td>$60.00/hr</td>
-                      <td>88 hrs</td>
-                      <td><span class="status status-green">Active</span></td>
-                      <td><button class="text-link" data-message="Caregiver profile opened">View</button></td>
-                    </tr>
-                    <tr>
-                      <td><span class="avatar-sm">TA</span><strong>Tunde Adeyemi</strong><span class="meta">CNA · hire date Nov 2025</span></td>
-                      <td>W-2 Employee</td>
-                      <td><span class="status status-red" style="font-size:.7rem">CNA expired</span></td>
-                      <td>$16.50/hr</td>
-                      <td>12 hrs</td>
-                      <td><span class="status status-red">Cert lapsed</span></td>
-                      <td><button class="text-link" data-web-page="compliance">Review certs</button></td>
-                    </tr>
-                  </tbody>
-                </table>
+            <div class="caregiver-workspace">
+              <section class="card" style="padding:0" aria-labelledby="caregiver-roster-heading">
+                <div style="padding:20px 20px 0">
+                  <div class="section-header">
+                    <div>
+                      <h2 id="caregiver-roster-heading">Caregiver roster</h2>
+                      <span class="subtle">Paged from the caregiver API</span>
+                    </div>
+                    <span class="meta">Page 1 of 3</span>
+                  </div>
+                </div>
+                <div class="data-table-wrap">
+                  <table class="data-table">
+                    <thead>
+                      <tr>
+                        <th>Name</th>
+                        <th>Type</th>
+                        <th>Rating</th>
+                        <th>Status</th>
+                        <th></th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <tr>
+                        <td><span class="avatar-sm">AW</span><strong>Amara Williams</strong><span class="meta">User 2f84a19c</span></td>
+                        <td>W-2 Employee</td>
+                        <td>4.8 / 5</td>
+                        <td><span class="status status-green">Active</span></td>
+                        <td><button class="text-link" type="button" data-caregiver-profile="amara">View</button></td>
+                      </tr>
+                      <tr>
+                        <td><span class="avatar-sm">DO</span><strong>David Okafor</strong><span class="meta">User 9bb31c70</span></td>
+                        <td>W-2 Employee</td>
+                        <td>4.6 / 5</td>
+                        <td><span class="status status-green">Active</span></td>
+                        <td><button class="text-link" type="button" data-caregiver-profile="david">View</button></td>
+                      </tr>
+                      <tr>
+                        <td><span class="avatar-sm">MJ</span><strong>Maria Johnson</strong><span class="meta">User 840d27a1</span></td>
+                        <td>1099 Contractor</td>
+                        <td>Not rated</td>
+                        <td><span class="status status-amber">Cert warning</span></td>
+                        <td><button class="text-link" type="button" data-caregiver-profile="maria">View</button></td>
+                      </tr>
+                      <tr>
+                        <td><span class="avatar-sm">SP</span><strong>Soo-Jin Park</strong><span class="meta">User c6f5f0de</span></td>
+                        <td>1099 Contractor</td>
+                        <td>4.9 / 5</td>
+                        <td><span class="status status-green">Active</span></td>
+                        <td><button class="text-link" type="button" data-caregiver-profile="soojin">View</button></td>
+                      </tr>
+                      <tr>
+                        <td><span class="avatar-sm">TA</span><strong>Tunde Adeyemi</strong><span class="meta">User e6a821c4</span></td>
+                        <td>W-2 Employee</td>
+                        <td>4.2 / 5</td>
+                        <td><span class="status status-red">Cert lapsed</span></td>
+                        <td><button class="text-link" type="button" data-caregiver-profile="tunde">View</button></td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+                <div style="padding:14px 20px;display:flex;align-items:center;justify-content:flex-end;gap:10px">
+                  <button class="button button-secondary button-sm" type="button">Previous</button>
+                  <span class="meta">Page 1 of 3</span>
+                  <button class="button button-secondary button-sm" type="button">Next</button>
+                </div>
+              </section>
+
+              <aside class="card profile-panel" aria-labelledby="caregiver-profile-heading">
+                <div class="section-header">
+                  <div>
+                    <h2 id="caregiver-profile-heading">Profile detail</h2>
+                    <span class="subtle">Skills and credential status</span>
+                  </div>
+                </div>
+
+                <p id="caregiver-profile-empty" class="empty-state">Select a caregiver to view skills and certifications.</p>
+
+                <div id="caregiver-profile-detail" hidden>
+                  <div class="profile-header">
+                    <div class="profile-identity">
+                      <span class="avatar-lg">AW</span>
+                      <div>
+                        <strong>Amara Williams</strong>
+                        <span class="meta">W-2 Employee · available weekdays and weekends</span>
+                      </div>
+                    </div>
+                    <span class="status status-green">Active</span>
+                  </div>
+
+                  <section aria-labelledby="profile-contact-heading">
+                    <h3 id="profile-contact-heading">Contact</h3>
+                    <div class="profile-row"><span class="subtle">Email</span><span>amara.williams@example.test</span></div>
+                    <div class="profile-row"><span class="subtle">Phone</span><span>(410) 555-0148</span></div>
+                  </section>
+
+                  <section aria-labelledby="profile-employment-heading">
+                    <h3 id="profile-employment-heading">Employment and availability</h3>
+                    <div class="profile-row"><span class="subtle">Hire date</span><span>Jan 15, 2025</span></div>
+                    <div class="profile-row"><span class="subtle">Pay rate</span><span>$18.50/hr</span></div>
+                    <div class="profile-row"><span class="subtle">Max weekly hours</span><span>40</span></div>
+                    <div class="profile-row"><span class="subtle">Availability</span><span>Weekdays, weekends</span></div>
+                  </section>
+
+                  <section aria-labelledby="profile-skills-heading">
+                    <h3 id="profile-skills-heading">Skills</h3>
+                    <div class="badge-row">
+                      <span class="status status-blue">Dementia</span>
+                      <span class="status status-blue">Mobility</span>
+                      <span class="status status-blue">Medication</span>
+                    </div>
+                  </section>
+
+                  <section aria-labelledby="profile-certs-heading">
+                    <div class="section-header" style="margin:0 0 8px">
+                      <h3 id="profile-certs-heading">Certifications</h3>
+                      <button class="text-link" type="button" data-web-page="caregiver-certification">Add certification</button>
+                    </div>
+                    <div class="credential-row">
+                      <div><strong>CNA</strong><span class="meta">Maryland Board of Nursing · expires Jan 15, 2027</span></div>
+                      <span class="status status-green">Valid</span>
+                    </div>
+                    <div class="credential-row">
+                      <div><strong>CPR</strong><span class="meta">American Red Cross · expires Aug 2, 2026</span></div>
+                      <span class="status status-amber">Expiring soon</span>
+                    </div>
+                  </section>
+
+                  <section aria-labelledby="profile-performance-heading">
+                    <h3 id="profile-performance-heading">Performance</h3>
+                    <div class="profile-row"><span class="subtle">Average rating</span><span>4.8 / 5</span></div>
+                    <div class="profile-row"><span class="subtle">Shifts (MTD)</span><span>18 checked in</span></div>
+                    <div class="profile-row"><span class="subtle">Billable hours (MTD)</span><span>72 hrs</span></div>
+                    <div class="profile-row"><span class="subtle">Completed shifts</span><span>128 lifetime</span></div>
+                    <div class="profile-row"><span class="subtle">No-shows</span><span>0</span></div>
+                  </section>
+
+                  <div class="access-action-row">
+                    <button class="button button-primary" type="button" data-web-page="caregiver-eligible-shifts">Schedule eligible shifts</button>
+                    <button class="button button-secondary" type="button" data-web-page="schedule">Open schedule</button>
+                  </div>
+                </div>
+              </aside>
+            </div>
+          </div>
+
+          <!-- ── Add Caregiver ── -->
+          <div id="page-caregiver-create" class="web-page">
+            <div class="page-heading">
+              <div>
+                <p class="eyebrow">People</p>
+                <h1>Add caregiver</h1>
+                <p class="subtle">Create the account and caregiver profile before adding certifications.</p>
               </div>
+              <button class="button button-secondary" type="button" data-web-page="caregivers">← Back to caregivers</button>
+            </div>
+
+            <div class="caregiver-form-grid">
+              <section class="card form-section" aria-labelledby="caregiver-create-form-heading">
+                <div class="section-header">
+                  <div>
+                    <h2 id="caregiver-create-form-heading">Caregiver profile</h2>
+                    <span class="subtle">Account, employment, skills, and availability</span>
+                  </div>
+                  <span class="status status-blue">Draft</span>
+                </div>
+
+                <section class="form-section" aria-labelledby="caregiver-account-heading">
+                  <h3 id="caregiver-account-heading">Account</h3>
+                  <div class="form-field-grid">
+                    <label class="form-field">First name<input type="text" value="Casey"></label>
+                    <label class="form-field">Last name<input type="text" value="Caregiver"></label>
+                    <label class="form-field">Email<input type="email" value="casey.caregiver@example.test"></label>
+                    <label class="form-field">Phone<input type="tel" value="410-555-0184"></label>
+                    <label class="form-field">Temporary password<input type="password" value="Temporary1"></label>
+                  </div>
+                </section>
+
+                <section class="form-section" aria-labelledby="caregiver-employment-heading">
+                  <h3 id="caregiver-employment-heading">Employment</h3>
+                  <div class="form-field-grid">
+                    <label class="form-field">Employment type<select><option>W-2 Employee</option><option>1099 Contractor</option></select></label>
+                    <label class="form-field">Hire date<input type="date" value="2026-06-22"></label>
+                    <label class="form-field">Hourly pay rate<input type="number" value="18.50" step="0.01"></label>
+                    <label class="form-field">Max weekly hours<input type="number" value="40"></label>
+                  </div>
+                </section>
+
+                <section class="form-section" aria-labelledby="caregiver-skills-heading">
+                  <h3 id="caregiver-skills-heading">Skills</h3>
+                  <div class="check-grid">
+                    <label class="check-row"><input type="checkbox" checked> Dementia care</label>
+                    <label class="check-row"><input type="checkbox"> Alzheimer's care</label>
+                    <label class="check-row"><input type="checkbox" checked> Mobility assistance</label>
+                    <label class="check-row"><input type="checkbox" checked> Medication management</label>
+                  </div>
+                </section>
+
+                <section class="form-section" aria-labelledby="caregiver-availability-heading">
+                  <h3 id="caregiver-availability-heading">Availability</h3>
+                  <div class="check-grid">
+                    <label class="check-row"><input type="checkbox" checked> Weekdays</label>
+                    <label class="check-row"><input type="checkbox" checked> Weekends</label>
+                    <label class="check-row"><input type="checkbox"> Nights</label>
+                  </div>
+                </section>
+
+                <div class="access-action-row">
+                  <button class="button button-primary" type="button" data-web-page="caregiver-certification">Create caregiver</button>
+                  <button class="button button-secondary" type="button" data-web-page="caregivers">Cancel</button>
+                </div>
+              </section>
+
+              <aside class="card profile-panel" aria-labelledby="caregiver-create-next-heading">
+                <h2 id="caregiver-create-next-heading">Profile setup</h2>
+                <div class="profile-row"><span class="subtle">Step 1</span><span>Account and profile</span></div>
+                <div class="profile-row"><span class="subtle">Step 2</span><span><button class="text-link" type="button" data-web-page="caregiver-certification">Add certifications</button></span></div>
+                <div class="profile-row"><span class="subtle">Step 3</span><span><button class="text-link" type="button" data-web-page="caregiver-eligible-shifts">Schedule eligible shifts</button></span></div>
+                <div style="padding:12px;background:var(--teal-100);border-radius:10px">
+                  <strong>Create first, then certify</strong>
+                  <p class="meta" style="margin-bottom:0">Certifications are managed from the saved caregiver profile.</p>
+                </div>
+              </aside>
+            </div>
+          </div>
+
+          <!-- ── Add Caregiver Certification ── -->
+          <div id="page-caregiver-certification" class="web-page">
+            <div class="page-heading">
+              <div>
+                <p class="eyebrow">People</p>
+                <h1>Add certifications</h1>
+                <p class="subtle">Attach one or more credentials to the saved caregiver profile.</p>
+              </div>
+              <button class="button button-secondary" type="button" data-web-page="caregivers">← Back to caregivers</button>
+            </div>
+
+            <div class="setup-steps" aria-label="Caregiver setup progress">
+              <div class="setup-step"><strong>Step 1</strong><span class="meta">Account and profile</span></div>
+              <div class="setup-step active"><strong>Step 2</strong><span class="meta">Certifications</span></div>
+              <div class="setup-step"><strong>Step 3</strong><span class="meta">Eligible shifts</span></div>
+            </div>
+
+            <div class="caregiver-form-grid">
+              <section class="card form-section" aria-labelledby="certification-form-heading">
+                <div class="section-header">
+                  <div>
+                    <h2 id="certification-form-heading">Add next certification</h2>
+                    <span class="subtle">Each saved credential becomes a certification record</span>
+                  </div>
+                  <span class="status status-green">2 saved</span>
+                </div>
+
+                <div class="profile-header" style="margin:0">
+                  <div class="profile-identity">
+                    <span class="avatar-lg">CC</span>
+                    <div>
+                      <strong>Casey Caregiver</strong>
+                      <span class="meta">W-2 Employee · profile saved</span>
+                    </div>
+                  </div>
+                  <span class="status status-blue">Step 2</span>
+                </div>
+
+                <section aria-labelledby="saved-certifications-heading">
+                  <div class="section-header" style="margin:0 0 8px">
+                    <h3 id="saved-certifications-heading">Saved certifications</h3>
+                    <button class="text-link" type="button" data-message="Blank certification row added">Add another</button>
+                  </div>
+                  <div class="credential-row">
+                    <div><strong>CNA</strong><span class="meta">MD-CNA-20481 · expires Jun 22, 2028</span></div>
+                    <span class="status status-green">Saved</span>
+                  </div>
+                  <div class="credential-row">
+                    <div><strong>CPR</strong><span class="meta">American Red Cross · expires Aug 2, 2026</span></div>
+                    <span class="status status-green">Saved</span>
+                  </div>
+                </section>
+
+                <div class="form-field-grid">
+                  <label class="form-field">Certification type
+                    <select>
+                      <option>First Aid</option>
+                      <option>CNA</option>
+                      <option>HHA</option>
+                      <option>LPN</option>
+                      <option>RN</option>
+                      <option>CPR</option>
+                      <option>First Aid</option>
+                      <option>Dementia</option>
+                      <option>Alzheimer's</option>
+                    </select>
+                  </label>
+                  <label class="form-field">Certification number<input type="text" value=""></label>
+                  <label class="form-field">Issue date<input type="date" value="2026-06-22"></label>
+                  <label class="form-field">Expiration date<input type="date" value="2028-06-22"></label>
+                  <label class="form-field">Issuing authority<input type="text" value="American Red Cross"></label>
+                </div>
+
+                <div class="access-action-row">
+                  <button class="button button-primary" type="button" data-message="Certification saved">Save and add another</button>
+                  <button class="button button-secondary" type="button" data-web-page="caregiver-eligible-shifts">Continue to eligible shifts</button>
+                  <button class="button button-secondary" type="button" data-web-page="caregiver-create">Back</button>
+                </div>
+              </section>
+
+              <aside class="card profile-panel" aria-labelledby="certification-next-heading">
+                <h2 id="certification-next-heading">Certification set</h2>
+                <div class="profile-row"><span class="subtle">Saved records</span><span>2 certifications</span></div>
+                <div class="profile-row"><span class="subtle">Ready to schedule</span><span>CNA shifts</span></div>
+                <div class="profile-row"><span class="subtle">Additional coverage</span><span>CPR-supported care</span></div>
+                <div class="profile-row"><span class="subtle">Matched care needs</span><span>CNA, mobility, dementia</span></div>
+                <div class="profile-row"><span class="subtle">Next step</span><span>Review eligible open shifts</span></div>
+                <div style="padding:12px;background:var(--amber-soft);border-radius:10px">
+                  <strong>Add every active credential</strong>
+                  <p class="meta" style="margin-bottom:0">Use the saved list for CNA, HHA, RN/LPN, CPR, First Aid, dementia, and other training records before reviewing eligible shifts.</p>
+                </div>
+              </aside>
+            </div>
+          </div>
+
+          <!-- ── Caregiver Eligible Shifts ── -->
+          <div id="page-caregiver-eligible-shifts" class="web-page">
+            <div class="page-heading">
+              <div>
+                <p class="eyebrow">People</p>
+                <h1>Schedule eligible shifts</h1>
+                <p class="subtle">Review open shifts that match the caregiver's credentials, skills, and availability.</p>
+              </div>
+              <button class="button button-secondary" type="button" data-web-page="caregivers">← Back to caregivers</button>
+            </div>
+
+            <div class="setup-steps" aria-label="Caregiver setup progress">
+              <div class="setup-step"><strong>Step 1</strong><span class="meta">Account and profile</span></div>
+              <div class="setup-step"><strong>Step 2</strong><span class="meta">Certification</span></div>
+              <div class="setup-step active"><strong>Step 3</strong><span class="meta">Eligible shifts</span></div>
+            </div>
+
+            <section class="match-grid" aria-label="Eligibility summary">
+              <article class="card">
+                <span class="metric-label">Eligible open shifts</span>
+                <div class="metric-value">6</div>
+                <span class="trend">3 start this week</span>
+              </article>
+              <article class="card">
+                <span class="metric-label">Credential fit</span>
+                <div class="metric-value">CNA</div>
+                <span class="trend">CPR recommended next</span>
+              </article>
+              <article class="card">
+                <span class="metric-label">Availability fit</span>
+                <div class="metric-value">82%</div>
+                <span class="trend">Weekdays and weekends</span>
+              </article>
+            </section>
+
+            <div class="caregiver-workspace">
+              <section class="card" style="padding:0" aria-labelledby="eligible-shifts-heading">
+                <div style="padding:20px 20px 0">
+                  <div class="section-header">
+                    <div>
+                      <h2 id="eligible-shifts-heading">Eligible open shifts</h2>
+                      <span class="subtle">Matched from certification, skills, availability, and service type</span>
+                    </div>
+                    <button class="button button-secondary button-sm" type="button" data-message="Eligibility filters opened">Filter</button>
+                  </div>
+                </div>
+                <div class="data-table-wrap">
+                  <table class="data-table">
+                    <thead>
+                      <tr>
+                        <th>Shift</th>
+                        <th>Client / Facility</th>
+                        <th>Requirement</th>
+                        <th>When</th>
+                        <th>Match</th>
+                        <th></th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <tr>
+                        <td><strong>Personal care</strong><span class="meta">In-home care · 4 hours</span></td>
+                        <td>Jordan M.</td>
+                        <td>CNA · mobility</td>
+                        <td>Tue 9:00 AM</td>
+                        <td><span class="status status-green">Strong</span></td>
+                        <td><button class="text-link" type="button" data-message="Shift assigned">Assign</button></td>
+                      </tr>
+                      <tr>
+                        <td><strong>Dementia support</strong><span class="meta">In-home care · 3 hours</span></td>
+                        <td>Casey R.</td>
+                        <td>CNA · dementia</td>
+                        <td>Wed 1:30 PM</td>
+                        <td><span class="status status-green">Strong</span></td>
+                        <td><button class="text-link" type="button" data-message="Shift assigned">Assign</button></td>
+                      </tr>
+                      <tr>
+                        <td><strong>Evening companionship</strong><span class="meta">In-home care · 2 hours</span></td>
+                        <td>Beverly T.</td>
+                        <td>CNA preferred</td>
+                        <td>Fri 6:00 PM</td>
+                        <td><span class="status status-amber">Time risk</span></td>
+                        <td><button class="text-link" type="button" data-message="Shift reviewed">Review</button></td>
+                      </tr>
+                      <tr>
+                        <td><strong>Weekend respite</strong><span class="meta">In-home care · 5 hours</span></td>
+                        <td>Jordan M.</td>
+                        <td>CNA · medication</td>
+                        <td>Sat 10:00 AM</td>
+                        <td><span class="status status-green">Strong</span></td>
+                        <td><button class="text-link" type="button" data-message="Shift assigned">Assign</button></td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+              </section>
+
+              <aside class="card profile-panel" aria-labelledby="eligibility-rules-heading">
+                <h2 id="eligibility-rules-heading">Why these shifts match</h2>
+                <div class="profile-row"><span class="subtle">Credential</span><span>CNA valid through Jun 2028</span></div>
+                <div class="profile-row"><span class="subtle">Skills</span><span>Dementia, mobility, medication</span></div>
+                <div class="profile-row"><span class="subtle">Availability</span><span>Weekdays, weekends</span></div>
+                <div class="profile-row"><span class="subtle">Weekly capacity</span><span>0 of 40 hours scheduled</span></div>
+                <div class="access-action-row">
+                  <button class="button button-primary" type="button" data-web-page="caregivers">Finish setup</button>
+                  <button class="button button-secondary" type="button" data-web-page="caregiver-certification">Add another certification</button>
+                </div>
+              </aside>
             </div>
           </div>
 
@@ -1339,7 +1981,181 @@
             </div>
           </div>
 
-          <!-- ── Transitions: Dashboard ── -->
+          <!-- User Management -->
+          <div id="page-user-management" class="web-page">
+            <div class="page-heading">
+              <div>
+                <p class="eyebrow">Admin only</p>
+                <h1>User management</h1>
+                <p class="subtle">Assign and revoke access for people with CarePath accounts. Visible only to administrators.</p>
+              </div>
+              <button class="button button-secondary" type="button" data-message="Role audit log exported">Export role audit</button>
+            </div>
+
+            <div class="card" style="margin-bottom:20px;border-left:4px solid var(--teal-700);background:var(--teal-100)">
+              <strong>Access guard</strong>
+              <p style="margin:4px 0 0;font-size:.88rem;color:var(--teal-900)">This page is protected by the Admin role. Non-admin users do not see the navigation item and receive an access denied screen if they enter the route directly.</p>
+            </div>
+
+            <section class="metric-grid" aria-label="User management totals">
+              <article class="card metric-card">
+                <span class="metric-label">Account users</span>
+                <div class="metric-value">42</div>
+                <span class="trend">Loaded from app users API</span>
+              </article>
+              <article class="card metric-card">
+                <span class="metric-label">Signed in now</span>
+                <div class="metric-value">9</div>
+                <span class="trend">Active sessions</span>
+              </article>
+              <article class="card metric-card">
+                <span class="metric-label">Available roles</span>
+                <div class="metric-value">6</div>
+                <span class="trend">Domain role set</span>
+              </article>
+              <article class="card metric-card">
+                <span class="metric-label">Pending review</span>
+                <div class="metric-value">3</div>
+                <span class="trend">Recent access changes</span>
+              </article>
+            </section>
+
+            <div class="access-grid">
+              <section class="card" aria-labelledby="account-directory-heading">
+                <div class="section-header">
+                  <div>
+                    <h2 id="account-directory-heading">Account directory</h2>
+                    <p class="subtle" style="margin:4px 0 0">Search all users who have an app account, then choose a result to manage access.</p>
+                  </div>
+                  <span class="status status-blue">All accounts</span>
+                </div>
+
+                <div class="access-search">
+                  <input type="search" list="user-search-examples" aria-label="Search account users" placeholder="Search account users...">
+                  <datalist id="user-search-examples">
+                    <option value="Tobi Kareem">
+                    <option value="Amara Williams">
+                    <option value="Beverly Thomas">
+                    <option value="coordinator@carepath.test">
+                  </datalist>
+                  <select aria-label="Search criteria">
+                    <option>Name</option>
+                    <option>Email</option>
+                    <option>Phone</option>
+                    <option>Current role</option>
+                    <option>Account status</option>
+                    <option>Signed-in status</option>
+                  </select>
+                  <select aria-label="Matching users dropdown">
+                    <option>Select matching user</option>
+                    <option>Tobi Kareem - Admin - signed in</option>
+                    <option>Nina Patel - Coordinator - signed in</option>
+                    <option>Amara Williams - Caregiver - signed in</option>
+                    <option>Beverly Thomas - Client - offline</option>
+                    <option>Harborview Manager - FacilityManager - offline</option>
+                  </select>
+                </div>
+
+                <div class="data-table-wrap">
+                  <table class="data-table" aria-label="Users with CarePath accounts">
+                    <thead>
+                      <tr>
+                        <th>User</th>
+                        <th>Signed in</th>
+                        <th>Current roles</th>
+                        <th>Account</th>
+                        <th></th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <tr>
+                        <td><span class="avatar-sm">TK</span><strong>Tobi Kareem</strong><span class="meta">tobi@carepath.test</span></td>
+                        <td><span class="status status-green">Now</span></td>
+                        <td><span class="status status-red" style="font-size:.7rem">Admin</span></td>
+                        <td><span class="status status-green">Active</span></td>
+                        <td><button class="text-link" data-message="Tobi Kareem selected">Manage roles</button></td>
+                      </tr>
+                      <tr>
+                        <td><span class="avatar-sm">NP</span><strong>Nina Patel</strong><span class="meta">nina@carepath.test</span></td>
+                        <td><span class="status status-green">Now</span></td>
+                        <td><span class="status status-blue" style="font-size:.7rem">Coordinator</span></td>
+                        <td><span class="status status-green">Active</span></td>
+                        <td><button class="text-link" data-message="Nina Patel selected">Manage roles</button></td>
+                      </tr>
+                      <tr>
+                        <td><span class="avatar-sm">AW</span><strong>Amara Williams</strong><span class="meta">amara@carepath.test</span></td>
+                        <td><span class="status status-green">Now</span></td>
+                        <td><span class="status status-green" style="font-size:.7rem">Caregiver</span></td>
+                        <td><span class="status status-green">Active</span></td>
+                        <td><button class="text-link" data-message="Amara Williams selected">Manage roles</button></td>
+                      </tr>
+                      <tr>
+                        <td><span class="avatar-sm">BT</span><strong>Beverly Thomas</strong><span class="meta">beverly@carepath.test</span></td>
+                        <td><span class="status status-blue">Offline</span></td>
+                        <td><span class="status status-amber" style="font-size:.7rem">Client</span></td>
+                        <td><span class="status status-green">Active</span></td>
+                        <td><button class="text-link" data-message="Beverly Thomas selected">Manage roles</button></td>
+                      </tr>
+                      <tr>
+                        <td><span class="avatar-sm">HM</span><strong>Harborview Manager</strong><span class="meta">manager@harborview.test</span></td>
+                        <td><span class="status status-blue">Offline</span></td>
+                        <td><span class="status status-blue" style="font-size:.7rem">FacilityManager</span></td>
+                        <td><span class="status status-green">Active</span></td>
+                        <td><button class="text-link" data-message="Harborview Manager selected">Manage roles</button></td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+              </section>
+
+              <aside class="card" aria-labelledby="role-editor-heading">
+                <div class="section-header">
+                  <div>
+                    <h2 id="role-editor-heading">Selected user</h2>
+                    <p class="subtle" style="margin:4px 0 0">Nina Patel - signed in 4 minutes ago</p>
+                  </div>
+                  <span class="avatar" aria-hidden="true">NP</span>
+                </div>
+
+                <div style="margin-bottom:16px">
+                  <strong style="display:block;margin-bottom:8px">Current roles</strong>
+                  <div class="role-chip-list">
+                    <span class="status status-blue">Coordinator</span>
+                    <button class="button button-sm button-secondary" type="button" data-message="Coordinator role revoked">Revoke Coordinator</button>
+                  </div>
+                </div>
+
+                <label for="assign-role" style="display:block;font-size:.82rem;font-weight:800;margin-bottom:7px">Assign role</label>
+                <select id="assign-role" class="role-select" style="width:100%">
+                  <option>Select role to assign</option>
+                  <option>Admin</option>
+                  <option>Coordinator</option>
+                  <option>Caregiver</option>
+                  <option>Client</option>
+                  <option>FacilityManager</option>
+                  <option>Clinician</option>
+                </select>
+                <div class="access-action-row">
+                  <button class="button button-primary" type="button" data-message="Role assigned">Assign selected role</button>
+                  <button class="button button-secondary" type="button" data-message="Access change cancelled">Cancel</button>
+                </div>
+
+                <div style="margin-top:22px">
+                  <strong style="display:block;margin-bottom:10px">All available roles</strong>
+                  <div class="role-card-grid">
+                    <div class="role-card"><strong>Admin</strong><p>Full system administration and role management.</p></div>
+                    <div class="role-card"><strong>Coordinator</strong><p>Schedules care, manages exceptions, reviews operations.</p></div>
+                    <div class="role-card"><strong>Caregiver</strong><p>Mobile shifts, visit notes, assigned client workflows.</p></div>
+                    <div class="role-card"><strong>Client</strong><p>Client or approved proxy account access.</p></div>
+                    <div class="role-card"><strong>FacilityManager</strong><p>Facility staffing visibility and requests.</p></div>
+                    <div class="role-card"><strong>Clinician</strong><p>Clinical review and transition plan verification.</p></div>
+                  </div>
+                </div>
+              </aside>
+            </div>
+          </div>
+
+          <!-- Transitions: Dashboard -->
           <div id="page-transitions" class="web-page">
             <div class="page-heading">
               <div>
@@ -2174,7 +2990,7 @@
                   <strong style="font-size:.8rem;color:var(--muted);text-transform:uppercase;letter-spacing:.08em">Employment</strong>
                   <div style="margin-top:10px">
                     <div class="profile-row"><span class="subtle">Type</span><span>W-2 Employee</span></div>
-                    <div class="profile-row"><span class="subtle">Pay rate</span><span>$18.50/hr</span></div>
+                    <div class="profile-row"><span class="subtle">Hire date</span><span>Jan 2025</span></div>
                     <div class="profile-row"><span class="subtle">Max weekly hours</span><span>40 hrs</span></div>
                     <div class="profile-row"><span class="subtle">Availability</span><span>Mon–Fri</span></div>
                   </div>
@@ -2387,7 +3203,10 @@
       if (target) target.classList.add('active');
 
       document.querySelectorAll('[data-web-page]').forEach(btn => {
-        const isCurrent = btn.dataset.webPage === pageId;
+        const caregiverSetupPages = ['caregiver-create', 'caregiver-certification', 'caregiver-eligible-shifts'];
+        const schedulePages = ['shift-assign'];
+        const currentNavPage = caregiverSetupPages.includes(pageId) ? 'caregivers' : schedulePages.includes(pageId) ? 'schedule' : pageId;
+        const isCurrent = btn.dataset.webPage === currentNavPage;
         if (btn.closest('.side-nav')) {
           if (isCurrent) btn.setAttribute('aria-current', 'page');
           else btn.removeAttribute('aria-current');
@@ -2397,6 +3216,18 @@
 
     document.querySelectorAll('[data-web-page]').forEach(btn => {
       btn.addEventListener('click', () => showWebPage(btn.dataset.webPage));
+    });
+
+    document.querySelectorAll('[data-caregiver-profile]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const empty = document.querySelector('#caregiver-profile-empty');
+        const detail = document.querySelector('#caregiver-profile-detail');
+        if (empty && detail) {
+          empty.hidden = true;
+          detail.hidden = false;
+        }
+        announce('Caregiver profile opened. Wireframe only.');
+      });
     });
 
     /* ── Mobile screen navigation ── */

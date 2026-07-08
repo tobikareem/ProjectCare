@@ -1,0 +1,237 @@
+@page "/analytics"
+@attribute [Authorize(Roles = "Admin")]
+@using System.Globalization
+@using CarePath.Client.Api
+@using CarePath.Client.UI.Components
+@using CarePath.Contracts.Billing
+@using CarePath.Contracts.Common
+@using CarePath.Contracts.Enumerations
+@using static CarePath.Web.Shared.BusinessFormatting
+@inject BillingClient Billing
+
+<PageTitle>Analytics</PageTitle>
+
+<div class="page-heading">
+    <div>
+        <p class="eyebrow">Business</p>
+        <h1>Analytics</h1>
+        <p class="subtle">@_periodLabel · Month-to-date performance</p>
+    </div>
+    <button class="button button-secondary" type="button" disabled title="Coming soon"
+            aria-label="Export report (coming soon)">↓ Export report</button>
+</div>
+
+@if (_summaryError is not null)
+{
+    <ApiErrorAlert Response="_summaryError" />
+}
+else if (_summaryLoading)
+{
+    <p class="subtle" role="status">Loading margin summary…</p>
+}
+else if (_summary is not null)
+{
+    var summary = _summary;
+
+    <div class="analytics-grid">
+        <article class="card">
+            <span class="metric-label">In-home care margin</span>
+            <div class="kpi-big @MarginToneClass(summary.InHomeCare.GrossMarginPercentage)">@Percent(summary.InHomeCare.GrossMarginPercentage)</div>
+            <span class="trend trend-muted">@summary.InHomeCare.ShiftCount shifts · @Hours(summary.InHomeCare.TotalBillableHours) hrs</span>
+            <div class="bar-track bar-track-offset" role="progressbar" aria-label="In-home care margin percentage"
+                 aria-valuemin="0" aria-valuemax="50" aria-valuenow="@AriaPercent(summary.InHomeCare.GrossMarginPercentage)">
+                <span class="bar-fill" style="width:@BarWidth(summary.InHomeCare.GrossMarginPercentage)%"></span>
+            </div>
+        </article>
+        <article class="card">
+            <span class="metric-label">Facility staffing margin</span>
+            <div class="kpi-big @MarginToneClass(summary.FacilityStaffing.GrossMarginPercentage)">@Percent(summary.FacilityStaffing.GrossMarginPercentage)</div>
+            <span class="trend trend-muted">@summary.FacilityStaffing.ShiftCount shifts · @Hours(summary.FacilityStaffing.TotalBillableHours) hrs</span>
+            <div class="bar-track bar-track-offset" role="progressbar" aria-label="Facility staffing margin percentage"
+                 aria-valuemin="0" aria-valuemax="50" aria-valuenow="@AriaPercent(summary.FacilityStaffing.GrossMarginPercentage)">
+                <span class="bar-fill staffing" style="width:@BarWidth(summary.FacilityStaffing.GrossMarginPercentage)%"></span>
+            </div>
+        </article>
+        <article class="card">
+            <span class="metric-label">Overall margin</span>
+            <div class="kpi-big @MarginToneClass(summary.Overall.GrossMarginPercentage)">@Percent(summary.Overall.GrossMarginPercentage)</div>
+            <span class="trend trend-muted">@summary.Overall.ShiftCount shifts · @Hours(summary.Overall.TotalBillableHours) hrs</span>
+            <div class="bar-track bar-track-offset" role="progressbar" aria-label="Overall margin percentage"
+                 aria-valuemin="0" aria-valuemax="50" aria-valuenow="@AriaPercent(summary.Overall.GrossMarginPercentage)">
+                <span class="bar-fill" style="width:@BarWidth(summary.Overall.GrossMarginPercentage)%"></span>
+            </div>
+        </article>
+    </div>
+
+    <div class="dashboard-grid">
+        <div>
+            <section class="card" aria-labelledby="revenue-chart-heading">
+                <div class="section-header">
+                    <h2 id="revenue-chart-heading">Monthly revenue trend</h2>
+                </div>
+                <div class="chart-placeholder">Revenue trend chart — coming soon</div>
+            </section>
+
+            <section class="card section-offset" aria-labelledby="shift-margins-heading">
+                <div class="section-header">
+                    <div>
+                        <h2 id="shift-margins-heading">Per-shift margins</h2>
+                        <span class="subtle">@_periodLabel</span>
+                    </div>
+                </div>
+                @if (_shiftError is not null)
+                {
+                    <ApiErrorAlert Response="_shiftError" />
+                }
+                else if (_shiftLoading)
+                {
+                    <p class="subtle" role="status">Loading shift margins…</p>
+                }
+                else
+                {
+                    <PagedTable TItem="ShiftMarginDto"
+                                Result="_shiftMargins"
+                                EmptyText="No completed shifts in this period."
+                                OnPageChanged="LoadShiftMarginsAsync">
+                        <HeaderTemplate>
+                            <tr>
+                                <th>Date</th>
+                                <th>Service line</th>
+                                <th>Hours</th>
+                                <th>Bill rate</th>
+                                <th>Pay rate</th>
+                                <th>Margin/hr</th>
+                                <th>Margin</th>
+                                <th>Margin %</th>
+                            </tr>
+                        </HeaderTemplate>
+                        <RowTemplate Context="shift">
+                            <tr>
+                                <td>@ShortDate(shift.ScheduledStartTime)</td>
+                                <td>@ServiceLineLabel(shift.ServiceType)</td>
+                                <td>@Hours(shift.BillableHours)</td>
+                                <td>@Money(shift.BillRate)</td>
+                                <td>@Money(shift.PayRate)</td>
+                                <td>@Money(shift.HourlyGrossMargin)</td>
+                                <td>@Money(shift.GrossMargin)</td>
+                                <td>@Percent(shift.GrossMarginPercentage)</td>
+                            </tr>
+                        </RowTemplate>
+                    </PagedTable>
+                }
+            </section>
+        </div>
+
+        <aside>
+            <section class="card" aria-labelledby="mtd-summary-heading">
+                <h2 id="mtd-summary-heading" class="summary-heading">MTD summary</h2>
+                <div class="profile-list">
+                    <div class="profile-row"><span class="subtle">Total revenue</span><strong>@Money(summary.Overall.TotalRevenue)</strong></div>
+                    <div class="profile-row"><span class="subtle">Labor cost</span><strong>@Money(summary.Overall.TotalLaborCost)</strong></div>
+                    <div class="profile-row">
+                        <span class="subtle">Gross profit</span>
+                        <strong class="@(summary.Overall.TotalGrossMargin >= 0 ? "kpi-big-positive" : "kpi-big-negative")">@Money(summary.Overall.TotalGrossMargin)</strong>
+                    </div>
+                    <div class="profile-row"><span class="subtle">Billable hours</span><strong>@Hours(summary.Overall.TotalBillableHours) hrs</strong></div>
+                    <div class="profile-row"><span class="subtle">Completed shifts</span><strong>@summary.Overall.ShiftCount</strong></div>
+                    <div class="profile-row"><span class="subtle">Avg margin/hr</span><strong>@Money(summary.Overall.AverageHourlyGrossMargin)</strong></div>
+                </div>
+            </section>
+        </aside>
+    </div>
+}
+
+@code {
+    // TODO(PM): no revenue time-series endpoint exists, so the wireframe's "Monthly revenue
+    // trend" chart renders as its placeholder; the wireframe's "Caregiver utilization" card has
+    // no backing endpoint either and is replaced by the real Overall margin card.
+    private MarginSummaryDto? _summary;
+    private ApiResponse? _summaryError;
+    private bool _summaryLoading = true;
+    private PagedResult<ShiftMarginDto>? _shiftMargins;
+    private ApiResponse? _shiftError;
+    private bool _shiftLoading = true;
+    private DateTime _periodStartUtc;
+    private DateTime _periodEndUtc;
+    private string _periodLabel = string.Empty;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var nowUtc = DateTime.UtcNow;
+        _periodStartUtc = new DateTime(nowUtc.Year, nowUtc.Month, 1, 0, 0, 0, DateTimeKind.Utc);
+        _periodEndUtc = _periodStartUtc.AddMonths(1);
+        _periodLabel = _periodStartUtc.ToString("MMMM yyyy", CultureInfo.InvariantCulture);
+
+        await LoadSummaryAsync();
+        await LoadShiftMarginsAsync(1);
+    }
+
+    private async Task LoadSummaryAsync()
+    {
+        _summaryLoading = true;
+        _summaryError = null;
+
+        try
+        {
+            var response = await Billing.GetMarginSummaryAsync(_periodStartUtc, _periodEndUtc);
+            if (response is { Success: true, Data: not null })
+            {
+                _summary = response.Data;
+            }
+            else
+            {
+                _summaryError = response;
+            }
+        }
+        catch (HttpRequestException)
+        {
+            // PHI-safe generic failure — never surface exception details (D-S6-3).
+            _summaryError = ApiResponse.Fail(new ApiError("network.unreachable", "The server could not be reached."));
+        }
+
+        _summaryLoading = false;
+    }
+
+    private async Task LoadShiftMarginsAsync(int pageNumber)
+    {
+        _shiftLoading = true;
+        _shiftError = null;
+
+        try
+        {
+            var response = await Billing.GetShiftMarginsAsync(
+                new PagedRequest { PageNumber = pageNumber }, _periodStartUtc, _periodEndUtc);
+            if (response is { Success: true, Data: not null })
+            {
+                _shiftMargins = response.Data;
+            }
+            else
+            {
+                _shiftError = response;
+            }
+        }
+        catch (HttpRequestException)
+        {
+            _shiftError = ApiResponse.Fail(new ApiError("network.unreachable", "The server could not be reached."));
+        }
+
+        _shiftLoading = false;
+    }
+
+    private static string MarginToneClass(decimal percentage) =>
+        percentage >= 0 ? "kpi-big-positive" : "kpi-big-negative";
+
+    // The wireframe's margin bars use a 0–50% scale (42.1% renders at 84.2% width).
+    private static string BarWidth(decimal percentage) =>
+        Math.Clamp(percentage * 2m, 0m, 100m).ToString("0.#", CultureInfo.InvariantCulture);
+
+    private static string AriaPercent(decimal percentage) =>
+        Math.Clamp(percentage, 0m, 50m).ToString("0.#", CultureInfo.InvariantCulture);
+
+    private static string ServiceLineLabel(ServiceType serviceType) => serviceType switch
+    {
+        ServiceType.InHomeCare => "In-home care",
+        ServiceType.FacilityStaffing => "Facility staffing",
+        _ => serviceType.ToString()
+    };
+}

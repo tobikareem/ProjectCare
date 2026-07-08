@@ -73,19 +73,14 @@ public sealed class ClientAccessGrantService : IClientAccessGrantService
             GrantedAtUtc = DateTime.UtcNow,
         };
 
-        await unitOfWork.BeginTransactionAsync(cancellationToken);
-        try
-        {
-            await unitOfWork.ClientAccessGrants.AddAsync(grant, cancellationToken);
-            await unitOfWork.SaveChangesAsync(cancellationToken);
-            await AuditAsync(grant.Id, AuditAction.Create, cancellationToken);
-            await unitOfWork.CommitTransactionAsync(cancellationToken);
-        }
-        catch
-        {
-            await unitOfWork.RollbackTransactionAsync(cancellationToken);
-            throw;
-        }
+        await unitOfWork.ExecuteInTransactionAsync(
+            async token =>
+            {
+                await unitOfWork.ClientAccessGrants.AddAsync(grant, token);
+                await unitOfWork.SaveChangesAsync(token);
+                await AuditAsync(grant.Id, AuditAction.Create, token);
+            },
+            cancellationToken);
 
         return grant.ToDto();
     }
@@ -104,19 +99,14 @@ public sealed class ClientAccessGrantService : IClientAccessGrantService
         grant.RevokedAtUtc = DateTime.UtcNow;
         grant.RevokedByUserId = currentUser.UserId;
 
-        await unitOfWork.BeginTransactionAsync(cancellationToken);
-        try
-        {
-            await unitOfWork.ClientAccessGrants.UpdateAsync(grant, cancellationToken);
-            await unitOfWork.SaveChangesAsync(cancellationToken);
-            await AuditAsync(grant.Id, AuditAction.Delete, cancellationToken);
-            await unitOfWork.CommitTransactionAsync(cancellationToken);
-        }
-        catch
-        {
-            await unitOfWork.RollbackTransactionAsync(cancellationToken);
-            throw;
-        }
+        await unitOfWork.ExecuteInTransactionAsync(
+            async token =>
+            {
+                await unitOfWork.ClientAccessGrants.UpdateAsync(grant, token);
+                await unitOfWork.SaveChangesAsync(token);
+                await AuditAsync(grant.Id, AuditAction.Delete, token);
+            },
+            cancellationToken);
     }
 
     private async Task<Client> GetClientAsync(Guid clientId, CancellationToken cancellationToken)

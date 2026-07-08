@@ -1,0 +1,469 @@
+@page "/visit-notes"
+@using CarePath.Client.Api
+@using CarePath.Client.UI.Components
+@using CarePath.Contracts.Common
+@using CarePath.Contracts.Enumerations
+@using CarePath.Contracts.Scheduling
+@using Microsoft.AspNetCore.Authorization
+@attribute [Authorize(Roles = "Admin,Coordinator,Clinician")]
+@inject ShiftsClient ShiftsClient
+@inject VisitNotesClient VisitNotesClient
+
+<PageTitle>Visit notes</PageTitle>
+
+<div class="page-heading">
+    <div>
+        <p class="eyebrow">Documentation</p>
+        <h1>Visit notes</h1>
+        <p class="subtle">@VisitNotesSummaryText</p>
+    </div>
+    <select class="button button-secondary" @bind="noteFilter" aria-label="Filter notes">
+        <option value="">All notes</option>
+        <option value="concerns">Concerns flagged</option>
+        <option value="complete">No concerns</option>
+    </select>
+</div>
+
+@if (shiftError is not null)
+{
+    <ApiErrorAlert Response="shiftError" />
+}
+
+<div class="visit-notes-grid">
+    <section class="card shift-picker" aria-labelledby="shift-list-heading">
+        <div class="section-header">
+            <div>
+                <h2 id="shift-list-heading">Shifts</h2>
+                <span class="subtle">Select a shift to load its notes</span>
+            </div>
+            <span class="meta">@PagingText(shiftPage)</span>
+        </div>
+
+        @if (isShiftsLoading)
+        {
+            <p class="empty-state">Loading shifts...</p>
+        }
+        else if (shiftPage?.Items.Count is null or 0)
+        {
+            <p class="empty-state">No shifts are available.</p>
+        }
+        else
+        {
+            <div class="shift-list">
+                @foreach (var shift in shiftPage.Items)
+                {
+                    <button class="shift-select @(selectedShift?.Id == shift.Id ? "selected-shift" : null)"
+                            type="button"
+                            @onclick="() => SelectShiftAsync(shift)"
+                            aria-pressed="@(selectedShift?.Id == shift.Id)">
+                        <span>
+                            <strong>@shift.ClientFullName</strong>
+                            <span class="meta">@FormatShiftWindow(shift) · @FormatServiceType(shift.ServiceType)</span>
+                        </span>
+                        <span>
+                            <StatusBadge Text="@FormatShiftStatus(shift.Status)" Tone="@StatusBadgeTones.For(shift.Status)" />
+                            <span class="meta">@CaregiverText(shift)</span>
+                        </span>
+                    </button>
+                }
+            </div>
+        }
+
+        <div class="pager-row" aria-label="Shift pages">
+            <button class="button button-secondary button-sm" type="button" disabled="@(!CanGoPrevious(shiftPage) || isShiftsLoading)" @onclick="PreviousShiftPageAsync">Previous</button>
+            <span class="meta">@PagingText(shiftPage)</span>
+            <button class="button button-secondary button-sm" type="button" disabled="@(!CanGoNext(shiftPage) || isShiftsLoading)" @onclick="NextShiftPageAsync">Next</button>
+        </div>
+    </section>
+
+    <section class="notes-column" aria-labelledby="notes-list-heading">
+        <div class="card">
+            <div class="section-header">
+                <div>
+                    <h2 id="notes-list-heading">Notes list</h2>
+                    <span class="subtle">@SelectedShiftText</span>
+                </div>
+            </div>
+
+            @if (noteError is not null)
+            {
+                <ApiErrorAlert Response="noteError" />
+            }
+            else if (selectedShift is null)
+            {
+                <p class="empty-state">Select a shift to view visit note summaries.</p>
+            }
+            else if (isNotesLoading)
+            {
+                <p class="empty-state">Loading visit notes...</p>
+            }
+            else if (FilteredNotes.Count == 0)
+            {
+                <p class="empty-state">No visit notes match the current filter.</p>
+            }
+            else
+            {
+                <div class="note-list">
+                    @foreach (var note in FilteredNotes)
+                    {
+                        <article class="note-card @(note.HasConcerns ? "note-card-concern" : null)">
+                            <div>
+                                <div class="note-meta-row">
+                                    <StatusBadge Text="@(note.HasConcerns ? "Concern flagged" : "Submitted")"
+                                                 Tone="@(note.HasConcerns ? BadgeTone.Danger : BadgeTone.Success)" />
+                                    <span class="meta">@note.VisitDateTime.ToLocalTime().ToString("MMM d, h:mm tt")</span>
+                                </div>
+                                <strong>@(selectedShift?.ClientFullName ?? "Selected shift")</strong>
+                                <span class="meta">@CaregiverText(selectedShift) · @FormatServiceType(selectedShift?.ServiceType)</span>
+                                <div class="badge-row note-badges" aria-label="Completed tasks">
+                                    @foreach (var task in NoteTasks(note))
+                                    {
+                                        <StatusBadge Text="@task" Tone="@BadgeTone.Info" />
+                                    }
+                                    @if (NoteTasks(note).Count == 0)
+                                    {
+                                        <span class="subtle">No task flags recorded.</span>
+                                    }
+                                </div>
+                            </div>
+                            <button class="button button-primary button-sm" type="button" @onclick="() => SelectNoteAsync(note.Id)">
+                                View note
+                            </button>
+                        </article>
+                    }
+                </div>
+            }
+        </div>
+
+        <aside class="card detail-card section-offset" aria-labelledby="note-detail-heading">
+            <div class="section-header">
+                <div>
+                    <h2 id="note-detail-heading">Audited note detail</h2>
+                    <span class="subtle">Clinical text appears only after opening a note</span>
+                </div>
+            </div>
+
+            @if (noteDetailError is not null)
+            {
+                <ApiErrorAlert Response="noteDetailError" />
+            }
+            else if (isNoteDetailLoading)
+            {
+                <p class="empty-state">Loading visit note detail...</p>
+            }
+            else if (selectedNote is null)
+            {
+                <p class="empty-state">Open a note to view audited clinical details.</p>
+            }
+            else
+            {
+                <dl class="detail-facts">
+                    <div><dt>Visit time</dt><dd>@selectedNote.VisitDateTime.ToLocalTime().ToString("MMM d, yyyy h:mm tt")</dd></div>
+                    <div><dt>Vitals</dt><dd>@VitalsText(selectedNote)</dd></div>
+                    <div><dt>Photos</dt><dd>@selectedNote.Photos.Count</dd></div>
+                </dl>
+
+                <h3>Completed tasks</h3>
+                <div class="badge-row">
+                    @foreach (var task in NoteTasks(selectedNote))
+                    {
+                        <StatusBadge Text="@task" Tone="@BadgeTone.Info" />
+                    }
+                </div>
+
+                <div class="clinical-grid">
+                    <section>
+                        <h3>Activities</h3>
+                        <p>@EmptyWhenMissing(selectedNote.Activities)</p>
+                    </section>
+                    <section>
+                        <h3>Client condition</h3>
+                        <p>@EmptyWhenMissing(selectedNote.ClientCondition)</p>
+                    </section>
+                    <section>
+                        <h3>Medication observations</h3>
+                        <p>@EmptyWhenMissing(selectedNote.Medications)</p>
+                    </section>
+                    <section>
+                        <h3>Concerns</h3>
+                        <p>@EmptyWhenMissing(selectedNote.Concerns)</p>
+                    </section>
+                </div>
+            }
+        </aside>
+    </section>
+</div>
+
+@code {
+    private const int ShiftPageSize = 8;
+    private const int NotePageSize = 10;
+
+    private PagedResult<ShiftSummaryDto>? shiftPage;
+    private PagedResult<VisitNoteSummaryDto>? notePage;
+    private ApiResponse? shiftError;
+    private ApiResponse? noteError;
+    private ApiResponse? noteDetailError;
+    private ShiftSummaryDto? selectedShift;
+    private VisitNoteDetailDto? selectedNote;
+    private bool isShiftsLoading;
+    private bool isNotesLoading;
+    private bool isNoteDetailLoading;
+    private int shiftPageNumber = 1;
+    private string noteFilter = string.Empty;
+
+    private IReadOnlyList<VisitNoteSummaryDto> FilteredNotes =>
+        notePage?.Items
+            .Where(MatchesNoteFilter)
+            .ToArray() ?? [];
+
+    private string VisitNotesSummaryText =>
+        selectedShift is null
+            ? "Choose a shift to review its documentation"
+            : $"{notePage?.TotalCount ?? 0} notes for {selectedShift.ClientFullName}";
+
+    private string SelectedShiftText =>
+        selectedShift is null
+            ? "No shift selected"
+            : $"{selectedShift.ClientFullName} · {FormatShiftWindow(selectedShift)}";
+
+    protected override async Task OnInitializedAsync() => await LoadShiftsAsync();
+
+    private async Task LoadShiftsAsync()
+    {
+        isShiftsLoading = true;
+        shiftError = null;
+
+        var response = await ShiftsClient.GetPageAsync(new PagedRequest { PageNumber = shiftPageNumber, PageSize = ShiftPageSize });
+        if (response.Success && response.Data is not null)
+        {
+            shiftPage = response.Data;
+        }
+        else
+        {
+            shiftError = response;
+        }
+
+        isShiftsLoading = false;
+    }
+
+    private async Task SelectShiftAsync(ShiftSummaryDto shift)
+    {
+        selectedShift = shift;
+        selectedNote = null;
+        noteDetailError = null;
+        notePage = null;
+        noteError = null;
+        isNotesLoading = true;
+
+        var response = await ShiftsClient.GetVisitNotesAsync(
+            shift.Id,
+            new PagedRequest { PageNumber = 1, PageSize = NotePageSize });
+
+        if (response.Success && response.Data is not null)
+        {
+            notePage = response.Data;
+        }
+        else
+        {
+            noteError = response;
+        }
+
+        isNotesLoading = false;
+    }
+
+    private async Task SelectNoteAsync(Guid noteId)
+    {
+        selectedNote = null;
+        noteDetailError = null;
+        isNoteDetailLoading = true;
+
+        var response = await VisitNotesClient.GetAsync(noteId);
+        if (response.Success && response.Data is not null)
+        {
+            selectedNote = response.Data;
+        }
+        else
+        {
+            noteDetailError = response;
+        }
+
+        isNoteDetailLoading = false;
+    }
+
+    private async Task PreviousShiftPageAsync()
+    {
+        if (!CanGoPrevious(shiftPage))
+        {
+            return;
+        }
+
+        shiftPageNumber--;
+        ClearShiftSelection();
+        await LoadShiftsAsync();
+    }
+
+    private async Task NextShiftPageAsync()
+    {
+        if (!CanGoNext(shiftPage))
+        {
+            return;
+        }
+
+        shiftPageNumber++;
+        ClearShiftSelection();
+        await LoadShiftsAsync();
+    }
+
+    private void ClearShiftSelection()
+    {
+        selectedShift = null;
+        selectedNote = null;
+        notePage = null;
+        noteError = null;
+        noteDetailError = null;
+    }
+
+    private bool MatchesNoteFilter(VisitNoteSummaryDto note) => noteFilter switch
+    {
+        "concerns" => note.HasConcerns,
+        "complete" => !note.HasConcerns,
+        _ => true
+    };
+
+    private static bool CanGoPrevious<T>(PagedResult<T>? page) => page?.HasPreviousPage == true;
+
+    private static bool CanGoNext<T>(PagedResult<T>? page) => page?.HasNextPage == true;
+
+    private static string PagingText<T>(PagedResult<T>? page) =>
+        page is null ? "Page 1" : $"Page {page.PageNumber} of {Math.Max(page.TotalPages, 1)}";
+
+    private static string FormatShiftWindow(ShiftSummaryDto shift)
+    {
+        var start = shift.ScheduledStartTime.ToLocalTime();
+        var end = shift.ScheduledEndTime.ToLocalTime();
+        return $"{start:MMM d, h:mm tt} - {end:h:mm tt}";
+    }
+
+    private static string FormatServiceType(ServiceType? type) => type switch
+    {
+        ServiceType.InHomeCare => "In-home care",
+        ServiceType.FacilityStaffing => "Facility staffing",
+        _ => "Service not set"
+    };
+
+    private static string FormatShiftStatus(ShiftStatus status) => status switch
+    {
+        ShiftStatus.InProgress => "In progress",
+        ShiftStatus.NoShow => "No-show",
+        _ => status.ToString()
+    };
+
+    private static string CaregiverText(ShiftSummaryDto? shift) =>
+        string.IsNullOrWhiteSpace(shift?.CaregiverFullName) ? "Unassigned" : shift.CaregiverFullName;
+
+    private static IReadOnlyList<string> NoteTasks(VisitNoteSummaryDto note)
+    {
+        var tasks = new List<string>();
+        if (note.PersonalCare)
+        {
+            tasks.Add("Personal care");
+        }
+
+        if (note.MealPreparation)
+        {
+            tasks.Add("Meal prep");
+        }
+
+        if (note.Medication)
+        {
+            tasks.Add("Medication");
+        }
+
+        if (note.LightHousekeeping)
+        {
+            tasks.Add("Housekeeping");
+        }
+
+        if (note.Companionship)
+        {
+            tasks.Add("Companionship");
+        }
+
+        if (note.Transportation)
+        {
+            tasks.Add("Transportation");
+        }
+
+        if (note.Exercise)
+        {
+            tasks.Add("Exercise");
+        }
+
+        return tasks;
+    }
+
+    private static IReadOnlyList<string> NoteTasks(VisitNoteDetailDto note)
+    {
+        var tasks = new List<string>();
+        if (note.PersonalCare)
+        {
+            tasks.Add("Personal care");
+        }
+
+        if (note.MealPreparation)
+        {
+            tasks.Add("Meal prep");
+        }
+
+        if (note.Medication)
+        {
+            tasks.Add("Medication");
+        }
+
+        if (note.LightHousekeeping)
+        {
+            tasks.Add("Housekeeping");
+        }
+
+        if (note.Companionship)
+        {
+            tasks.Add("Companionship");
+        }
+
+        if (note.Transportation)
+        {
+            tasks.Add("Transportation");
+        }
+
+        if (note.Exercise)
+        {
+            tasks.Add("Exercise");
+        }
+
+        return tasks;
+    }
+
+    private static string VitalsText(VisitNoteDetailDto note)
+    {
+        var values = new List<string>();
+        if (note.BloodPressureSystolic.HasValue && note.BloodPressureDiastolic.HasValue)
+        {
+            values.Add($"BP {note.BloodPressureSystolic}/{note.BloodPressureDiastolic}");
+        }
+
+        if (note.Temperature.HasValue)
+        {
+            values.Add($"{note.Temperature:0.0} F");
+        }
+
+        if (note.HeartRate.HasValue)
+        {
+            values.Add($"{note.HeartRate} bpm");
+        }
+
+        return values.Count == 0 ? "Not recorded" : string.Join(" · ", values);
+    }
+
+    private static string EmptyWhenMissing(string? value) =>
+        string.IsNullOrWhiteSpace(value) ? "Not recorded." : value;
+}

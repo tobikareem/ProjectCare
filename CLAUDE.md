@@ -1,6 +1,6 @@
 # CLAUDE.md — CarePath Health
 
-CarePath Health is a .NET 9 healthcare management platform for in-home care (W-2 employees) and healthcare staffing (1099 contractors). Clean Architecture: Domain → Application → Infrastructure → WebApi, with a MAUI Blazor Hybrid mobile app and Blazor WebAssembly admin dashboard planned.
+CarePath Health is a .NET 10 healthcare management platform for in-home care (W-2 employees) and healthcare staffing (1099 contractors). Clean Architecture: Domain → Application → Infrastructure → WebApi, with a MAUI Blazor Hybrid mobile app and Blazor WebAssembly admin dashboard planned.
 
 ---
 
@@ -322,8 +322,8 @@ Follow this sequence for every implementation task:
 
 | Layer | Technology |
 |---|---|
-| Runtime | .NET 9, C# 13 |
-| ORM | EF Core 9 + SQL Server |
+| Runtime | .NET 10, C# 14 |
+| ORM | EF Core 10 + SQL Server |
 | Auth | ASP.NET Core Identity + JWT |
 | Real-time | SignalR |
 | Validation | FluentValidation |

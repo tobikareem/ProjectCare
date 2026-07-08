@@ -1,0 +1,352 @@
+@page "/transitions/upload"
+@using CarePath.Client.Api
+@using CarePath.Client.UI.Components
+@using CarePath.Contracts.Clients
+@using CarePath.Contracts.Common
+@using CarePath.Contracts.Enumerations
+@using CarePath.Contracts.Transitions
+@using Microsoft.AspNetCore.Authorization
+@attribute [Authorize(Roles = "Admin,Coordinator")]
+@inject ClientsClient ClientsClient
+@inject TransitionsClient TransitionsClient
+@inject NavigationManager Navigation
+
+<PageTitle>Transition Intake</PageTitle>
+
+<div class="page-heading">
+    <div>
+        <p class="eyebrow">Transitions</p>
+        <h1>Discharge document intake</h1>
+        <p class="subtle">Submit approved discharge text for extraction and clinician review.</p>
+    </div>
+    <button class="button button-secondary" type="button" @onclick="GoToDashboard">Back to dashboard</button>
+</div>
+
+@if (clientsError is not null)
+{
+    <ApiErrorAlert Response="clientsError" />
+}
+
+@if (documentsError is not null)
+{
+    <ApiErrorAlert Response="documentsError" />
+}
+
+@if (submitError is not null)
+{
+    <ApiErrorAlert Response="submitError" />
+}
+
+@if (extractError is not null)
+{
+    <ApiErrorAlert Response="extractError" />
+}
+
+@if (createdDocument is not null)
+{
+    <div class="card transition-success" role="status">
+        <div>
+            <strong>Document intake submitted</strong>
+            <p class="meta">Document @ShortId(createdDocument.Id) is @createdDocument.Status. Raw content was not echoed back to the browser.</p>
+        </div>
+        <StatusBadge Text="@createdDocument.Status.ToString()" Tone="@StatusBadgeTones.For(createdDocument.Status)" />
+    </div>
+}
+
+<div class="transition-workspace">
+    <section class="card" aria-labelledby="intake-heading">
+        <h2 id="intake-heading">1. Select patient and enter discharge text</h2>
+
+        @if (isLoadingClients)
+        {
+            <p class="empty-state compact" role="status">Loading patient list...</p>
+        }
+
+        <div class="form-field-grid">
+            <label class="form-field" for="client-id">
+                Patient
+                <select id="client-id" @bind="selectedClientIdText" disabled="@isSubmitting">
+                    <option value="">Select patient...</option>
+                    @foreach (var client in clients)
+                    {
+                        <option value="@client.Id">@client.FullName</option>
+                    }
+                </select>
+            </label>
+
+            <label class="form-field" for="source-type">
+                Intake source
+                <select id="source-type" @bind="sourceType" disabled="@isSubmitting">
+                    <option value="@DischargeDocumentSourceType.PdfUpload">PDF discharge summary text</option>
+                    <option value="@DischargeDocumentSourceType.PhotoUpload">Photo transcription text</option>
+                    <option value="@DischargeDocumentSourceType.FhirImport">FHIR import text</option>
+                </select>
+            </label>
+
+            <label class="form-field" for="hospital-name">
+                Hospital
+                <input id="hospital-name" @bind="hospitalName" disabled="@isSubmitting" />
+            </label>
+
+            <label class="form-field" for="discharge-date">
+                Discharge date
+                <input id="discharge-date" type="date" @bind="dischargeDate" disabled="@isSubmitting" />
+            </label>
+        </div>
+
+        <label class="form-field transition-textarea-field" for="source-reference">
+            Source reference
+            <input id="source-reference" @bind="sourceReference" disabled="@isSubmitting" />
+        </label>
+
+        <label class="form-field transition-textarea-field" for="raw-content">
+            Discharge text
+            <textarea id="raw-content" class="transition-textarea" @bind="rawContent" disabled="@isSubmitting" aria-describedby="raw-content-help"></textarea>
+            <span id="raw-content-help" class="meta">The API returns document metadata only after intake.</span>
+        </label>
+
+        <div class="button-row transition-action-row">
+            <button class="button button-primary" type="button" disabled="@(!CanSubmit)" @onclick="SubmitDocumentAsync">Submit intake</button>
+            <button class="button button-secondary" type="button" disabled="@isSubmitting" @onclick="ResetForm">Clear form</button>
+        </div>
+    </section>
+
+    <aside class="card" aria-labelledby="status-heading">
+        <h2 id="status-heading">2. Extraction status</h2>
+        @if (createdDocument is null)
+        {
+            <ol class="transition-steps">
+                <li class="transition-step transition-step-active"><strong>Document received</strong><span class="meta">Submit intake to create a discharge document record.</span></li>
+                <li class="transition-step"><strong>Extraction requested</strong><span class="meta">The server creates draft instructions for review.</span></li>
+                <li class="transition-step"><strong>Clinician review</strong><span class="meta">Low-confidence items require human verification.</span></li>
+                <li class="transition-step"><strong>Activation</strong><span class="meta">A clinician e-signs once all instructions are terminal.</span></li>
+            </ol>
+        }
+        else
+        {
+            <ol class="transition-steps">
+                <li class="transition-step transition-step-complete"><strong>Document received</strong><span class="meta">@createdDocument.UploadedAt.ToLocalTime().ToString("g")</span></li>
+                <li class="transition-step @(extractionRequested ? "transition-step-complete" : "transition-step-active")"><strong>Extraction requested</strong><span class="meta">Creates draft plan records server-side.</span></li>
+                <li class="transition-step"><strong>Clinician review</strong><span class="meta">Open the review queue when extraction completes.</span></li>
+                <li class="transition-step"><strong>Activation</strong><span class="meta">Disabled until review is complete.</span></li>
+            </ol>
+            <div class="button-row transition-action-row">
+                <button class="button button-primary" type="button" disabled="@isExtracting" @onclick="RequestExtractionAsync">Request extraction</button>
+                <button class="button button-secondary" type="button" @onclick="GoToReview">Review queue</button>
+            </div>
+        }
+
+        <section class="section-offset" aria-labelledby="recent-documents-heading">
+            <div class="section-header">
+                <h2 id="recent-documents-heading">Recent uploads</h2>
+                <span class="meta">@PagingText(documentsPage)</span>
+            </div>
+            @if (isLoadingDocuments)
+            {
+                <p class="empty-state compact" role="status">Loading recent uploads...</p>
+            }
+            else if (documents.Count == 0)
+            {
+                <p class="empty-state compact">No discharge documents are available.</p>
+            }
+            else
+            {
+                <div class="stacked-list">
+                    @foreach (var document in documents)
+                    {
+                        <div class="credential-row">
+                            <div>
+                                <strong>@document.SourceType</strong>
+                                <span class="meta">@document.UploadedAt.ToLocalTime().ToString("g") - @ShortId(document.Id)</span>
+                            </div>
+                            <StatusBadge Text="@document.Status.ToString()" Tone="@StatusBadgeTones.For(document.Status)" />
+                        </div>
+                    }
+                </div>
+            }
+        </section>
+    </aside>
+</div>
+
+@code {
+    private IReadOnlyList<ClientSummaryDto> clients = [];
+    private PagedResult<DischargeDocumentDto>? documentsPage;
+    private ApiResponse? clientsError;
+    private ApiResponse? documentsError;
+    private ApiResponse? submitError;
+    private ApiResponse? extractError;
+    private DischargeDocumentDto? createdDocument;
+    private bool isLoadingClients = true;
+    private bool isLoadingDocuments = true;
+    private bool isSubmitting;
+    private bool isExtracting;
+    private bool extractionRequested;
+    private string selectedClientIdText = string.Empty;
+    private DischargeDocumentSourceType sourceType = DischargeDocumentSourceType.PdfUpload;
+    private string hospitalName = string.Empty;
+    private string sourceReference = string.Empty;
+    private string rawContent = string.Empty;
+    private DateTime dischargeDate = DateTime.UtcNow.Date;
+
+    private IReadOnlyList<DischargeDocumentDto> documents => documentsPage?.Items ?? [];
+
+    private bool CanSubmit =>
+        !isSubmitting &&
+        Guid.TryParse(selectedClientIdText, out _) &&
+        !string.IsNullOrWhiteSpace(rawContent);
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadClientsAsync();
+        await LoadDocumentsAsync();
+    }
+
+    private async Task LoadClientsAsync()
+    {
+        isLoadingClients = true;
+        clientsError = null;
+
+        try
+        {
+            var response = await ClientsClient.GetPageAsync(new PagedRequest { PageNumber = 1, PageSize = 100 });
+            if (response is { Success: true, Data: not null })
+            {
+                clients = response.Data.Items;
+            }
+            else
+            {
+                clientsError = response;
+            }
+        }
+        catch (HttpRequestException)
+        {
+            clientsError = ApiResponse.Fail(new ApiError("network.unreachable", "The server could not be reached."));
+        }
+
+        isLoadingClients = false;
+    }
+
+    private async Task LoadDocumentsAsync()
+    {
+        isLoadingDocuments = true;
+        documentsError = null;
+
+        try
+        {
+            var response = await TransitionsClient.GetDischargeDocumentsAsync(new PagedRequest { PageNumber = 1, PageSize = 6 });
+            if (response is { Success: true, Data: not null })
+            {
+                documentsPage = response.Data;
+            }
+            else
+            {
+                documentsError = response;
+            }
+        }
+        catch (HttpRequestException)
+        {
+            documentsError = ApiResponse.Fail(new ApiError("network.unreachable", "The server could not be reached."));
+        }
+
+        isLoadingDocuments = false;
+    }
+
+    private async Task SubmitDocumentAsync()
+    {
+        if (!Guid.TryParse(selectedClientIdText, out var clientId))
+        {
+            return;
+        }
+
+        isSubmitting = true;
+        submitError = null;
+        extractError = null;
+
+        try
+        {
+            var response = await TransitionsClient.CreateDischargeDocumentAsync(new CreateDischargeDocumentRequest
+            {
+                ClientId = clientId,
+                SourceType = sourceType,
+                RawContent = rawContent,
+                SourceReference = string.IsNullOrWhiteSpace(sourceReference) ? null : sourceReference,
+                HospitalName = string.IsNullOrWhiteSpace(hospitalName) ? null : hospitalName,
+                DischargeDate = DateTime.SpecifyKind(dischargeDate.Date, DateTimeKind.Utc)
+            });
+
+            if (response is { Success: true, Data: not null })
+            {
+                createdDocument = response.Data;
+                rawContent = string.Empty;
+                extractionRequested = false;
+                await LoadDocumentsAsync();
+            }
+            else
+            {
+                submitError = response;
+            }
+        }
+        catch (HttpRequestException)
+        {
+            submitError = ApiResponse.Fail(new ApiError("network.unreachable", "The request could not be completed."));
+        }
+        finally
+        {
+            isSubmitting = false;
+        }
+    }
+
+    private async Task RequestExtractionAsync()
+    {
+        if (createdDocument is null)
+        {
+            return;
+        }
+
+        isExtracting = true;
+        extractError = null;
+
+        try
+        {
+            var response = await TransitionsClient.RequestExtractionAsync(createdDocument.Id);
+            if (response.Success)
+            {
+                extractionRequested = true;
+                await LoadDocumentsAsync();
+            }
+            else
+            {
+                extractError = response;
+            }
+        }
+        catch (HttpRequestException)
+        {
+            extractError = ApiResponse.Fail(new ApiError("network.unreachable", "The request could not be completed."));
+        }
+        finally
+        {
+            isExtracting = false;
+        }
+    }
+
+    private void ResetForm()
+    {
+        selectedClientIdText = string.Empty;
+        sourceType = DischargeDocumentSourceType.PdfUpload;
+        hospitalName = string.Empty;
+        sourceReference = string.Empty;
+        rawContent = string.Empty;
+        dischargeDate = DateTime.UtcNow.Date;
+        submitError = null;
+        extractError = null;
+    }
+
+    private void GoToDashboard() => Navigation.NavigateTo("/transitions");
+
+    private void GoToReview() => Navigation.NavigateTo("/transitions/review");
+
+    private static string ShortId(Guid id) => id.ToString("N")[..8];
+
+    private static string PagingText<T>(PagedResult<T>? page) =>
+        page is null ? "Page 1" : $"Page {page.PageNumber} of {Math.Max(page.TotalPages, 1)}";
+}

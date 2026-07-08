@@ -11,6 +11,7 @@ using CarePath.Domain.Entities.Transitions;
 using CarePath.Domain.Enumerations;
 using CarePath.Domain.Interfaces.Repositories;
 using FluentValidation;
+using ContractTransitionPlanStatus = CarePath.Contracts.Enumerations.TransitionPlanStatus;
 
 namespace CarePath.Application.Transitions.Services;
 
@@ -121,6 +122,31 @@ public sealed class TransitionsService : ITransitionsService
         return document.ToContentDto();
     }
 
+    public async Task<PagedResult<DischargeDocumentDto>> GetDischargeDocumentsAsync(
+        PagedRequest request,
+        CancellationToken cancellationToken = default)
+    {
+        EnsureCoordinatorOrClinician();
+
+        var (documents, totalCount) = await unitOfWork.DischargeDocuments.GetPagedAsync(
+            request.PageNumber,
+            request.PageSize,
+            cancellationToken);
+
+        foreach (var document in documents)
+        {
+            await AuditAsync(ProtectedResourceType.DischargeDocument, document.Id, AuditAction.Read, cancellationToken);
+        }
+
+        return new PagedResult<DischargeDocumentDto>
+        {
+            Items = documents.Select(document => document.ToDto()).ToArray(),
+            PageNumber = request.PageNumber,
+            PageSize = request.PageSize,
+            TotalCount = totalCount,
+        };
+    }
+
     public async Task<TransitionPlanClinicalDto> ExtractDischargeDocumentAsync(
         Guid documentId,
         CancellationToken cancellationToken = default)
@@ -198,14 +224,20 @@ public sealed class TransitionsService : ITransitionsService
 
     public async Task<PagedResult<TransitionPlanSummaryDto>> GetPlansAsync(
         PagedRequest request,
+        ContractTransitionPlanStatus? status = null,
         CancellationToken cancellationToken = default)
     {
         EnsureCoordinatorOrClinician();
 
-        var (plans, totalCount) = await unitOfWork.TransitionPlans.GetPagedAsync(
-            request.PageNumber,
-            request.PageSize,
-            cancellationToken);
+        var (plans, totalCount) = status.HasValue
+            ? await GetPlansPageByStatusAsync(
+                (TransitionPlanStatus)(int)status.Value,
+                request,
+                cancellationToken)
+            : await unitOfWork.TransitionPlans.GetPagedAsync(
+                request.PageNumber,
+                request.PageSize,
+                cancellationToken);
         var planIds = plans.Select(plan => plan.Id).ToArray();
         var clientIds = plans.Select(plan => plan.ClientId).Distinct().ToArray();
 
@@ -496,6 +528,26 @@ public sealed class TransitionsService : ITransitionsService
         return reminder.ToDto();
     }
 
+    public async Task<IReadOnlyList<TransitionReminderDto>> GetRemindersAsync(
+        Guid planId,
+        CancellationToken cancellationToken = default)
+    {
+        EnsureCoordinatorOrClinician();
+        _ = await GetPlanEntityAsync(planId, cancellationToken);
+        var reminders = await unitOfWork.TransitionReminders.FindAsync(
+            reminder => reminder.TransitionPlanId == planId,
+            cancellationToken);
+        foreach (var reminder in reminders)
+        {
+            await AuditAsync(ProtectedResourceType.TransitionReminder, reminder.Id, AuditAction.Read, cancellationToken);
+        }
+
+        return reminders
+            .OrderBy(reminder => reminder.ScheduledAt)
+            .Select(reminder => reminder.ToDto())
+            .ToArray();
+    }
+
     public async Task<TransitionCheckInDto> CreateCheckInAsync(
         Guid planId,
         CreateCheckInRequest request,
@@ -546,6 +598,26 @@ public sealed class TransitionsService : ITransitionsService
             cancellationToken);
 
         return checkIn.ToDto();
+    }
+
+    public async Task<IReadOnlyList<TransitionCheckInDto>> GetCheckInsAsync(
+        Guid planId,
+        CancellationToken cancellationToken = default)
+    {
+        EnsureCoordinatorOrClinician();
+        _ = await GetPlanEntityAsync(planId, cancellationToken);
+        var checkIns = await unitOfWork.TransitionCheckIns.FindAsync(
+            checkIn => checkIn.TransitionPlanId == planId,
+            cancellationToken);
+        foreach (var checkIn in checkIns)
+        {
+            await AuditAsync(ProtectedResourceType.TransitionCheckIn, checkIn.Id, AuditAction.Read, cancellationToken);
+        }
+
+        return checkIns
+            .OrderByDescending(checkIn => checkIn.CheckInDate)
+            .Select(checkIn => checkIn.ToDto())
+            .ToArray();
     }
 
     public async Task<IReadOnlyList<TransitionEscalationDto>> GetEscalationsAsync(
@@ -620,6 +692,18 @@ public sealed class TransitionsService : ITransitionsService
         return escalation.ToDto();
     }
 
+    private Task<(IReadOnlyList<TransitionPlan> Items, int TotalCount)> GetPlansPageByStatusAsync(
+        TransitionPlanStatus status,
+        PagedRequest request,
+        CancellationToken cancellationToken)
+    {
+        return unitOfWork.TransitionPlans.GetPagedAsync(
+            plan => plan.Status == status,
+            request.PageNumber,
+            request.PageSize,
+            cancellationToken);
+    }
+
     private async Task<DischargeDocument> GetDocumentAsync(Guid documentId, CancellationToken cancellationToken)
     {
         return await unitOfWork.DischargeDocuments.GetByIdAsync(documentId, cancellationToken)
@@ -665,7 +749,7 @@ public sealed class TransitionsService : ITransitionsService
 
     private void EnsureCoordinator()
     {
-        if (!HasRole(ApplicationRoles.Coordinator))
+        if (!HasAnyRole(ApplicationRoles.Admin, ApplicationRoles.Coordinator))
         {
             throw new ResourceAccessDeniedException("RoleInsufficient", isPhiResource: true);
         }
@@ -673,7 +757,7 @@ public sealed class TransitionsService : ITransitionsService
 
     private void EnsureClinician()
     {
-        if (!HasRole(ApplicationRoles.Clinician))
+        if (!HasAnyRole(ApplicationRoles.Admin, ApplicationRoles.Clinician))
         {
             throw new ResourceAccessDeniedException("RoleInsufficient", isPhiResource: true);
         }
@@ -743,11 +827,13 @@ public sealed class TransitionsService : ITransitionsService
 
     private void EnsureCoordinatorOrClinician()
     {
-        if (!HasRole(ApplicationRoles.Coordinator) && !HasRole(ApplicationRoles.Clinician))
+        if (!HasAnyRole(ApplicationRoles.Admin, ApplicationRoles.Coordinator, ApplicationRoles.Clinician))
         {
             throw new ResourceAccessDeniedException("RoleInsufficient", isPhiResource: true);
         }
     }
+
+    private bool HasAnyRole(params string[] roles) => roles.Any(HasRole);
 
     private bool HasRole(string role) => currentUser.Roles.Contains(role);
 

@@ -2,6 +2,7 @@ using CarePath.Application.Abstractions.Auth;
 using CarePath.Application.Common.Exceptions;
 using CarePath.Application.Transitions.Services;
 using CarePath.Contracts.Common;
+using CarePath.Contracts.Enumerations;
 using CarePath.Contracts.Transitions;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -22,7 +23,7 @@ public sealed class TransitionsController : ControllerBase
     }
 
     [HttpPost("documents")]
-    [Authorize(Roles = "Coordinator")]
+    [Authorize(Roles = "Admin,Coordinator")]
     public async Task<ActionResult<DischargeDocumentDto>> CreateDischargeDocument(
         [FromBody] CreateDischargeDocumentRequest request,
         CancellationToken cancellationToken)
@@ -33,7 +34,7 @@ public sealed class TransitionsController : ControllerBase
     }
 
     [HttpGet("documents/{id:guid}")]
-    [Authorize(Roles = "Coordinator,Clinician")]
+    [Authorize(Roles = "Admin,Coordinator,Clinician")]
     public async Task<ActionResult<DischargeDocumentDto>> GetDischargeDocument(Guid id, CancellationToken cancellationToken)
     {
         await EnsureAuthorizedAsync(ProtectedResourceType.DischargeDocument, id, ObjectAccessAction.Read, cancellationToken);
@@ -41,15 +42,22 @@ public sealed class TransitionsController : ControllerBase
     }
 
     [HttpGet("documents/{id:guid}/content")]
-    [Authorize(Roles = "Coordinator,Clinician")]
+    [Authorize(Roles = "Admin,Coordinator,Clinician")]
     public async Task<ActionResult<DischargeDocumentContentDto>> GetDischargeDocumentContent(Guid id, CancellationToken cancellationToken)
     {
         await EnsureAuthorizedAsync(ProtectedResourceType.DischargeDocument, id, ObjectAccessAction.Read, cancellationToken);
         return Ok(await service.GetDischargeDocumentContentAsync(id, cancellationToken));
     }
 
+    [HttpGet("documents")]
+    [Authorize(Roles = "Admin,Coordinator,Clinician")]
+    public async Task<ActionResult<PagedResult<DischargeDocumentDto>>> GetDischargeDocuments(
+        [FromQuery] PagedRequest request,
+        CancellationToken cancellationToken)
+        => Ok(await service.GetDischargeDocumentsAsync(request, cancellationToken));
+
     [HttpPost("documents/{id:guid}/extract")]
-    [Authorize(Roles = "Coordinator")]
+    [Authorize(Roles = "Admin,Coordinator")]
     public async Task<ActionResult<TransitionPlanClinicalDto>> ExtractDischargeDocument(Guid id, CancellationToken cancellationToken)
     {
         await EnsureAuthorizedAsync(ProtectedResourceType.DischargeDocument, id, ObjectAccessAction.Update, cancellationToken);
@@ -58,14 +66,15 @@ public sealed class TransitionsController : ControllerBase
     }
 
     [HttpGet("plans")]
-    [Authorize(Roles = "Coordinator,Clinician")]
+    [Authorize(Roles = "Admin,Coordinator,Clinician")]
     public async Task<ActionResult<PagedResult<TransitionPlanSummaryDto>>> GetPlans(
         [FromQuery] PagedRequest request,
+        [FromQuery] TransitionPlanStatus? status,
         CancellationToken cancellationToken)
-        => Ok(await service.GetPlansAsync(request, cancellationToken));
+        => Ok(await service.GetPlansAsync(request, status, cancellationToken));
 
     [HttpGet("plans/{id:guid}")]
-    [Authorize(Roles = "Coordinator,Clinician")]
+    [Authorize(Roles = "Admin,Coordinator,Clinician")]
     public async Task<ActionResult<TransitionPlanClinicalDto>> GetPlan(Guid id, CancellationToken cancellationToken)
     {
         await EnsureAuthorizedAsync(ProtectedResourceType.TransitionPlan, id, ObjectAccessAction.Read, cancellationToken);
@@ -78,7 +87,7 @@ public sealed class TransitionsController : ControllerBase
         => Ok(await service.GetPatientPlanAsync(id, cancellationToken));
 
     [HttpPut("plans/{id:guid}/instructions/{instructionId:guid}")]
-    [Authorize(Roles = "Clinician")]
+    [Authorize(Roles = "Admin,Clinician")]
     public async Task<ActionResult<TransitionInstructionClinicalDto>> ReviewInstruction(
         Guid id,
         Guid instructionId,
@@ -91,7 +100,7 @@ public sealed class TransitionsController : ControllerBase
     }
 
     [HttpPost("plans/{id:guid}/activate")]
-    [Authorize(Roles = "Clinician")]
+    [Authorize(Roles = "Admin,Clinician")]
     public async Task<ActionResult<TransitionPlanClinicalDto>> ActivatePlan(
         Guid id,
         [FromBody] ActivatePlanRequest request,
@@ -102,7 +111,7 @@ public sealed class TransitionsController : ControllerBase
     }
 
     [HttpPost("plans/{id:guid}/reminders")]
-    [Authorize(Roles = "Coordinator")]
+    [Authorize(Roles = "Admin,Coordinator")]
     public async Task<ActionResult<TransitionReminderDto>> ScheduleReminder(
         Guid id,
         [FromBody] ScheduleReminderRequest request,
@@ -110,6 +119,14 @@ public sealed class TransitionsController : ControllerBase
     {
         await EnsureAuthorizedAsync(ProtectedResourceType.TransitionPlan, id, ObjectAccessAction.Create, cancellationToken);
         return Ok(await service.ScheduleReminderAsync(id, request, cancellationToken));
+    }
+
+    [HttpGet("plans/{id:guid}/reminders")]
+    [Authorize(Roles = "Admin,Coordinator,Clinician")]
+    public async Task<ActionResult<IReadOnlyList<TransitionReminderDto>>> GetReminders(Guid id, CancellationToken cancellationToken)
+    {
+        await EnsureAuthorizedAsync(ProtectedResourceType.TransitionPlan, id, ObjectAccessAction.Read, cancellationToken);
+        return Ok(await service.GetRemindersAsync(id, cancellationToken));
     }
 
     [HttpPost("plans/{id:guid}/check-ins")]
@@ -120,8 +137,16 @@ public sealed class TransitionsController : ControllerBase
         CancellationToken cancellationToken)
         => Ok(await service.CreateCheckInAsync(id, request, cancellationToken));
 
+    [HttpGet("plans/{id:guid}/check-ins")]
+    [Authorize(Roles = "Admin,Coordinator,Clinician")]
+    public async Task<ActionResult<IReadOnlyList<TransitionCheckInDto>>> GetCheckIns(Guid id, CancellationToken cancellationToken)
+    {
+        await EnsureAuthorizedAsync(ProtectedResourceType.TransitionPlan, id, ObjectAccessAction.Read, cancellationToken);
+        return Ok(await service.GetCheckInsAsync(id, cancellationToken));
+    }
+
     [HttpGet("plans/{id:guid}/escalations")]
-    [Authorize(Roles = "Coordinator")]
+    [Authorize(Roles = "Admin,Coordinator")]
     public async Task<ActionResult<IReadOnlyList<TransitionEscalationDto>>> GetEscalations(Guid id, CancellationToken cancellationToken)
     {
         await EnsureAuthorizedAsync(ProtectedResourceType.TransitionPlan, id, ObjectAccessAction.Read, cancellationToken);
@@ -129,7 +154,7 @@ public sealed class TransitionsController : ControllerBase
     }
 
     [HttpGet("escalations")]
-    [Authorize(Roles = "Coordinator")]
+    [Authorize(Roles = "Admin,Coordinator")]
     public async Task<ActionResult<PagedResult<TransitionEscalationDto>>> GetEscalationQueue(
         [FromQuery] PagedRequest request,
         [FromQuery] bool openOnly = true,
@@ -137,7 +162,7 @@ public sealed class TransitionsController : ControllerBase
         => Ok(await service.GetEscalationQueueAsync(request, openOnly, cancellationToken));
 
     [HttpPost("escalations/{id:guid}/acknowledge")]
-    [Authorize(Roles = "Coordinator")]
+    [Authorize(Roles = "Admin,Coordinator")]
     public async Task<ActionResult<TransitionEscalationDto>> AcknowledgeEscalation(
         Guid id,
         [FromBody] AcknowledgeEscalationRequest request,
@@ -148,7 +173,7 @@ public sealed class TransitionsController : ControllerBase
     }
 
     [HttpGet("plans/client/{clientId:guid}")]
-    [Authorize(Roles = "Coordinator,Clinician,Caregiver")]
+    [Authorize(Roles = "Admin,Coordinator,Clinician,Caregiver")]
     public async Task<ActionResult<object>> GetPlanForClient(Guid clientId, CancellationToken cancellationToken)
     {
         await EnsureAuthorizedAsync(ProtectedResourceType.Client, clientId, ObjectAccessAction.Read, cancellationToken);

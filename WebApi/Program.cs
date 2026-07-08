@@ -5,11 +5,13 @@ using CarePath.Infrastructure.Identity;
 using CarePath.Infrastructure.Persistence;
 using CarePath.WebApi.Middleware;
 using CarePath.WebApi.ModelBinding;
+using CarePath.WebApi.OpenApi;
 using CarePath.WebApi.Security;
 using CarePath.WebApi.Serialization;
 using CarePath.WebApi.Validation;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.OpenApi;
 
 const string webClientCorsPolicy = "WebClient";
 
@@ -47,12 +49,52 @@ builder.Services.AddCors(options =>
             .AllowAnyHeader()
             .AllowAnyMethod()));
 
-// Learn more about configuring OpenAPI at https://aka.ms/aspnet/openapi
+builder.Services.AddEndpointsApiExplorer();
+builder.Services.AddSwaggerGen(options =>
+{
+    options.SwaggerDoc("v1", new OpenApiInfo
+    {
+        Title = "CarePath Health API",
+        Version = "v1",
+        Description = "Operational API for CarePath Health."
+    });
+
+    options.AddSecurityDefinition("bearer", new OpenApiSecurityScheme
+    {
+        Type = SecuritySchemeType.Http,
+        Scheme = "bearer",
+        BearerFormat = "JWT",
+        Description = "Paste a JWT access token from /api/auth/login."
+    });
+
+    options.OperationFilter<AuthorizeOperationFilter>();
+});
+
+// Keep the built-in OpenAPI endpoint available for local development tooling.
 builder.Services.AddOpenApi();
 
 var app = builder.Build();
 
 app.UseCarePathProblemDetails();
+
+// The WASM client calls the documented http://localhost:5240 dev endpoint; a 307 to https
+// breaks browser CORS preflights, so HTTPS is only forced outside Development.
+if (!app.Environment.IsDevelopment())
+{
+    app.UseHttpsRedirection();
+}
+
+var swaggerEnabled = app.Environment.IsDevelopment() || app.Configuration.GetValue<bool>("Swagger:Enabled");
+if (swaggerEnabled)
+{
+    app.UseSwagger();
+    app.UseSwaggerUI(options =>
+    {
+        options.SwaggerEndpoint("/swagger/v1/swagger.json", "CarePath Health API v1");
+        options.DocumentTitle = "CarePath Health API";
+        options.RoutePrefix = "swagger";
+    });
+}
 
 // Configure the HTTP request pipeline.
 if (app.Environment.IsDevelopment())
@@ -66,13 +108,6 @@ if (app.Environment.IsDevelopment())
 
     await context.Database.MigrateAsync();
     await CarePathDbContextSeed.SeedAsync(context, userManager, roleManager, builder.Configuration, app.Environment);
-}
-
-// The WASM client calls the documented http://localhost:5240 dev endpoint; a 307 to https
-// breaks browser CORS preflights, so HTTPS is only forced outside Development.
-if (!app.Environment.IsDevelopment())
-{
-    app.UseHttpsRedirection();
 }
 
 app.UseCors(webClientCorsPolicy);

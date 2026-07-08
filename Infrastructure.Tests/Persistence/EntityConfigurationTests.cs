@@ -243,7 +243,7 @@ public class EntityConfigurationTests
 
         foreach (var entityType in entityTypes)
         {
-            _model.FindEntityType(entityType)!.GetQueryFilter().Should().NotBeNull(entityType.Name);
+            _model.FindEntityType(entityType)!.GetDeclaredQueryFilters().Should().NotBeEmpty(entityType.Name);
         }
     }
 
@@ -253,9 +253,9 @@ public class EntityConfigurationTests
     {
         // Assert
         _model.FindEntityType(typeof(ApplicationUser))!
-            .GetQueryFilter()
+            .GetDeclaredQueryFilters()
             .Should()
-            .NotBeNull();
+            .NotBeEmpty();
     }
 
     [Fact]

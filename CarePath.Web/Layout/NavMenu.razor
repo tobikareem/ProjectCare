@@ -9,20 +9,20 @@
 <p class="nav-label">Workspace</p>
 <nav class="side-nav" aria-label="Workspace navigation">
     <NavLink href="" Match="NavLinkMatch.All">
-        <span aria-hidden="true">⌂</span><span>Overview</span>
+        <span aria-hidden="true">&#x2302;</span><span>Overview</span>
     </NavLink>
     <NavLink href="schedule">
-        <span aria-hidden="true">▦</span><span>Schedule</span>
+        <span aria-hidden="true">&#x25A6;</span><span>Schedule</span>
         <span class="nav-count" aria-label="7 open shifts">7</span>
     </NavLink>
     <NavLink href="caregivers">
-        <span aria-hidden="true">♙</span><span>Caregivers</span>
+        <span aria-hidden="true">&#x2659;</span><span>Caregivers</span>
     </NavLink>
     <NavLink href="clients">
-        <span aria-hidden="true">♡</span><span>Clients</span>
+        <span aria-hidden="true">&#x2661;</span><span>Clients</span>
     </NavLink>
     <NavLink href="visit-notes">
-        <span aria-hidden="true">▤</span><span>Visit notes</span>
+        <span aria-hidden="true">&#x25A4;</span><span>Visit notes</span>
         <span class="nav-count" aria-label="3 pending notes">3</span>
     </NavLink>
 </nav>
@@ -33,10 +33,10 @@
         <span aria-hidden="true">$</span><span>Billing</span>
     </NavLink>
     <NavLink href="analytics">
-        <span aria-hidden="true">↗</span><span>Analytics</span>
+        <span aria-hidden="true">&#x2197;</span><span>Analytics</span>
     </NavLink>
     <NavLink href="compliance">
-        <span aria-hidden="true">✓</span><span>Compliance</span>
+        <span aria-hidden="true">&#x2713;</span><span>Compliance</span>
         <span class="nav-count" aria-label="4 compliance alerts">4</span>
     </NavLink>
 </nav>
@@ -52,20 +52,30 @@
     </Authorized>
 </AuthorizeView>
 
-<p class="nav-label">Transitions</p>
-<nav class="side-nav" aria-label="Transitions navigation">
-    <NavLink href="transitions">
-        <span aria-hidden="true">↻</span><span>Dashboard</span>
-        <span class="nav-count" aria-label="2 escalations">2</span>
-    </NavLink>
-    <NavLink href="transitions/upload">
-        <span aria-hidden="true">↑</span><span>Upload doc</span>
-    </NavLink>
-    <NavLink href="transitions/review">
-        <span aria-hidden="true">◇</span><span>Review queue</span>
-        <span class="nav-count" aria-label="1 awaiting review">1</span>
-    </NavLink>
-    <NavLink href="transitions/patient-plan">
-        <span aria-hidden="true">♡</span><span>Patient plan</span>
-    </NavLink>
-</nav>
+<AuthorizeView Roles="Admin,Coordinator,Clinician">
+    <Authorized Context="transitionsContext">
+        <p class="nav-label">Transitions</p>
+        <nav class="side-nav" aria-label="Transitions navigation">
+            <NavLink href="transitions">
+                <span aria-hidden="true">&#x21BB;</span><span>Dashboard</span>
+            </NavLink>
+            <AuthorizeView Roles="Admin,Coordinator">
+                <Authorized Context="coordinatorContext">
+                    <NavLink href="transitions/upload">
+                        <span aria-hidden="true">&#x2191;</span><span>Upload doc</span>
+                    </NavLink>
+                    <NavLink href="transitions/escalations">
+                        <span aria-hidden="true">!</span><span>Escalations</span>
+                    </NavLink>
+                </Authorized>
+            </AuthorizeView>
+            <AuthorizeView Roles="Admin,Clinician">
+                <Authorized Context="clinicianContext">
+                    <NavLink href="transitions/review">
+                        <span aria-hidden="true">&#x25C7;</span><span>Review queue</span>
+                    </NavLink>
+                </Authorized>
+            </AuthorizeView>
+        </nav>
+    </Authorized>
+</AuthorizeView>

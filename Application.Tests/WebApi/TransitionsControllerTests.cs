@@ -20,6 +20,8 @@ public sealed class TransitionsControllerTests
     [InlineData(nameof(TransitionsController.ReviewInstruction), ProtectedResourceType.TransitionPlan)]
     [InlineData(nameof(TransitionsController.ActivatePlan), ProtectedResourceType.TransitionPlan)]
     [InlineData(nameof(TransitionsController.ScheduleReminder), ProtectedResourceType.TransitionPlan)]
+    [InlineData(nameof(TransitionsController.GetReminders), ProtectedResourceType.TransitionPlan)]
+    [InlineData(nameof(TransitionsController.GetCheckIns), ProtectedResourceType.TransitionPlan)]
     [InlineData(nameof(TransitionsController.GetEscalations), ProtectedResourceType.TransitionPlan)]
     [InlineData(nameof(TransitionsController.AcknowledgeEscalation), ProtectedResourceType.TransitionEscalation)]
     [InlineData(nameof(TransitionsController.GetPlanForClient), ProtectedResourceType.Client)]
@@ -49,6 +51,8 @@ public sealed class TransitionsControllerTests
             nameof(TransitionsController.ReviewInstruction) => async () => await controller.ReviewInstruction(id, Guid.NewGuid(), new ReviewInstructionRequest(), CancellationToken.None),
             nameof(TransitionsController.ActivatePlan) => async () => await controller.ActivatePlan(id, new ActivatePlanRequest { ConfirmESignature = true }, CancellationToken.None),
             nameof(TransitionsController.ScheduleReminder) => async () => await controller.ScheduleReminder(id, new ScheduleReminderRequest(), CancellationToken.None),
+            nameof(TransitionsController.GetReminders) => async () => await controller.GetReminders(id, CancellationToken.None),
+            nameof(TransitionsController.GetCheckIns) => async () => await controller.GetCheckIns(id, CancellationToken.None),
             nameof(TransitionsController.GetEscalations) => async () => await controller.GetEscalations(id, CancellationToken.None),
             nameof(TransitionsController.AcknowledgeEscalation) => async () => await controller.AcknowledgeEscalation(id, new AcknowledgeEscalationRequest { ResolutionNote = "Reviewed.", EscalationLevel = CarePath.Contracts.Enumerations.EscalationLevel.CoordinatorAlert }, CancellationToken.None),
             nameof(TransitionsController.GetPlanForClient) => async () => await controller.GetPlanForClient(id, CancellationToken.None),
@@ -107,6 +111,67 @@ public sealed class TransitionsControllerTests
         ok.Value.Should().BeSameAs(expected);
         idorGuard.VerifyNoOtherCalls();
         service.Verify(transitions => transitions.GetEscalationQueueAsync(request, true, It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task GetDischargeDocuments_UsesServicePagingWithoutGenericIdorGuard()
+    {
+        // Arrange
+        var request = new PagedRequest { PageNumber = 1, PageSize = 10 };
+        var expected = new PagedResult<DischargeDocumentDto>
+        {
+            Items = new[] { new DischargeDocumentDto { Id = Guid.NewGuid(), ClientId = Guid.NewGuid() } },
+            PageNumber = 1,
+            PageSize = 10,
+            TotalCount = 1,
+        };
+        var service = new Mock<ITransitionsService>(MockBehavior.Strict);
+        service.Setup(transitions => transitions.GetDischargeDocumentsAsync(request, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(expected);
+        var idorGuard = new Mock<IIdorGuard>(MockBehavior.Strict);
+        var controller = new TransitionsController(service.Object, idorGuard.Object);
+
+        // Act
+        var response = await controller.GetDischargeDocuments(request, CancellationToken.None);
+
+        // Assert
+        var ok = response.Result.Should().BeOfType<OkObjectResult>().Subject;
+        ok.Value.Should().BeSameAs(expected);
+        idorGuard.VerifyNoOtherCalls();
+        service.Verify(transitions => transitions.GetDischargeDocumentsAsync(request, It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task GetPlans_PassesStatusFilterThroughToService()
+    {
+        // Arrange
+        var request = new PagedRequest { PageNumber = 1, PageSize = 10 };
+        var expected = new PagedResult<TransitionPlanSummaryDto>
+        {
+            Items = Array.Empty<TransitionPlanSummaryDto>(),
+            PageNumber = 1,
+            PageSize = 10,
+            TotalCount = 0,
+        };
+        var service = new Mock<ITransitionsService>(MockBehavior.Strict);
+        service.Setup(transitions => transitions.GetPlansAsync(
+                request,
+                CarePath.Contracts.Enumerations.TransitionPlanStatus.PendingVerification,
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(expected);
+        var idorGuard = new Mock<IIdorGuard>(MockBehavior.Strict);
+        var controller = new TransitionsController(service.Object, idorGuard.Object);
+
+        // Act
+        var response = await controller.GetPlans(
+            request,
+            CarePath.Contracts.Enumerations.TransitionPlanStatus.PendingVerification,
+            CancellationToken.None);
+
+        // Assert
+        var ok = response.Result.Should().BeOfType<OkObjectResult>().Subject;
+        ok.Value.Should().BeSameAs(expected);
+        idorGuard.VerifyNoOtherCalls();
     }
 
     [Fact]

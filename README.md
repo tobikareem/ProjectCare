@@ -1,6 +1,6 @@
 # CarePath Health
 
-A .NET 9 healthcare management platform for **in-home care** (W-2 employees) and **healthcare staffing** (1099 contractors), built for the Maryland healthcare market.
+A .NET 10 healthcare management platform for **in-home care** (W-2 employees) and **healthcare staffing** (1099 contractors), built for the Maryland healthcare market.
 
 CarePath Health streamlines caregiver scheduling, GPS-verified visit tracking, real-time billing, and margin analytics — all under a single platform designed with HIPAA compliance in mind.
 
@@ -35,7 +35,7 @@ Domain  ←  Application  ←  Infrastructure  ←  WebApi
 
 ### Prerequisites
 
-- [.NET 9 SDK](https://dotnet.microsoft.com/download/dotnet/9.0)
+- [.NET 10 SDK](https://dotnet.microsoft.com/download/dotnet/10.0)
 - SQL Server (local or remote)
 - Visual Studio 2022+ or VS Code with the C# extension
 

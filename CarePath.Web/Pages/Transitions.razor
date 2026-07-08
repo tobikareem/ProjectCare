@@ -1,0 +1,272 @@
+@page "/transitions"
+@using CarePath.Client.Api
+@using CarePath.Client.UI.Components
+@using CarePath.Contracts.Common
+@using CarePath.Contracts.Enumerations
+@using CarePath.Contracts.Transitions
+@using Microsoft.AspNetCore.Authorization
+@attribute [Authorize(Roles = "Admin,Coordinator,Clinician")]
+@inject TransitionsClient TransitionsClient
+@inject NavigationManager Navigation
+
+<PageTitle>Transitions</PageTitle>
+
+<div class="page-heading">
+    <div>
+        <p class="eyebrow">Transitions</p>
+        <h1>30-Day Care Dashboard</h1>
+        <p class="subtle">@DashboardSummary</p>
+    </div>
+    <AuthorizeView Roles="Admin,Coordinator">
+        <Authorized>
+            <div class="button-row">
+                <button class="button button-secondary" type="button" @onclick="GoToEscalations">Escalation queue</button>
+                <button class="button button-primary" type="button" @onclick="GoToUpload">+ Intake document</button>
+            </div>
+        </Authorized>
+    </AuthorizeView>
+</div>
+
+<section class="metric-grid" aria-label="Transitions key metrics">
+    <article class="card metric-card">
+        <span class="metric-label">Active plans</span>
+        <div class="metric-value">@ActivePlanCount</div>
+        <span class="trend">Loaded from transition plans API</span>
+    </article>
+    <article class="card metric-card">
+        <span class="metric-label">High-risk patients</span>
+        <div class="metric-value metric-value-red">@HighRiskCount</div>
+        <span class="trend trend-red">Daily attention needed</span>
+    </article>
+    <article class="card metric-card">
+        <span class="metric-label">Pending instructions</span>
+        <div class="metric-value metric-value-amber">@PendingInstructionCount</div>
+        <span class="trend trend-amber">Clinician review</span>
+    </article>
+    <article class="card metric-card">
+        <span class="metric-label">Open escalations</span>
+        <div class="metric-value metric-value-red">@OpenEscalationCount</div>
+        <span class="trend trend-red">Coordinator action</span>
+    </article>
+</section>
+
+@if (plansError is not null)
+{
+    <ApiErrorAlert Response="plansError" />
+}
+
+<div class="dashboard-grid">
+    <section class="card table-card" aria-labelledby="active-plans-heading">
+        <div class="section-header">
+            <div>
+                <h2 id="active-plans-heading">Transition plans</h2>
+                <span class="subtle">Sorted by server response and paged for dashboard use.</span>
+            </div>
+            <span class="meta">@PagingText(plansPage)</span>
+        </div>
+
+        @if (isLoading)
+        {
+            <p class="empty-state" role="status">Loading transition plans...</p>
+        }
+        else if (plans.Count == 0)
+        {
+            <p class="empty-state">No transition plans are available for your role.</p>
+        }
+        else
+        {
+            <div class="data-table-wrap">
+                <table class="data-table" aria-label="Transition plans">
+                    <thead>
+                        <tr>
+                            <th>Patient</th>
+                            <th>Hospital</th>
+                            <th>Discharge</th>
+                            <th>Risk</th>
+                            <th>Days left</th>
+                            <th>Review</th>
+                            <th>Escalations</th>
+                            <th>Status</th>
+                            <th></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var plan in plans)
+                        {
+                            <tr>
+                                <td><span class="avatar-sm" aria-hidden="true">@Initials(plan.ClientFullName)</span><strong>@plan.ClientFullName</strong></td>
+                                <td>@DisplayValue(plan.HospitalName)</td>
+                                <td>@plan.DischargeDate.ToLocalTime().ToString("MMM d")</td>
+                                <td><StatusBadge Text="@plan.RiskLevel.ToString()" Tone="@StatusBadgeTones.For(plan.RiskLevel)" /></td>
+                                <td><strong>@plan.DaysRemaining</strong></td>
+                                <td>@plan.PendingInstructionCount pending</td>
+                                <td>@plan.OpenEscalationCount open</td>
+                                <td><StatusBadge Text="@StatusText(plan.Status)" Tone="@StatusBadgeTones.For(plan.Status)" /></td>
+                                <td><button class="text-link" type="button" @onclick="() => GoToPlan(plan.Id)">View</button></td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+
+        <div class="pager-row" aria-label="Transition plan pages">
+            <button class="button button-secondary button-sm" type="button" disabled="@(!CanGoPrevious(plansPage) || isLoading)" @onclick="PreviousPageAsync">Previous</button>
+            <span class="meta">@PagingText(plansPage)</span>
+            <button class="button button-secondary button-sm" type="button" disabled="@(!CanGoNext(plansPage) || isLoading)" @onclick="NextPageAsync">Next</button>
+        </div>
+    </section>
+
+    <aside>
+        <section class="card transition-panel" aria-labelledby="open-escalations-heading">
+            <div class="section-header">
+                <h2 id="open-escalations-heading">Open escalations</h2>
+                <StatusBadge Text="@OpenEscalationCount.ToString()" Tone="@(OpenEscalationCount > 0 ? BadgeTone.Danger : BadgeTone.Success)" />
+            </div>
+            @if (OpenEscalationCount == 0)
+            {
+                <p class="empty-state compact">No open escalations on this page.</p>
+            }
+            else
+            {
+                <ul class="alert-list">
+                    @foreach (var plan in plans.Where(p => p.OpenEscalationCount > 0).Take(3))
+                    {
+                        <li class="alert-item">
+                            <strong>@plan.ClientFullName</strong>
+                            <p>@plan.OpenEscalationCount open escalation(s). Review coordinator queue.</p>
+                            <button class="text-link transition-link-action" type="button" @onclick="GoToEscalations">Open queue</button>
+                        </li>
+                    }
+                </ul>
+            }
+        </section>
+
+        <section class="card section-offset transition-panel" aria-labelledby="review-queue-heading">
+            <div class="section-header">
+                <h2 id="review-queue-heading">Review queue</h2>
+                <StatusBadge Text="@PendingReviewCount.ToString()" Tone="@(PendingReviewCount > 0 ? BadgeTone.Warning : BadgeTone.Success)" />
+            </div>
+            @if (PendingReviewCount == 0)
+            {
+                <p class="empty-state compact">No plans on this page are awaiting clinician review.</p>
+            }
+            else
+            {
+                @foreach (var plan in plans.Where(p => p.Status == TransitionPlanStatus.PendingVerification).Take(3))
+                {
+                    <div class="transition-summary-row">
+                        <strong>@plan.ClientFullName</strong>
+                        <span class="meta">@plan.PendingInstructionCount pending instructions</span>
+                        <button class="text-link transition-link-action" type="button" @onclick="() => GoToReview(plan.Id)">Review now</button>
+                    </div>
+                }
+            }
+        </section>
+    </aside>
+</div>
+
+@code {
+    private const int PageSize = 10;
+
+    private PagedResult<TransitionPlanSummaryDto>? plansPage;
+    private ApiResponse? plansError;
+    private bool isLoading = true;
+    private int pageNumber = 1;
+
+    private IReadOnlyList<TransitionPlanSummaryDto> plans => plansPage?.Items ?? [];
+
+    private string DashboardSummary => plansPage is null
+        ? "Post-discharge monitoring loading..."
+        : $"{plansPage.TotalCount} total plans visible to your role";
+
+    private int ActivePlanCount => plans.Count(plan => plan.Status == TransitionPlanStatus.Active);
+
+    private int HighRiskCount => plans.Count(plan => plan.RiskLevel == TransitionRiskLevel.High);
+
+    private int PendingInstructionCount => plans.Sum(plan => plan.PendingInstructionCount);
+
+    private int OpenEscalationCount => plans.Sum(plan => plan.OpenEscalationCount);
+
+    private int PendingReviewCount => plans.Count(plan => plan.Status == TransitionPlanStatus.PendingVerification);
+
+    protected override async Task OnInitializedAsync() => await LoadPlansAsync();
+
+    private async Task LoadPlansAsync()
+    {
+        isLoading = true;
+        plansError = null;
+
+        try
+        {
+            var response = await TransitionsClient.GetPlansAsync(new PagedRequest { PageNumber = pageNumber, PageSize = PageSize });
+            if (response is { Success: true, Data: not null })
+            {
+                plansPage = response.Data;
+            }
+            else
+            {
+                plansError = response;
+            }
+        }
+        catch (HttpRequestException)
+        {
+            plansError = ApiResponse.Fail(new ApiError("network.unreachable", "The server could not be reached."));
+        }
+
+        isLoading = false;
+    }
+
+    private async Task PreviousPageAsync()
+    {
+        if (!CanGoPrevious(plansPage))
+        {
+            return;
+        }
+
+        pageNumber--;
+        await LoadPlansAsync();
+    }
+
+    private async Task NextPageAsync()
+    {
+        if (!CanGoNext(plansPage))
+        {
+            return;
+        }
+
+        pageNumber++;
+        await LoadPlansAsync();
+    }
+
+    private void GoToUpload() => Navigation.NavigateTo("/transitions/upload");
+
+    private void GoToEscalations() => Navigation.NavigateTo("/transitions/escalations");
+
+    private void GoToReview(Guid planId) => Navigation.NavigateTo($"/transitions/review/{planId}");
+
+    private void GoToPlan(Guid planId) => Navigation.NavigateTo($"/transitions/{planId}");
+
+    private static bool CanGoPrevious<T>(PagedResult<T>? page) => page?.HasPreviousPage == true;
+
+    private static bool CanGoNext<T>(PagedResult<T>? page) => page?.HasNextPage == true;
+
+    private static string PagingText<T>(PagedResult<T>? page) =>
+        page is null ? "Page 1" : $"Page {page.PageNumber} of {Math.Max(page.TotalPages, 1)}";
+
+    private static string Initials(string fullName)
+    {
+        var parts = fullName.Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        return parts.Length == 0
+            ? "?"
+            : string.Concat(parts.Take(2).Select(part => char.ToUpperInvariant(part[0])));
+    }
+
+    private static string DisplayValue(string? value) => string.IsNullOrWhiteSpace(value) ? "Not recorded" : value;
+
+    private static string StatusText(TransitionPlanStatus status) => status switch
+    {
+        TransitionPlanStatus.PendingVerification => "Pending verification",
+        _ => status.ToString()
+    };
+}

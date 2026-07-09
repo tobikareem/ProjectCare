@@ -2,6 +2,7 @@
 @using CarePath.Client.Api
 @using CarePath.Client.UI.Components
 @using CarePath.Contracts.Common
+@using CarePath.Contracts.Enumerations
 @using CarePath.Contracts.Scheduling
 @using Microsoft.AspNetCore.Authorization
 @attribute [Authorize(Roles = "Admin,Coordinator")]
@@ -12,40 +13,156 @@
 
 <div class="page-heading">
     <div>
-        <p class="eyebrow">Coverage</p>
+        <p class="eyebrow">@WeekHeading</p>
         <h1>Schedule</h1>
-        <p class="subtle">Weekly board and open shift coverage queue.</p>
+        <p class="subtle">@BoardSummaryText</p>
     </div>
-    <div class="button-row">
-        <button class="button button-secondary" type="button">List view</button>
-        <button class="button button-primary" type="button">+ New shift</button>
+    <div class="schedule-actions">
+        <div class="week-controls" aria-label="Schedule week navigation">
+            <button class="button button-secondary button-sm" type="button" aria-label="Previous week" @onclick="PreviousWeek">&lt;</button>
+            <button class="button button-secondary button-sm" type="button" @onclick="Today">Today</button>
+            <button class="button button-secondary button-sm" type="button" aria-label="Next week" @onclick="NextWeek">&gt;</button>
+        </div>
+        <button class="button button-secondary" type="button" aria-pressed="@isListView" @onclick="ToggleScheduleView">
+            @(isListView ? "Calendar view" : "List view")
+        </button>
+        <button class="button button-primary" type="button" @onclick="NavigateToCreateShift">+ New shift</button>
     </div>
 </div>
 
-<div class="card calendar-card">
-    <div class="cal-header">
-        <span></span>
-        <span>Mon</span><span>Tue</span><span>Wed</span>
-        <span>Thu</span><span>Fri</span><span>Sat</span><span>Sun</span>
+@if (scheduleError is not null)
+{
+    <ApiErrorAlert Response="scheduleError" />
+}
+
+@if (isBoardLoading)
+{
+    <div class="card calendar-card schedule-loading-card">
+        <p class="empty-state">Loading weekly schedule...</p>
     </div>
-    <div class="cal-grid">
-        @foreach (var hour in CalendarHours)
-        {
-            <div class="cal-time">@hour.Label</div>
-            @foreach (var day in Enumerable.Range(0, 7))
+}
+else
+{
+    @if (hiddenShiftCount > 0)
+    {
+        <p class="meta schedule-board-note">+@hiddenShiftCount more shifts match this week but are not loaded into the board.</p>
+    }
+
+    @if (isListView)
+    {
+        <section class="card table-card schedule-list-card" aria-labelledby="schedule-list-heading">
+            <div class="section-header">
+                <div>
+                    <h2 id="schedule-list-heading">Weekly shifts</h2>
+                    <span class="subtle">All assigned and open shifts for the visible week.</span>
+                </div>
+            </div>
+
+            @if (!BoardShifts.Any())
             {
-                <div class="cal-cell">
-                    @foreach (var shift in ShiftsForCell(hour.Hour, day))
-                    {
-                        <button class="shift-block @ShiftBlockClass(shift)" type="button" @onclick="() => NavigateToAssign(shift.Id)">
-                            @ShiftLabel(shift)
-                        </button>
-                    }
+                <p class="empty-state">No shifts are scheduled for this week.</p>
+            }
+            else
+            {
+                <div class="data-table-wrap schedule-list-wrap">
+                    <table class="data-table">
+                        <thead>
+                            <tr>
+                                <th>Shift</th>
+                                <th>When</th>
+                                <th>Caregiver</th>
+                                <th>Service</th>
+                                <th>Status</th>
+                                <th></th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var shift in BoardShifts.OrderBy(shift => shift.ScheduledStartTime))
+                            {
+                                <tr>
+                                    <td><strong>@shift.ClientFullName</strong><span class="meta">@FormatDuration(shift)</span></td>
+                                    <td>@FormatTimeRange(shift)</td>
+                                    <td>@DetailCaregiver(shift)</td>
+                                    <td>@FormatServiceType(shift.ServiceType)</td>
+                                    <td><StatusBadge Text="@FormatStatus(shift.Status)" Tone="@StatusBadgeTones.For(shift.Status)" /></td>
+                                    <td><button class="text-link" type="button" @onclick="() => NavigateToAssign(shift.Id)">Open</button></td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
                 </div>
             }
-        }
-    </div>
-</div>
+        </section>
+    }
+    else
+    {
+        <div class="calendar-frame" aria-label="Scrollable weekly shift board">
+            <div class="schedule-calendar-card">
+                <div class="cal-header schedule-calendar-grid">
+                    <span></span>
+                    @foreach (var day in WeekDays)
+                    {
+                        <span>@day.ToString("ddd d")</span>
+                    }
+                </div>
+                <div class="cal-grid schedule-calendar-grid">
+                    @foreach (var hour in CalendarHours)
+                    {
+                        <div class="cal-time">@FormatHour(hour)</div>
+                        @foreach (var dayOffset in Enumerable.Range(0, 7))
+                        {
+                            <div class="cal-cell schedule-cal-cell" data-day-index="@dayOffset" data-hour="@hour" aria-label="@CellLabel(dayOffset, hour)">
+                                @foreach (var shift in ShiftsForCell(hour, dayOffset))
+                                {
+                                    <button class="shift-block schedule-shift-block @ShiftBlockClass(shift)"
+                                            type="button"
+                                            aria-describedby="@(activeDetailShiftId == shift.Id ? DetailCardId(shift) : null)"
+                                            @onmouseenter="() => ShowShiftDetail(shift.Id)"
+                                            @onmouseleave="HideShiftDetail"
+                                            @onfocus="() => ShowShiftDetail(shift.Id)"
+                                            @onblur="HideShiftDetail"
+                                            @onkeydown="HandleShiftKeyDown"
+                                            @onclick="() => NavigateToAssign(shift.Id)">
+                                        @ShiftLabel(shift)
+                                    </button>
+                                }
+                            </div>
+                        }
+                    }
+                </div>
+            </div>
+        </div>
+    }
+
+    @if (ActiveDetailShift is not null)
+    {
+        var activeShift = ActiveDetailShift;
+        <section id="@DetailCardId(activeShift)" class="card shift-detail-card" role="tooltip" aria-live="polite">
+            <div>
+                <strong>@activeShift.ClientFullName</strong>
+                <span class="meta">@DetailCaregiver(activeShift)</span>
+            </div>
+            <dl class="shift-detail-grid">
+                <div>
+                    <dt>Time</dt>
+                    <dd>@FormatTimeRange(activeShift)</dd>
+                </div>
+                <div>
+                    <dt>Duration</dt>
+                    <dd>@FormatDuration(activeShift)</dd>
+                </div>
+                <div>
+                    <dt>Service</dt>
+                    <dd>@FormatServiceType(activeShift.ServiceType)</dd>
+                </div>
+                <div>
+                    <dt>Status</dt>
+                    <dd><StatusBadge Text="@FormatStatus(activeShift.Status)" Tone="@StatusBadgeTones.For(activeShift.Status)" /></dd>
+                </div>
+            </dl>
+        </section>
+    }
+}
 
 <div class="schedule-legend">
     <span><span class="legend-swatch legend-inhome"></span>In-home care</span>
@@ -53,9 +170,9 @@
     <span><span class="legend-swatch legend-open"></span>Open / unassigned</span>
 </div>
 
-@if (error is not null)
+@if (coverageError is not null)
 {
-    <ApiErrorAlert Response="error" />
+    <ApiErrorAlert Response="coverageError" />
 }
 
 <section class="card table-card section-offset" aria-labelledby="coverage-queue-heading">
@@ -66,7 +183,7 @@
         </div>
     </div>
 
-    @if (isLoading)
+    @if (isCoverageLoading)
     {
         <p class="empty-state">Loading open shifts...</p>
     }
@@ -105,18 +222,44 @@
 </section>
 
 @code {
-    private static readonly (int Hour, string Label)[] CalendarHours =
-    [
-        (8, "8 AM"),
-        (10, "10 AM"),
-        (13, "1 PM"),
-        (18, "6 PM"),
-    ];
+    private const int BoardPageSize = 100;
+    private const int FirstCalendarHour = 6;
+    private const int LastCalendarHour = 22;
 
+    private static readonly int[] CalendarHours = Enumerable.Range(FirstCalendarHour, LastCalendarHour - FirstCalendarHour + 1).ToArray();
+
+    private DateTime visibleWeekStartLocal = StartOfWeek(DateTime.UtcNow.ToLocalTime());
     private IReadOnlyList<OpenShiftCoverageDto> coverageQueue = [];
     private IReadOnlyList<ShiftSummaryDto> scheduleShifts = [];
-    private ApiResponse? error;
-    private bool isLoading;
+    private ApiResponse? scheduleError;
+    private ApiResponse? coverageError;
+    private bool isBoardLoading;
+    private bool isCoverageLoading;
+    private bool isListView;
+    private int hiddenShiftCount;
+    private Guid? activeDetailShiftId;
+
+    private string WeekHeading => $"Week of {visibleWeekStartLocal:MMM d, yyyy}";
+
+    private string BoardSummaryText
+    {
+        get
+        {
+            var shifts = BoardShifts.ToArray();
+            var openCount = shifts.Count(shift => !shift.CaregiverId.HasValue);
+            return $"Weekly view - {shifts.Length} shifts - {openCount} open";
+        }
+    }
+
+    private IEnumerable<DateTime> WeekDays => Enumerable.Range(0, 7).Select(day => visibleWeekStartLocal.AddDays(day));
+
+    private IEnumerable<ShiftSummaryDto> BoardShifts => scheduleShifts
+        .Where(shift => shift.Status != ShiftStatus.Cancelled)
+        .Where(IsInVisibleWeek);
+
+    private ShiftSummaryDto? ActiveDetailShift => activeDetailShiftId.HasValue
+        ? BoardShifts.FirstOrDefault(shift => shift.Id == activeDetailShiftId.Value)
+        : null;
 
     protected override async Task OnInitializedAsync()
     {
@@ -124,19 +267,62 @@
         await LoadCoverageQueueAsync();
     }
 
+    private async Task PreviousWeek()
+    {
+        visibleWeekStartLocal = visibleWeekStartLocal.AddDays(-7);
+        await LoadScheduleAsync();
+    }
+
+    private async Task Today()
+    {
+        visibleWeekStartLocal = StartOfWeek(DateTime.UtcNow.ToLocalTime());
+        await LoadScheduleAsync();
+    }
+
+    private async Task NextWeek()
+    {
+        visibleWeekStartLocal = visibleWeekStartLocal.AddDays(7);
+        await LoadScheduleAsync();
+    }
+
+    private void ToggleScheduleView()
+    {
+        isListView = !isListView;
+        activeDetailShiftId = null;
+    }
+
     private async Task LoadScheduleAsync()
     {
-        var response = await ShiftsClient.GetPageAsync(new PagedRequest { PageNumber = 1, PageSize = 50 });
+        isBoardLoading = true;
+        scheduleError = null;
+        activeDetailShiftId = null;
+        hiddenShiftCount = 0;
+
+        var fromUtc = LocalToUtc(visibleWeekStartLocal);
+        var toUtc = LocalToUtc(visibleWeekStartLocal.AddDays(7));
+        var response = await ShiftsClient.GetPageAsync(
+            new PagedRequest { PageNumber = 1, PageSize = BoardPageSize },
+            fromUtc,
+            toUtc);
+
         if (response.Success && response.Data is not null)
         {
             scheduleShifts = response.Data.Items;
+            hiddenShiftCount = Math.Max(0, response.Data.TotalCount - response.Data.Items.Count);
         }
+        else
+        {
+            scheduleShifts = [];
+            scheduleError = response;
+        }
+
+        isBoardLoading = false;
     }
 
     private async Task LoadCoverageQueueAsync()
     {
-        isLoading = true;
-        error = null;
+        isCoverageLoading = true;
+        coverageError = null;
 
         var response = await ShiftsClient.GetCoverageQueueAsync(new PagedRequest { PageNumber = 1, PageSize = 20 });
         if (response.Success && response.Data is not null)
@@ -145,22 +331,18 @@
         }
         else
         {
-            error = response;
+            coverageQueue = [];
+            coverageError = response;
         }
 
-        isLoading = false;
+        isCoverageLoading = false;
     }
 
     private IEnumerable<ShiftSummaryDto> ShiftsForCell(int hour, int dayOffset)
     {
-        if (scheduleShifts.Count == 0)
-        {
-            return [];
-        }
-
-        var weekStart = StartOfWeek(scheduleShifts.Min(shift => shift.ScheduledStartTime));
-        var cellDate = weekStart.AddDays(dayOffset).Date;
-        return scheduleShifts.Where(shift => shift.ScheduledStartTime.Date == cellDate && shift.ScheduledStartTime.Hour == hour);
+        return BoardShifts
+            .Where(shift => DayOffset(shift) == dayOffset && BoardHour(shift) == hour)
+            .OrderBy(shift => shift.ScheduledStartTime);
     }
 
     private static DateTime StartOfWeek(DateTime value)
@@ -170,16 +352,49 @@
         return date.AddDays(-offset);
     }
 
+    private static DateTime LocalToUtc(DateTime localValue)
+    {
+        var local = localValue.Kind == DateTimeKind.Local
+            ? localValue
+            : DateTime.SpecifyKind(localValue, DateTimeKind.Local);
+        return local.ToUniversalTime();
+    }
+
+    private bool IsInVisibleWeek(ShiftSummaryDto shift)
+    {
+        var localStart = shift.ScheduledStartTime.ToLocalTime();
+        return localStart >= visibleWeekStartLocal && localStart < visibleWeekStartLocal.AddDays(7);
+    }
+
+    private int DayOffset(ShiftSummaryDto shift) =>
+        (shift.ScheduledStartTime.ToLocalTime().Date - visibleWeekStartLocal.Date).Days;
+
+    private static int BoardHour(ShiftSummaryDto shift)
+    {
+        var localStart = shift.ScheduledStartTime.ToLocalTime();
+        var roundedHour = localStart.Minute >= 30 ? localStart.Hour + 1 : localStart.Hour;
+        return Math.Clamp(roundedHour, FirstCalendarHour, LastCalendarHour);
+    }
+
     private static string ShiftBlockClass(ShiftSummaryDto shift)
     {
-        if (!shift.CaregiverId.HasValue)
+        var classes = !shift.CaregiverId.HasValue
+            ? "shift-open"
+            : shift.ServiceType == ServiceType.FacilityStaffing
+                ? "shift-staffing"
+                : "shift-inhome";
+
+        if (shift.Status == ShiftStatus.Completed)
         {
-            return "shift-open";
+            classes += " shift-completed";
         }
 
-        return shift.ServiceType == CarePath.Contracts.Enumerations.ServiceType.FacilityStaffing
-            ? "shift-staffing"
-            : "shift-inhome";
+        if (shift.Status == ShiftStatus.NoShow)
+        {
+            classes += " shift-attention";
+        }
+
+        return classes;
     }
 
     private static string ShiftLabel(ShiftSummaryDto shift)
@@ -188,12 +403,62 @@
         return $"{shift.ClientFullName} - {caregiver}";
     }
 
+    private static string DetailCaregiver(ShiftSummaryDto shift) =>
+        string.IsNullOrWhiteSpace(shift.CaregiverFullName) ? "Unassigned" : shift.CaregiverFullName;
+
+    private static string FormatTimeRange(ShiftSummaryDto shift)
+    {
+        var start = shift.ScheduledStartTime.ToLocalTime();
+        var end = shift.ScheduledEndTime.ToLocalTime();
+        return $"{start:ddd, MMM d h:mm tt} - {end:h:mm tt}";
+    }
+
+    private static string FormatDuration(ShiftSummaryDto shift)
+    {
+        var duration = shift.ScheduledEndTime - shift.ScheduledStartTime;
+        if (duration < TimeSpan.Zero)
+        {
+            duration = TimeSpan.Zero;
+        }
+
+        var hours = (int)duration.TotalHours;
+        var minutes = duration.Minutes;
+        return minutes == 0 ? $"{hours} h" : $"{hours} h {minutes} m";
+    }
+
+    private static string FormatHour(int hour) => new DateTime(2000, 1, 1, hour, 0, 0, DateTimeKind.Unspecified).ToString("h tt");
+
+    private string CellLabel(int dayOffset, int hour) => $"{visibleWeekStartLocal.AddDays(dayOffset):dddd}, {FormatHour(hour)}";
+
+    private static string DetailCardId(ShiftSummaryDto shift) => $"shift-detail-{shift.Id:N}";
+
+    private void ShowShiftDetail(Guid shiftId) => activeDetailShiftId = shiftId;
+
+    private void HideShiftDetail() => activeDetailShiftId = null;
+
+    private void HandleShiftKeyDown(KeyboardEventArgs args)
+    {
+        if (string.Equals(args.Key, "Escape", StringComparison.Ordinal))
+        {
+            HideShiftDetail();
+        }
+    }
+
     private void NavigateToAssign(Guid shiftId) => Navigation.NavigateTo($"/schedule/assign/{shiftId}");
 
-    private static string FormatServiceType(CarePath.Contracts.Enumerations.ServiceType type) => type switch
+    private void NavigateToCreateShift() => Navigation.NavigateTo("/shifts/create");
+
+    private static string FormatServiceType(ServiceType type) => type switch
     {
-        CarePath.Contracts.Enumerations.ServiceType.InHomeCare => "In-home care",
-        CarePath.Contracts.Enumerations.ServiceType.FacilityStaffing => "Facility staffing",
+        ServiceType.InHomeCare => "In-home care",
+        ServiceType.FacilityStaffing => "Facility staffing",
         _ => type.ToString()
+    };
+
+    private static string FormatStatus(ShiftStatus status) => status switch
+    {
+        ShiftStatus.InProgress => "In progress",
+        ShiftStatus.NoShow => "No show",
+        _ => status.ToString()
     };
 }

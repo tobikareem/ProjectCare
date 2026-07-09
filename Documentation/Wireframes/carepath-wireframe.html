@@ -851,7 +851,7 @@
                 <h1>Operations overview</h1>
                 <p class="subtle">Staff today's care, resolve exceptions, and protect service margins.</p>
               </div>
-              <button class="button button-primary" type="button" data-message="New shift workflow opened">＋ Create shift</button>
+              <button class="button button-primary" type="button" data-web-page="shift-create">＋ Create shift</button>
             </div>
 
             <section class="metric-grid" aria-label="Key performance indicators">
@@ -976,7 +976,7 @@
               </div>
               <div style="display:flex;gap:10px">
                 <button class="button button-secondary" type="button" data-message="List view selected">List view</button>
-                <button class="button button-primary" type="button" data-web-page="shift-assign">＋ New shift</button>
+                <button class="button button-primary" type="button" data-web-page="shift-create">＋ New shift</button>
               </div>
             </div>
 
@@ -1080,13 +1080,92 @@
             </section>
           </div>
 
+          <!-- ── Shift Create ── -->
+          <div id="page-shift-create" class="web-page">
+            <div class="page-heading">
+              <div>
+                <p class="eyebrow">Schedule</p>
+                <h1>Create shift</h1>
+                <p class="subtle">Schedule one unit of care — who is served, when, and at what rates — then assign an eligible caregiver.</p>
+              </div>
+              <button class="button button-secondary" type="button" data-web-page="schedule">← Back to schedule</button>
+            </div>
+
+            <div class="caregiver-workspace">
+              <section class="card form-section" aria-labelledby="shift-create-heading">
+                <div class="section-header">
+                  <div>
+                    <h2 id="shift-create-heading">Shift details</h2>
+                    <span class="subtle">Enter times in your local time zone. Rates are visible to coordinators and admins only.</span>
+                  </div>
+                  <span class="status status-blue">Draft</span>
+                </div>
+
+                <div class="form-field-grid">
+                  <label class="form-field">Client or facility<select><option>Select client or facility…</option><option selected>Jordan M. - in-home care</option><option>Casey R. - in-home care</option><option>Harborview - facility staffing</option><option>Northside Rehab - facility staffing</option></select></label>
+                  <label class="form-field">Service type<select><option selected>In-home care</option><option>Facility staffing</option></select></label>
+                  <label class="form-field">Start<input type="datetime-local" value="2026-06-24T08:00"></label>
+                  <label class="form-field">End<input type="datetime-local" value="2026-06-24T12:00"></label>
+                  <label class="form-field">Break minutes (optional)<input type="number" value="0" min="0" step="5"></label>
+                  <label class="form-field">Bill rate ($/hr)<input type="number" value="32.00" step="0.01"></label>
+                  <label class="form-field">Pay rate ($/hr)<input type="number" value="18.50" step="0.01"></label>
+                </div>
+
+                <section class="form-section" aria-labelledby="shift-create-summary-heading">
+                  <h3 id="shift-create-summary-heading">Shift summary</h3>
+                  <div style="display:grid;gap:8px;font-size:.88rem;max-width:420px">
+                    <div style="display:flex;justify-content:space-between"><span class="subtle">Scheduled duration</span><span>4 h 0 m</span></div>
+                    <div style="display:flex;justify-content:space-between"><span class="subtle">Est. billable hours</span><span>4.0</span></div>
+                    <div style="display:flex;justify-content:space-between"><span class="subtle">Requirements</span><span>CNA · medication support</span></div>
+                  </div>
+                  <p class="meta" style="margin-top:10px">Requirements come from the client's care plan and drive caregiver eligibility — they are not entered on this form.</p>
+                </section>
+
+                <div class="access-action-row">
+                  <button class="button button-primary" type="button" data-message="Shift created and caregiver assigned">Create &amp; assign shift</button>
+                  <button class="button button-secondary" type="button" data-message="Open shift created — added to coverage queue">Create open shift</button>
+                  <button class="button button-secondary" type="button" data-web-page="schedule">Cancel</button>
+                </div>
+                <p class="meta" style="margin-top:10px">“Create open shift” saves without a caregiver and adds the shift to the coverage queue. Eligibility checks (availability, credentials) run when a caregiver is assigned.</p>
+              </section>
+
+              <aside class="card profile-panel" aria-labelledby="create-eligible-heading">
+                <div class="section-header">
+                  <div>
+                    <h2 id="create-eligible-heading">Assign caregiver <span class="subtle" style="font-weight:400;font-size:.82rem">(optional)</span></h2>
+                    <span class="subtle">Assign now, or create an open shift and assign later from the coverage queue. Filtered by credentials, availability, active status, and double-booking checks.</span>
+                  </div>
+                </div>
+
+                <div class="credential-row">
+                  <div><strong>Amara Williams</strong><span class="meta">CNA, medication · 18 MTD shifts · 4.8 rating</span></div>
+                  <span class="status status-green">Selected</span>
+                </div>
+                <div class="credential-row">
+                  <div><strong>Casey Caregiver</strong><span class="meta">CNA, mobility · 0 MTD shifts · new profile</span></div>
+                  <button class="text-link" type="button" data-message="Casey Caregiver selected">Select</button>
+                </div>
+                <div class="credential-row">
+                  <div><strong>David Okafor</strong><span class="meta">HHA · credential mismatch for CNA-required shift</span></div>
+                  <button class="text-link" type="button" data-message="David Okafor reviewed">Review</button>
+                </div>
+                <div class="credential-row">
+                  <div><strong>Tunde Adeyemi</strong><span class="meta">CNA expired · blocked until renewed</span></div>
+                  <span class="status status-red">Blocked</span>
+                </div>
+
+                <p class="meta" style="margin-top:14px">Need to fill an existing open shift instead? Use the <button class="text-link" type="button" data-web-page="schedule">coverage queue</button>.</p>
+              </aside>
+            </div>
+          </div>
+
           <!-- ── Shift Assignment ── -->
           <div id="page-shift-assign" class="web-page">
             <div class="page-heading">
               <div>
                 <p class="eyebrow">Schedule</p>
-                <h1>Assign caregiver</h1>
-                <p class="subtle">Pick an eligible caregiver for an open shift or reassign a scheduled shift.</p>
+                <h1>Assign open shift</h1>
+                <p class="subtle">Pick an eligible caregiver for an existing open shift, or reassign a scheduled shift.</p>
               </div>
               <button class="button button-secondary" type="button" data-web-page="schedule">← Back to schedule</button>
             </div>
@@ -1096,7 +1175,7 @@
                 <div class="section-header">
                   <div>
                     <h2 id="shift-assignment-heading">Shift details</h2>
-                    <span class="subtle">This maps to the shift create/update assignment workflow.</span>
+                    <span class="subtle">Review the shift before assigning. Changes here update the existing shift.</span>
                   </div>
                   <span class="status status-red">Open</span>
                 </div>
@@ -3204,7 +3283,7 @@
 
       document.querySelectorAll('[data-web-page]').forEach(btn => {
         const caregiverSetupPages = ['caregiver-create', 'caregiver-certification', 'caregiver-eligible-shifts'];
-        const schedulePages = ['shift-assign'];
+        const schedulePages = ['shift-assign', 'shift-create'];
         const currentNavPage = caregiverSetupPages.includes(pageId) ? 'caregivers' : schedulePages.includes(pageId) ? 'schedule' : pageId;
         const isCurrent = btn.dataset.webPage === currentNavPage;
         if (btn.closest('.side-nav')) {

@@ -1,0 +1,299 @@
+@page "/shifts/create"
+@using CarePath.Client.Api
+@using CarePath.Client.UI.Components
+@using CarePath.Contracts.Clients
+@using CarePath.Contracts.Common
+@using CarePath.Contracts.Enumerations
+@using CarePath.Contracts.Scheduling
+@using Microsoft.AspNetCore.Authorization
+@attribute [Authorize(Roles = "Admin,Coordinator")]
+@inject ClientsClient ClientsClient
+@inject ShiftsClient ShiftsClient
+@inject NavigationManager Navigation
+
+<PageTitle>Create shift</PageTitle>
+
+<div class="page-heading">
+    <div>
+        <p class="eyebrow">Schedule</p>
+        <h1>Create shift</h1>
+        <p class="subtle">Schedule one unit of care - who is served, when, and at what rates - then assign an eligible caregiver.</p>
+    </div>
+    <button class="button button-secondary" type="button" @onclick="NavigateToSchedule">Back to schedule</button>
+</div>
+
+@if (error is not null)
+{
+    <ApiErrorAlert Response="error" />
+}
+
+@if (successMessage is not null)
+{
+    <div class="status status-green" role="status">@successMessage</div>
+}
+
+<div class="caregiver-workspace">
+    <section class="card form-section" aria-labelledby="shift-create-heading">
+        <div class="section-header">
+            <div>
+                <h2 id="shift-create-heading">Shift details</h2>
+                <span class="subtle">Enter times in your local time zone. Rates are visible to coordinators and admins only.</span>
+            </div>
+            <StatusBadge Text="Draft" Tone="@BadgeTone.Info" />
+        </div>
+
+        @if (isLoadingClients)
+        {
+            <p class="empty-state">Loading clients and facilities...</p>
+        }
+        else
+        {
+            <div class="form-field-grid">
+                <label class="form-field" for="shift-client">
+                    Client or facility
+                    <select id="shift-client" value="@selectedClientIdText" @onchange="OnClientChanged" disabled="@isSaving">
+                        <option value="">Select client or facility...</option>
+                        @foreach (var client in clients)
+                        {
+                            <option value="@client.Id">@ClientOptionLabel(client)</option>
+                        }
+                    </select>
+                </label>
+
+                <label class="form-field" for="shift-service-type">
+                    Service type
+                    <select id="shift-service-type" @bind="serviceType" disabled="@isSaving">
+                        <option value="@ServiceType.InHomeCare">In-home care</option>
+                        <option value="@ServiceType.FacilityStaffing">Facility staffing</option>
+                    </select>
+                </label>
+
+                <label class="form-field" for="shift-start">
+                    Start
+                    <input id="shift-start" type="datetime-local" @bind="scheduledStartLocal" disabled="@isSaving" />
+                </label>
+
+                <label class="form-field" for="shift-end">
+                    End
+                    <input id="shift-end" type="datetime-local" @bind="scheduledEndLocal" disabled="@isSaving" />
+                </label>
+
+                <label class="form-field" for="shift-break">
+                    Break minutes (optional)
+                    <input id="shift-break" type="number" min="0" step="5" @bind="breakMinutes" disabled="@isSaving" />
+                </label>
+
+                <label class="form-field" for="shift-bill-rate">
+                    Bill rate ($/hr)
+                    <input id="shift-bill-rate" type="number" min="0" step="0.01" @bind="billRate" disabled="@isSaving" />
+                </label>
+
+                <label class="form-field" for="shift-pay-rate">
+                    Pay rate ($/hr)
+                    <input id="shift-pay-rate" type="number" min="0" step="0.01" @bind="payRate" disabled="@isSaving" />
+                </label>
+            </div>
+
+            <section class="form-section" aria-labelledby="shift-create-summary-heading">
+                <h3 id="shift-create-summary-heading">Shift summary</h3>
+                <div class="shift-summary-list">
+                    <div><span class="subtle">Scheduled duration</span><span>@FormatDuration(ScheduledDuration)</span></div>
+                    <div><span class="subtle">Est. billable hours</span><span>@EstimatedBillableHours.ToString("0.##")</span></div>
+                    <div><span class="subtle">Requirements</span><span>@RequirementSummary</span></div>
+                </div>
+                <p class="meta">Requirements come from the client's care plan and drive caregiver eligibility - they are not entered on this form.</p>
+            </section>
+
+            <div class="access-action-row">
+                <button class="button button-primary" type="button" disabled="@(!CanSubmit || isSaving)" @onclick="CreateAndAssignAsync">Create &amp; assign shift</button>
+                <button class="button button-secondary" type="button" disabled="@(!CanSubmit || isSaving)" @onclick="CreateOpenShiftAsync">Create open shift</button>
+                <button class="button button-secondary" type="button" disabled="@isSaving" @onclick="NavigateToSchedule">Cancel</button>
+            </div>
+            <p class="meta">Create open shift saves without a caregiver and adds the shift to the coverage queue. Eligibility checks run when a caregiver is assigned.</p>
+        }
+    </section>
+
+    <aside class="card profile-panel" aria-labelledby="create-eligible-heading">
+        <div class="section-header">
+            <div>
+                <h2 id="create-eligible-heading">Assign caregiver <span class="subtle optional-label">(optional)</span></h2>
+                <span class="subtle">Assign now, or create an open shift and assign later from the coverage queue.</span>
+            </div>
+        </div>
+
+        <div class="credential-row">
+            <div>
+                <strong>Create &amp; assign shift</strong>
+                <span class="meta">Creates the shift first, then opens the eligible caregiver list for the new shift.</span>
+            </div>
+            <StatusBadge Text="Two-step" Tone="@BadgeTone.Info" />
+        </div>
+        <div class="credential-row">
+            <div>
+                <strong>Create open shift</strong>
+                <span class="meta">Adds the unassigned shift to the coverage queue for later assignment.</span>
+            </div>
+            <StatusBadge Text="Open" Tone="@BadgeTone.Danger" />
+        </div>
+
+        <p class="meta">Need to fill an existing open shift instead? Use the <button class="text-link" type="button" @onclick="NavigateToSchedule">coverage queue</button>.</p>
+    </aside>
+</div>
+
+@code {
+    private const int ClientPageSize = 100;
+
+    private IReadOnlyList<ClientSummaryDto> clients = [];
+    private ApiResponse? error;
+    private string? successMessage;
+    private string selectedClientIdText = string.Empty;
+    private ServiceType serviceType = ServiceType.InHomeCare;
+    private DateTime scheduledStartLocal = DefaultStartLocal();
+    private DateTime scheduledEndLocal = DefaultStartLocal().AddHours(4);
+    private int? breakMinutes = 0;
+    private decimal billRate = 32.00m;
+    private decimal payRate = 18.50m;
+    private bool isLoadingClients = true;
+    private bool isSaving;
+
+    private TimeSpan ScheduledDuration => scheduledEndLocal > scheduledStartLocal
+        ? scheduledEndLocal - scheduledStartLocal
+        : TimeSpan.Zero;
+
+    private decimal EstimatedBillableHours
+    {
+        get
+        {
+            var minutes = Math.Max(0, ScheduledDuration.TotalMinutes - (breakMinutes ?? 0));
+            return Math.Round((decimal)minutes / 60m, 2);
+        }
+    }
+
+    private bool CanSubmit =>
+        Guid.TryParse(selectedClientIdText, out _)
+        && scheduledEndLocal > scheduledStartLocal
+        && billRate > 0
+        && payRate > 0
+        && (!breakMinutes.HasValue || breakMinutes.Value >= 0);
+
+    private string RequirementSummary => serviceType == ServiceType.FacilityStaffing
+        ? "Facility credential and availability"
+        : "Direct-care credential and availability";
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadClientsAsync();
+    }
+
+    private async Task LoadClientsAsync()
+    {
+        isLoadingClients = true;
+        error = null;
+
+        var response = await ClientsClient.GetPageAsync(new PagedRequest { PageNumber = 1, PageSize = ClientPageSize });
+        if (response.Success && response.Data is not null)
+        {
+            clients = response.Data.Items.Where(client => client.IsActive).ToArray();
+            var first = clients.FirstOrDefault();
+            if (first is not null)
+            {
+                selectedClientIdText = first.Id.ToString();
+                serviceType = first.ServiceType;
+            }
+        }
+        else
+        {
+            error = response;
+        }
+
+        isLoadingClients = false;
+    }
+
+    private void OnClientChanged(ChangeEventArgs args)
+    {
+        selectedClientIdText = args.Value?.ToString() ?? string.Empty;
+        if (Guid.TryParse(selectedClientIdText, out var clientId))
+        {
+            var selectedClient = clients.FirstOrDefault(client => client.Id == clientId);
+            if (selectedClient is not null)
+            {
+                serviceType = selectedClient.ServiceType;
+            }
+        }
+    }
+
+    private async Task CreateOpenShiftAsync()
+    {
+        await CreateShiftAsync(navigateToAssign: false);
+    }
+
+    private async Task CreateAndAssignAsync()
+    {
+        await CreateShiftAsync(navigateToAssign: true);
+    }
+
+    private async Task CreateShiftAsync(bool navigateToAssign)
+    {
+        if (!CanSubmit || !Guid.TryParse(selectedClientIdText, out var clientId))
+        {
+            return;
+        }
+
+        isSaving = true;
+        error = null;
+        successMessage = null;
+
+        var response = await ShiftsClient.CreateAsync(new CreateShiftRequest
+        {
+            ClientId = clientId,
+            CaregiverId = null,
+            ServiceType = serviceType,
+            ScheduledStartUtc = ToUtc(scheduledStartLocal),
+            ScheduledEndUtc = ToUtc(scheduledEndLocal),
+            BreakMinutes = breakMinutes,
+            BillRate = billRate,
+            PayRate = payRate,
+        });
+
+        if (response.Success && response.Data is not null)
+        {
+            successMessage = navigateToAssign ? "Shift created. Opening assignment." : "Open shift created.";
+            Navigation.NavigateTo(navigateToAssign ? $"/schedule/assign/{response.Data.Id}" : "/schedule");
+            return;
+        }
+
+        error = response;
+        isSaving = false;
+    }
+
+    private void NavigateToSchedule() => Navigation.NavigateTo("/schedule");
+
+    private static DateTime ToUtc(DateTime localValue) =>
+        DateTime.SpecifyKind(localValue, DateTimeKind.Local).ToUniversalTime();
+
+    private static DateTime DefaultStartLocal()
+    {
+        var localTomorrow = DateTime.UtcNow.ToLocalTime().Date.AddDays(1);
+        return localTomorrow.AddHours(8);
+    }
+
+    private static string ClientOptionLabel(ClientSummaryDto client) =>
+        $"{client.FullName} - {FormatServiceType(client.ServiceType)}";
+
+    private static string FormatServiceType(ServiceType type) => type switch
+    {
+        ServiceType.InHomeCare => "in-home care",
+        ServiceType.FacilityStaffing => "facility staffing",
+        _ => type.ToString()
+    };
+
+    private static string FormatDuration(TimeSpan duration)
+    {
+        if (duration == TimeSpan.Zero)
+        {
+            return "0 h 0 m";
+        }
+
+        return $"{(int)duration.TotalHours} h {duration.Minutes} m";
+    }
+}

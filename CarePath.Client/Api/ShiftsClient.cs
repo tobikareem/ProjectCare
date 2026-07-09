@@ -18,12 +18,29 @@ public sealed class ShiftsClient : ApiClientBase
 
     /// <summary>Gets a page of shifts (scoped server-side per role).</summary>
     /// <param name="paging">Paging parameters.</param>
+    /// <param name="fromUtc">Optional visible range start in UTC, inclusive.</param>
+    /// <param name="toUtc">Optional visible range end in UTC, exclusive.</param>
     /// <param name="cancellationToken">Token to cancel the operation.</param>
     /// <returns>The paged shift list.</returns>
     public Task<ApiResponse<PagedResult<ShiftSummaryDto>>> GetPageAsync(
         PagedRequest paging,
-        CancellationToken cancellationToken = default) =>
-        GetAsync<PagedResult<ShiftSummaryDto>>($"api/shifts?{paging.ToQueryString()}", cancellationToken);
+        DateTime? fromUtc = null,
+        DateTime? toUtc = null,
+        CancellationToken cancellationToken = default)
+    {
+        var query = paging.ToQueryString();
+        if (fromUtc.HasValue)
+        {
+            query += $"&fromUtc={QueryFormat.Utc(fromUtc.Value)}";
+        }
+
+        if (toUtc.HasValue)
+        {
+            query += $"&toUtc={QueryFormat.Utc(toUtc.Value)}";
+        }
+
+        return GetAsync<PagedResult<ShiftSummaryDto>>($"api/shifts?{query}", cancellationToken);
+    }
 
     /// <summary>Gets open shifts needing coverage (Admin/Coordinator).</summary>
     /// <param name="paging">Paging parameters.</param>
@@ -55,7 +72,11 @@ public sealed class ShiftsClient : ApiClientBase
         GetAsync<PagedResult<EligibleCaregiverDto>>(
             $"api/shifts/{shiftId}/eligible-caregivers?{paging.ToQueryString()}", cancellationToken);
 
-    /// <summary>Schedules a shift (Admin/Coordinator; passes the D-S4-4 guards server-side).</summary>
+    /// <summary>
+    /// Schedules a shift (Admin/Coordinator). With <c>CaregiverId</c> set, the D-S4-4
+    /// eligibility guards run server-side; with <c>CaregiverId = null</c> an OPEN shift is
+    /// created for the coverage queue and eligibility is checked at assignment (D-S6-12).
+    /// </summary>
     /// <param name="request">The create request.</param>
     /// <param name="cancellationToken">Token to cancel the operation.</param>
     /// <returns>The created shift detail.</returns>

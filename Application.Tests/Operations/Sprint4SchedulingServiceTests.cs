@@ -162,6 +162,39 @@ public sealed class Sprint4SchedulingServiceTests
     }
 
     [Fact]
+    public async Task CreateShiftAsync_WhenCaregiverOmitted_CreatesOpenShiftWithoutEligibilityChecks()
+    {
+        // Arrange — overlap and missing certifications would both block an assigned create (D-S6-12)
+        var context = CreateContext(
+            existingShifts: [ExistingShift(WindowStart.AddHours(-1), WindowEnd.AddHours(1), ShiftStatus.Scheduled)],
+            certifications: Array.Empty<CaregiverCertification>());
+
+        // Act
+        var result = await context.Service.CreateShiftAsync(CreateRequest(context.Client.Id, caregiverId: null));
+
+        // Assert
+        result.CaregiverId.Should().BeNull();
+        result.Status.Should().Be(CarePath.Contracts.Enumerations.ShiftStatus.Scheduled);
+        context.UnitOfWork.Shifts.Verify(repository => repository.AddAsync(It.Is<Shift>(shift => shift.CaregiverId == null), It.IsAny<CancellationToken>()), Times.Once);
+        context.UnitOfWork.Caregivers.Verify(repository => repository.GetByIdAsync(It.IsAny<Guid>(), It.IsAny<CancellationToken>()), Times.Never);
+        context.UnitOfWork.CaregiverCertifications.Verify(repository => repository.FindAsync(It.IsAny<Expression<Func<CaregiverCertification, bool>>>(), It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task CreateShiftAsync_WhenCaregiverIdIsEmptyGuid_ThrowsValidationBeforeSave()
+    {
+        // Arrange
+        var context = CreateContext();
+
+        // Act
+        var act = async () => await context.Service.CreateShiftAsync(CreateRequest(context.Client.Id, Guid.Empty));
+
+        // Assert
+        await act.Should().ThrowAsync<ValidationException>();
+        context.UnitOfWork.Shifts.Verify(repository => repository.AddAsync(It.IsAny<Shift>(), It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    [Fact]
     public async Task UpdateShiftAsync_WhenUpdatedWindowOverlapsExistingShift_ThrowsDoubleBookedCode()
     {
         // Arrange
@@ -267,6 +300,99 @@ public sealed class Sprint4SchedulingServiceTests
         // Assert
         result.Items.Should().ContainSingle(item => item.Id == shift.Id);
         context.UnitOfWork.Shifts.Verify(repository => repository.GetPagedAsync(It.IsAny<Expression<Func<Shift, bool>>>(), 1, 10, It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task GetShiftsAsync_WhenRangeProvided_QueriesHalfOpenOverlapWindowOnly()
+    {
+        // Arrange — D-S6-13: [fromUtc, toUtc) overlap window for the schedule board
+        var context = CreateContext();
+        var weekStart = new DateTime(2026, 7, 6, 0, 0, 0, DateTimeKind.Utc);
+        var weekEnd = weekStart.AddDays(7);
+        var inWindowShift = ExistingShift(weekStart.AddDays(1).AddHours(9), weekStart.AddDays(1).AddHours(13), ShiftStatus.Scheduled);
+        inWindowShift.ClientId = context.Client.Id;
+        inWindowShift.CaregiverId = context.Caregiver.Id;
+        Expression<Func<Shift, bool>>? capturedPredicate = null;
+        context.UnitOfWork.Shifts.Setup(repository => repository.GetPagedAsync(
+                It.IsAny<Expression<Func<Shift, bool>>>(), 1, 100, It.IsAny<CancellationToken>()))
+            .Callback<Expression<Func<Shift, bool>>, int, int, CancellationToken>((predicate, _, _, _) => capturedPredicate = predicate)
+            .ReturnsAsync((new[] { inWindowShift }, 1));
+
+        // Act
+        var result = await context.Service.GetShiftsAsync(
+            new CarePath.Contracts.Common.PagedRequest { PageNumber = 1, PageSize = 100 },
+            weekStart,
+            weekEnd);
+
+        // Assert
+        result.Items.Should().ContainSingle(item => item.Id == inWindowShift.Id);
+        capturedPredicate.Should().NotBeNull();
+        var predicate = capturedPredicate!.Compile();
+        predicate(inWindowShift).Should().BeTrue();
+        predicate(ExistingShift(weekStart.AddDays(-1), weekStart, ShiftStatus.Scheduled)).Should().BeFalse("a shift ending exactly at the window start belongs to the previous week");
+        predicate(ExistingShift(weekEnd, weekEnd.AddHours(4), ShiftStatus.Scheduled)).Should().BeFalse("a shift starting exactly at the window end belongs to the next week");
+        predicate(ExistingShift(weekStart.AddDays(-1), weekEnd.AddDays(1), ShiftStatus.Scheduled)).Should().BeTrue("a shift spanning the whole window overlaps it");
+        context.UnitOfWork.Shifts.Verify(repository => repository.GetPagedAsync(
+            It.IsAny<int>(), It.IsAny<int>(), It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task GetShiftsAsync_WhenFromIsAfterTo_ThrowsStableRangeCodeBeforeQuery()
+    {
+        // Arrange
+        var context = CreateContext();
+
+        // Act
+        var act = async () => await context.Service.GetShiftsAsync(
+            new CarePath.Contracts.Common.PagedRequest(),
+            WindowEnd,
+            WindowStart);
+
+        // Assert
+        var exception = await act.Should().ThrowAsync<ValidationException>();
+        exception.Which.Errors.Should().ContainSingle(error => error.ErrorCode == "shift.invalid_range");
+        context.UnitOfWork.Shifts.Verify(repository => repository.GetPagedAsync(
+            It.IsAny<int>(), It.IsAny<int>(), It.IsAny<CancellationToken>()), Times.Never);
+        context.UnitOfWork.Shifts.Verify(repository => repository.GetPagedAsync(
+            It.IsAny<Expression<Func<Shift, bool>>>(), It.IsAny<int>(), It.IsAny<int>(), It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task GetShiftsAsync_WhenCaregiverScopedWithRange_ComposesOwnershipAndWindow()
+    {
+        // Arrange
+        var context = CreateContext();
+        var weekStart = new DateTime(2026, 7, 6, 0, 0, 0, DateTimeKind.Utc);
+        var weekEnd = weekStart.AddDays(7);
+        var ownShift = ExistingShift(weekStart.AddDays(2).AddHours(8), weekStart.AddDays(2).AddHours(12), ShiftStatus.Scheduled);
+        ownShift.ClientId = context.Client.Id;
+        ownShift.CaregiverId = context.Caregiver.Id;
+        var service = new ShiftOperationsService(
+            context.UnitOfWork,
+            new TestCurrentUserContext(context.Caregiver.UserId, new HashSet<string>(StringComparer.Ordinal) { ApplicationRoles.Caregiver }),
+            Mock.Of<IClientAccessEvaluator>(),
+            context.AuditLogger.Object);
+        context.UnitOfWork.Caregivers.Setup(repository => repository.FindAsync(It.IsAny<Expression<Func<Caregiver, bool>>>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new[] { context.Caregiver });
+        Expression<Func<Shift, bool>>? capturedPredicate = null;
+        context.UnitOfWork.Shifts.Setup(repository => repository.GetPagedAsync(
+                It.IsAny<Expression<Func<Shift, bool>>>(), 1, 20, It.IsAny<CancellationToken>()))
+            .Callback<Expression<Func<Shift, bool>>, int, int, CancellationToken>((predicate, _, _, _) => capturedPredicate = predicate)
+            .ReturnsAsync((new[] { ownShift }, 1));
+
+        // Act
+        var result = await service.GetShiftsAsync(new CarePath.Contracts.Common.PagedRequest(), weekStart, weekEnd);
+
+        // Assert
+        result.Items.Should().ContainSingle(item => item.Id == ownShift.Id);
+        var predicate = capturedPredicate!.Compile();
+        predicate(ownShift).Should().BeTrue();
+        var ownShiftOutsideWindow = ExistingShift(weekEnd.AddDays(1), weekEnd.AddDays(1).AddHours(4), ShiftStatus.Scheduled);
+        ownShiftOutsideWindow.CaregiverId = context.Caregiver.Id;
+        predicate(ownShiftOutsideWindow).Should().BeFalse("the window filter composes with caregiver scoping");
+        var otherCaregiverInWindow = ExistingShift(weekStart.AddDays(2), weekStart.AddDays(2).AddHours(4), ShiftStatus.Scheduled);
+        otherCaregiverInWindow.CaregiverId = Guid.NewGuid();
+        predicate(otherCaregiverInWindow).Should().BeFalse("caregivers only see their own shifts regardless of window");
     }
 
     [Fact]
@@ -687,7 +813,7 @@ public sealed class Sprint4SchedulingServiceTests
         return new TestContext(unitOfWork, service, auditLogger, currentUserId, client, caregiver);
     }
 
-    private static CreateShiftRequest CreateRequest(Guid clientId, Guid caregiverId) => new()
+    private static CreateShiftRequest CreateRequest(Guid clientId, Guid? caregiverId) => new()
     {
         ClientId = clientId,
         CaregiverId = caregiverId,

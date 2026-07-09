@@ -32,6 +32,27 @@ public sealed class Sprint6ClientRouteAlignmentTests
     }
 
     [Fact]
+    public async Task GetPageAsync_WhenRangeProvided_AppendsUtcRangeParameters()
+    {
+        // Arrange — D-S6-13: schedule board loads the visible week server-side
+        var handler = new RecordingHandler();
+        var client = new ShiftsClient(CreateHttpClient(handler));
+        var fromUtc = new DateTime(2026, 7, 6, 0, 0, 0, DateTimeKind.Utc);
+        var toUtc = fromUtc.AddDays(7);
+
+        // Act
+        await client.GetPageAsync(new PagedRequest(), fromUtc, toUtc);
+
+        // Assert
+        handler.LastRequest.Should().NotBeNull();
+        handler.LastRequest!.Method.Should().Be(HttpMethod.Get);
+        handler.LastRequest.RequestUri!.PathAndQuery.Should().Be(
+            "/api/shifts?pageNumber=1&pageSize=20"
+            + $"&fromUtc={Uri.EscapeDataString(fromUtc.ToString("O"))}"
+            + $"&toUtc={Uri.EscapeDataString(toUtc.ToString("O"))}");
+    }
+
+    [Fact]
     public async Task GetEligibleCaregiversAsync_WhenCalled_TargetsShiftScopedRouteWithGuidOnly()
     {
         // Arrange

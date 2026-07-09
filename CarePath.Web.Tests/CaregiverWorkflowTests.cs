@@ -3,12 +3,14 @@ using System.Net.Http.Json;
 using System.Text.Json;
 using Bunit;
 using CarePath.Client.Api;
+using CarePath.Contracts.Clients;
 using CarePath.Contracts.Common;
 using CarePath.Contracts.Enumerations;
 using CarePath.Contracts.Identity;
 using CarePath.Contracts.Scheduling;
 using CarePath.Web.Pages;
 using FluentAssertions;
+using Microsoft.AspNetCore.Components;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace CarePath.Web.Tests;
@@ -156,6 +158,351 @@ public sealed class CaregiverWorkflowTests
         });
     }
 
+    [Fact]
+    public void ShiftCreate_WhenCreateOpenShiftClicked_CallsCreateWithNullCaregiverAndNavigatesToSchedule()
+    {
+        // Arrange
+        var handler = new FakeApiHandler()
+            .Get("api/clients", ClientPage())
+            .Post("api/shifts", ShiftDetail());
+        using var context = new BunitContext();
+        AddClients(context, handler);
+        var component = context.Render<ShiftCreate>();
+
+        // Act
+        component.WaitForElement("select#shift-client");
+        component.FindAll("button").Single(button => button.TextContent.Contains("Create open shift")).Click();
+
+        // Assert
+        component.WaitForAssertion(() =>
+        {
+            handler.PostRequests.Should().ContainSingle(request => request.Path == "api/shifts");
+            handler.PostRequests.Single().Body.Should().Contain("\"caregiverId\":null");
+            PostedDateTime(handler.PostRequests.Single().Body, "scheduledStartUtc").Should().EndWith("Z");
+            PostedDateTime(handler.PostRequests.Single().Body, "scheduledEndUtc").Should().EndWith("Z");
+            context.Services.GetRequiredService<NavigationManager>().Uri.Should().EndWith("/schedule");
+        });
+    }
+
+    [Fact]
+    public void ShiftCreate_WhenCreateAndAssignClicked_CreatesOpenShiftThenNavigatesToAssignPage()
+    {
+        // Arrange
+        var handler = new FakeApiHandler()
+            .Get("api/clients", ClientPage())
+            .Post("api/shifts", ShiftDetail());
+        using var context = new BunitContext();
+        AddClients(context, handler);
+        var component = context.Render<ShiftCreate>();
+
+        // Act
+        component.WaitForElement("select#shift-client");
+        component.FindAll("button").Single(button => button.TextContent.Contains("Create & assign shift")).Click();
+
+        // Assert
+        component.WaitForAssertion(() =>
+        {
+            handler.PostRequests.Should().ContainSingle(request => request.Path == "api/shifts");
+            handler.PostRequests.Single().Body.Should().Contain("\"caregiverId\":null");
+            context.Services.GetRequiredService<NavigationManager>().Uri.Should().EndWith($"/schedule/assign/{ShiftId}");
+        });
+    }
+
+    [Fact]
+    public void ShiftCreate_WhenCreateFails_RendersApiErrorAlert()
+    {
+        // Arrange
+        var handler = new FakeApiHandler()
+            .Get("api/clients", ClientPage())
+            .Post("api/shifts", new ApiProblemDetails
+            {
+                Title = "Validation failed",
+                Status = 400,
+                ValidationErrors =
+                [
+                    new ValidationError("ScheduledEndUtc", "End must be after start.", "shift.end_before_start")
+                ],
+            });
+        using var context = new BunitContext();
+        AddClients(context, handler);
+        var component = context.Render<ShiftCreate>();
+
+        // Act
+        component.WaitForElement("select#shift-client");
+        component.FindAll("button").Single(button => button.TextContent.Contains("Create open shift")).Click();
+
+        // Assert
+        component.WaitForAssertion(() =>
+        {
+            component.Find("[role='alert']").TextContent.Should().Contain("End must be after start.");
+        });
+    }
+
+    [Fact]
+    public void ShiftCreate_WhenRendered_DoesNotRenderRateValuesOutsideInputs()
+    {
+        // Arrange
+        var handler = new FakeApiHandler()
+            .Get("api/clients", ClientPage());
+        using var context = new BunitContext();
+        AddClients(context, handler);
+
+        // Act
+        var component = context.Render<ShiftCreate>();
+
+        // Assert
+        component.WaitForAssertion(() =>
+        {
+            var nonInputText = string.Join(
+                " ",
+                component.FindAll("body *")
+                    .Where(element => !string.Equals(element.TagName, "input", StringComparison.OrdinalIgnoreCase))
+                    .Select(element => element.TextContent));
+            nonInputText.Should().NotContain("32.00");
+            nonInputText.Should().NotContain("18.50");
+            component.Find("input#shift-bill-rate").GetAttribute("value").Should().Be("32.00");
+            component.Find("input#shift-pay-rate").GetAttribute("value").Should().Be("18.50");
+        });
+    }
+
+    [Fact]
+    public void Home_WhenCreateShiftClicked_NavigatesToCreateShift()
+    {
+        // Arrange
+        using var context = new BunitContext();
+        AddClients(context, new FakeApiHandler()
+            .Get("api/shifts/coverage", EmptyCoveragePage())
+            .Get("api/shifts", EmptyShiftPage()));
+
+        // Act
+        var component = context.Render<Home>();
+        component.Find("button.button-primary").Click();
+
+        // Assert
+        context.Services.GetRequiredService<NavigationManager>().Uri.Should().EndWith("/shifts/create");
+    }
+
+    [Fact]
+    public void Home_WhenRendered_UsesShiftAndCoverageDataForOverview()
+    {
+        // Arrange
+        var handler = new FakeApiHandler()
+            .Get("api/shifts/coverage", CoveragePage(
+                CoverageShift(dayOffset: 0, startHour: DateTime.UtcNow.ToLocalTime().Hour + 1, clientName: "Harborview Center"),
+                CoverageShift(dayOffset: 0, startHour: 14, clientName: "Northside Rehab"),
+                CoverageShift(dayOffset: 1, startHour: 8, clientName: "Tomorrow Center"),
+                CoverageShift(dayOffset: 2, startHour: 8, clientName: "Weekend Center")))
+            .Get("api/shifts", ShiftPage(
+                BoardShift(dayOffset: 0, startHour: 8, clientName: "Jordan M."),
+                BoardShift(dayOffset: 0, startHour: 10, clientName: "Casey R."),
+                BoardShift(dayOffset: 0, startHour: 13, clientName: "Harborview Center", caregiverName: null)));
+        using var context = new BunitContext();
+        AddClients(context, handler);
+
+        // Act
+        var component = context.Render<Home>();
+
+        // Assert
+        component.WaitForAssertion(() =>
+        {
+            component.Markup.Should().Contain("Shifts today");
+            component.Markup.Should().Contain(">3<");
+            component.Markup.Should().Contain("2 staffed");
+            component.Markup.Should().Contain("1 open");
+            component.Markup.Should().Contain("Jordan M.");
+            component.Markup.Should().Contain("Casey R.");
+            component.Markup.Should().Contain("Harborview Center");
+            component.Markup.Should().Contain("4 shifts need coverage");
+            component.Markup.Should().Contain("9 items");
+        });
+    }
+
+    [Fact]
+    public void Schedule_WhenNewShiftClicked_NavigatesToCreateShift()
+    {
+        // Arrange
+        var handler = new FakeApiHandler()
+            .Get("api/shifts/coverage", EmptyCoveragePage())
+            .Get("api/shifts", EmptyShiftPage());
+        using var context = new BunitContext();
+        AddClients(context, handler);
+
+        // Act
+        var component = context.Render<Schedule>();
+        component.WaitForElement("button.button-primary").Click();
+
+        // Assert
+        context.Services.GetRequiredService<NavigationManager>().Uri.Should().EndWith("/shifts/create");
+    }
+
+    [Fact]
+    public void Schedule_WhenShiftInVisibleWeek_RendersInCorrectDayAndTimeCell()
+    {
+        // Arrange
+        var handler = new FakeApiHandler()
+            .Get("api/shifts/coverage", EmptyCoveragePage())
+            .Get("api/shifts", ShiftPage(BoardShift(dayOffset: 2, startHour: 10, clientName: "Northside Rehab")));
+        using var context = new BunitContext();
+        AddClients(context, handler);
+
+        // Act
+        var component = context.Render<Schedule>();
+
+        // Assert
+        component.WaitForAssertion(() =>
+        {
+            var cell = component.Find("[data-day-index='2'][data-hour='10']");
+            cell.TextContent.Should().Contain("Northside Rehab");
+            cell.TextContent.Should().Contain("Amara Williams");
+        });
+    }
+
+    [Fact]
+    public void Schedule_WhenShiftIsOpen_RendersOpenStyling()
+    {
+        // Arrange
+        var handler = new FakeApiHandler()
+            .Get("api/shifts/coverage", EmptyCoveragePage())
+            .Get("api/shifts", ShiftPage(BoardShift(
+                dayOffset: 1,
+                startHour: 13,
+                clientName: "Harborview",
+                caregiverId: null,
+                caregiverName: null,
+                serviceType: ServiceType.FacilityStaffing)));
+        using var context = new BunitContext();
+        AddClients(context, handler);
+
+        // Act
+        var component = context.Render<Schedule>();
+
+        // Assert
+        component.WaitForAssertion(() =>
+        {
+            var button = component.Find("button.schedule-shift-block");
+            button.GetAttribute("class").Should().Contain("shift-open");
+            button.TextContent.Should().Contain("Harborview - Unassigned");
+        });
+    }
+
+    [Fact]
+    public void Schedule_WhenListViewClicked_RendersWeeklyShiftListAndCanReturnToCalendar()
+    {
+        // Arrange
+        var handler = new FakeApiHandler()
+            .Get("api/shifts/coverage", EmptyCoveragePage())
+            .Get("api/shifts", ShiftPage(
+                BoardShift(dayOffset: 0, startHour: 8, clientName: "Jordan M."),
+                BoardShift(dayOffset: 1, startHour: 13, clientName: "Harborview", caregiverName: null)));
+        using var context = new BunitContext();
+        AddClients(context, handler);
+        var component = context.Render<Schedule>();
+
+        // Act
+        component.FindAll("button").Single(button => button.TextContent.Contains("List view")).Click();
+
+        // Assert
+        component.WaitForAssertion(() =>
+        {
+            component.Markup.Should().Contain("Weekly shifts");
+            var headers = component.FindAll("section[aria-labelledby='schedule-list-heading'] thead th")
+                .Select(header => header.TextContent.Trim())
+                .ToArray();
+            headers.Should().Equal("Shift", "When", "Caregiver", "Service", "Status", string.Empty);
+            component.Markup.Should().Contain("Jordan M.");
+            component.Markup.Should().Contain("Harborview");
+            component.Markup.Should().Contain("Unassigned");
+            component.Markup.Should().NotContain("32.00");
+            component.Markup.Should().NotContain("18.50");
+        });
+
+        component.FindAll("button").Single(button => button.TextContent.Contains("Calendar view")).Click();
+        component.WaitForAssertion(() => component.Find(".calendar-frame").Should().NotBeNull());
+    }
+
+    [Fact]
+    public void Schedule_WhenShiftFocused_RendersDetailCardWithoutRates()
+    {
+        // Arrange
+        var handler = new FakeApiHandler()
+            .Get("api/shifts/coverage", EmptyCoveragePage())
+            .Get("api/shifts", ShiftPage(BoardShift(dayOffset: 0, startHour: 8, endHour: 12)));
+        using var context = new BunitContext();
+        AddClients(context, handler);
+        var component = context.Render<Schedule>();
+
+        // Act
+        component.WaitForElement("button.schedule-shift-block").Focus();
+
+        // Assert
+        component.WaitForAssertion(() =>
+        {
+            var tooltip = component.Find("[role='tooltip']");
+            tooltip.TextContent.Should().Contain("Jordan M.");
+            tooltip.TextContent.Should().Contain("Amara Williams");
+            tooltip.TextContent.Should().Contain("8:00 AM");
+            tooltip.TextContent.Should().Contain("12:00 PM");
+            tooltip.TextContent.Should().Contain("4 h");
+            tooltip.TextContent.Should().Contain("In-home care");
+            tooltip.TextContent.Should().Contain("Scheduled");
+            tooltip.TextContent.Should().NotContain("32.00");
+            tooltip.TextContent.Should().NotContain("18.50");
+            component.Find("button.schedule-shift-block").GetAttribute("aria-describedby").Should().StartWith("shift-detail-");
+        });
+    }
+
+    [Fact]
+    public void Schedule_WhenNextWeekClicked_RequestsNewVisibleRange()
+    {
+        // Arrange
+        var handler = new FakeApiHandler()
+            .Get("api/shifts/coverage", EmptyCoveragePage())
+            .Get("api/shifts", EmptyShiftPage());
+        using var context = new BunitContext();
+        AddClients(context, handler);
+        var component = context.Render<Schedule>();
+
+        // Act
+        component.WaitForElement("button[aria-label='Next week']").Click();
+
+        // Assert
+        component.WaitForAssertion(() =>
+        {
+            var shiftRequests = handler.GetRequestUris
+                .Where(path => path.StartsWith("api/shifts?", StringComparison.OrdinalIgnoreCase))
+                .ToArray();
+            shiftRequests.Should().HaveCountGreaterThanOrEqualTo(2);
+            shiftRequests[0].Should().Contain("fromUtc=");
+            shiftRequests[0].Should().Contain("toUtc=");
+            shiftRequests[1].Should().Contain("fromUtc=");
+            shiftRequests[1].Should().Contain("toUtc=");
+            shiftRequests[1].Should().NotBe(shiftRequests[0]);
+        });
+    }
+
+    [Fact]
+    public void Schedule_WhenShiftCancelled_DoesNotRenderOnBoard()
+    {
+        // Arrange
+        var handler = new FakeApiHandler()
+            .Get("api/shifts/coverage", EmptyCoveragePage())
+            .Get("api/shifts", ShiftPage(
+                BoardShift(dayOffset: 0, startHour: 8, clientName: "Cancelled Client", status: ShiftStatus.Cancelled),
+                BoardShift(dayOffset: 0, startHour: 8, clientName: "Active Client")));
+        using var context = new BunitContext();
+        AddClients(context, handler);
+
+        // Act
+        var component = context.Render<Schedule>();
+
+        // Assert
+        component.WaitForAssertion(() =>
+        {
+            component.Markup.Should().NotContain("Cancelled Client");
+            component.Markup.Should().Contain("Active Client");
+        });
+    }
+
     private static void AddClients(BunitContext context, FakeApiHandler handler)
     {
         var httpClient = new HttpClient(handler)
@@ -163,8 +510,117 @@ public sealed class CaregiverWorkflowTests
             BaseAddress = new Uri("https://api.example.test/")
         };
         context.Services.AddSingleton(new CaregiversClient(httpClient));
+        context.Services.AddSingleton(new ClientsClient(httpClient));
         context.Services.AddSingleton(new ShiftsClient(httpClient));
     }
+
+    private static PagedResult<ClientSummaryDto> ClientPage() => new()
+    {
+        Items =
+        [
+            new ClientSummaryDto
+            {
+                Id = ClientId,
+                UserId = UserId,
+                FullName = "Jordan M.",
+                ServiceType = ServiceType.InHomeCare,
+                Age = 72,
+                IsActive = true,
+            }
+        ],
+        PageNumber = 1,
+        PageSize = 20,
+        TotalCount = 1,
+    };
+
+    private static string PostedDateTime(string body, string propertyName)
+    {
+        using var document = JsonDocument.Parse(body);
+        return document.RootElement.GetProperty(propertyName).GetString() ?? string.Empty;
+    }
+
+    private static PagedResult<ShiftSummaryDto> EmptyShiftPage() => new()
+    {
+        Items = [],
+        PageNumber = 1,
+        PageSize = 100,
+        TotalCount = 0,
+    };
+
+    private static PagedResult<ShiftSummaryDto> ShiftPage(params ShiftSummaryDto[] shifts) => new()
+    {
+        Items = shifts,
+        PageNumber = 1,
+        PageSize = 100,
+        TotalCount = shifts.Length,
+    };
+
+    private static ShiftSummaryDto BoardShift(
+        int dayOffset,
+        int startHour,
+        int? endHour = null,
+        string clientName = "Jordan M.",
+        Guid? caregiverId = null,
+        string? caregiverName = "Amara Williams",
+        ServiceType serviceType = ServiceType.InHomeCare,
+        ShiftStatus status = ShiftStatus.Scheduled)
+    {
+        var resolvedCaregiverId = caregiverName is null ? caregiverId : caregiverId ?? CaregiverId;
+        return new ShiftSummaryDto
+        {
+            Id = Guid.NewGuid(),
+            ClientId = ClientId,
+            ClientFullName = clientName,
+            CaregiverId = resolvedCaregiverId,
+            CaregiverFullName = caregiverName,
+            ScheduledStartTime = BoardDateUtc(dayOffset, startHour),
+            ScheduledEndTime = BoardDateUtc(dayOffset, endHour ?? startHour + 4),
+            Status = status,
+            ServiceType = serviceType,
+        };
+    }
+
+    private static DateTime BoardDateUtc(int dayOffset, int hour)
+    {
+        var local = CurrentWeekStartLocal().AddDays(dayOffset).AddHours(hour);
+        return DateTime.SpecifyKind(local, DateTimeKind.Local).ToUniversalTime();
+    }
+
+    private static DateTime CurrentWeekStartLocal()
+    {
+        var date = DateTime.UtcNow.ToLocalTime().Date;
+        var offset = ((int)date.DayOfWeek + 6) % 7;
+        return date.AddDays(-offset);
+    }
+
+    private static PagedResult<OpenShiftCoverageDto> EmptyCoveragePage() => new()
+    {
+        Items = [],
+        PageNumber = 1,
+        PageSize = 20,
+        TotalCount = 0,
+    };
+
+    private static PagedResult<OpenShiftCoverageDto> CoveragePage(params OpenShiftCoverageDto[] shifts) => new()
+    {
+        Items = shifts,
+        PageNumber = 1,
+        PageSize = 100,
+        TotalCount = shifts.Length,
+    };
+
+    private static OpenShiftCoverageDto CoverageShift(int dayOffset, int startHour, string clientName) => new()
+    {
+        ShiftId = Guid.NewGuid(),
+        ClientId = ClientId,
+        ClientDisplayName = clientName,
+        ScheduledStartTime = BoardDateUtc(dayOffset, Math.Clamp(startHour, 0, 23)),
+        ScheduledEndTime = BoardDateUtc(dayOffset, Math.Clamp(startHour + 4, 1, 23)),
+        ServiceType = ServiceType.FacilityStaffing,
+        Status = ShiftStatus.Scheduled,
+        RequirementLabels = ["Coverage needed"],
+        BestMatches = [],
+    };
 
     private static PagedResult<CaregiverSummaryDto> CaregiverPage() => new()
     {
@@ -312,15 +768,26 @@ public sealed class CaregiverWorkflowTests
     {
         private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
         private readonly Dictionary<string, object> getResponses = new(StringComparer.OrdinalIgnoreCase);
+        private readonly Dictionary<string, object> postResponses = new(StringComparer.OrdinalIgnoreCase);
         private readonly Dictionary<string, object> putResponses = new(StringComparer.OrdinalIgnoreCase);
 
         public List<string> GetRequests { get; } = [];
+
+        public List<string> GetRequestUris { get; } = [];
+
+        public List<(string Path, string Body)> PostRequests { get; } = [];
 
         public List<(string Path, string Body)> PutRequests { get; } = [];
 
         public FakeApiHandler Get(string pathPrefix, object response)
         {
             getResponses[pathPrefix] = response;
+            return this;
+        }
+
+        public FakeApiHandler Post(string pathPrefix, object response)
+        {
+            postResponses[pathPrefix] = response;
             return this;
         }
 
@@ -335,8 +802,18 @@ public sealed class CaregiverWorkflowTests
             var path = request.RequestUri?.PathAndQuery.TrimStart('/') ?? string.Empty;
             if (request.Method == HttpMethod.Get)
             {
+                GetRequestUris.Add(path);
                 GetRequests.Add(path.Split('?')[0]);
                 return JsonResponse(Match(getResponses, path));
+            }
+
+            if (request.Method == HttpMethod.Post)
+            {
+                var body = request.Content is null
+                    ? string.Empty
+                    : await request.Content.ReadAsStringAsync(cancellationToken);
+                PostRequests.Add((path.Split('?')[0], body));
+                return JsonResponse(Match(postResponses, path));
             }
 
             if (request.Method == HttpMethod.Put)

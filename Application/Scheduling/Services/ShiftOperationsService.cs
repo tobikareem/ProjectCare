@@ -22,6 +22,7 @@ public sealed class ShiftOperationsService : IShiftOperationsService
     private const string DoubleBookedCode = "shift.double_booked";
     private const string CertificationExpiredCode = "caregiver.certification_expired";
     private const string InvalidLifecycleCode = "shift.invalid_lifecycle";
+    private const string InvalidRangeCode = "shift.invalid_range";
 
     private readonly IUnitOfWork unitOfWork;
     private readonly ICurrentUserContext currentUser;
@@ -70,8 +71,11 @@ public sealed class ShiftOperationsService : IShiftOperationsService
             Status = ShiftStatus.Scheduled,
         };
         shift.Client = await GetClientAsync(shift.ClientId, cancellationToken);
-        shift.Caregiver = await GetCaregiverAsync(request.CaregiverId, cancellationToken);
-        await EnsureCaregiverCanBeAssignedAsync(request.CaregiverId, shift, cancellationToken);
+        if (request.CaregiverId.HasValue)
+        {
+            shift.Caregiver = await GetCaregiverAsync(request.CaregiverId.Value, cancellationToken);
+            await EnsureCaregiverCanBeAssignedAsync(request.CaregiverId.Value, shift, cancellationToken);
+        }
 
         await unitOfWork.ExecuteInTransactionAsync(
             async token =>
@@ -210,18 +214,36 @@ public sealed class ShiftOperationsService : IShiftOperationsService
         return shift.ToDetailDto();
     }
 
-    public async Task<PagedResult<ShiftSummaryDto>> GetShiftsAsync(PagedRequest request, CancellationToken cancellationToken = default)
+    public async Task<PagedResult<ShiftSummaryDto>> GetShiftsAsync(
+        PagedRequest request,
+        DateTime? fromUtc = null,
+        DateTime? toUtc = null,
+        CancellationToken cancellationToken = default)
     {
+        var from = NormalizeUtc(fromUtc);
+        var to = NormalizeUtc(toUtc);
+        if (from.HasValue && to.HasValue && from.Value > to.Value)
+        {
+            throw ValidationFailure("Schedule", "The requested schedule range is invalid.", InvalidRangeCode);
+        }
+
         IReadOnlyList<Shift> shifts;
         int totalCount;
 
         if (HasAnyRole(ApplicationRoles.Admin, ApplicationRoles.Coordinator))
         {
-            (shifts, totalCount) = await unitOfWork.Shifts.GetPagedAsync(request.PageNumber, request.PageSize, cancellationToken);
+            (shifts, totalCount) = from.HasValue || to.HasValue
+                ? await unitOfWork.Shifts.GetPagedAsync(
+                    shift => (!from.HasValue || shift.ScheduledEndTime > from.Value)
+                        && (!to.HasValue || shift.ScheduledStartTime < to.Value),
+                    request.PageNumber,
+                    request.PageSize,
+                    cancellationToken)
+                : await unitOfWork.Shifts.GetPagedAsync(request.PageNumber, request.PageSize, cancellationToken);
         }
         else
         {
-            (shifts, totalCount) = await GetScopedShiftPageAsync(request, cancellationToken);
+            (shifts, totalCount) = await GetScopedShiftPageAsync(request, from, to, cancellationToken);
         }
 
         foreach (var shift in shifts)
@@ -419,6 +441,8 @@ public sealed class ShiftOperationsService : IShiftOperationsService
 
     private async Task<(IReadOnlyList<Shift> Items, int TotalCount)> GetScopedShiftPageAsync(
         PagedRequest request,
+        DateTime? from,
+        DateTime? to,
         CancellationToken cancellationToken)
     {
         if (!currentUser.UserId.HasValue)
@@ -435,7 +459,9 @@ public sealed class ShiftOperationsService : IShiftOperationsService
             return caregiverIds.Length == 0
                 ? (Array.Empty<Shift>(), 0)
                 : await unitOfWork.Shifts.GetPagedAsync(
-                    shift => shift.CaregiverId.HasValue && caregiverIds.Contains(shift.CaregiverId.Value),
+                    shift => shift.CaregiverId.HasValue && caregiverIds.Contains(shift.CaregiverId.Value)
+                        && (!from.HasValue || shift.ScheduledEndTime > from.Value)
+                        && (!to.HasValue || shift.ScheduledStartTime < to.Value),
                     request.PageNumber,
                     request.PageSize,
                     cancellationToken);
@@ -467,13 +493,30 @@ public sealed class ShiftOperationsService : IShiftOperationsService
             return clientIds.Length == 0
                 ? (Array.Empty<Shift>(), 0)
                 : await unitOfWork.Shifts.GetPagedAsync(
-                    shift => clientIds.Contains(shift.ClientId),
+                    shift => clientIds.Contains(shift.ClientId)
+                        && (!from.HasValue || shift.ScheduledEndTime > from.Value)
+                        && (!to.HasValue || shift.ScheduledStartTime < to.Value),
                     request.PageNumber,
                     request.PageSize,
                     cancellationToken);
         }
 
         return (Array.Empty<Shift>(), 0);
+    }
+
+    private static DateTime? NormalizeUtc(DateTime? value)
+    {
+        if (!value.HasValue)
+        {
+            return null;
+        }
+
+        return value.Value.Kind switch
+        {
+            DateTimeKind.Utc => value.Value,
+            DateTimeKind.Local => value.Value.ToUniversalTime(),
+            _ => DateTime.SpecifyKind(value.Value, DateTimeKind.Utc),
+        };
     }
 
     private async Task AttachShiftUsersAsync(Shift shift, CancellationToken cancellationToken)

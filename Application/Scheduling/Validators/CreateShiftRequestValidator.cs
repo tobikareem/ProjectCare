@@ -8,7 +8,9 @@ public sealed class CreateShiftRequestValidator : AbstractValidator<CreateShiftR
     public CreateShiftRequestValidator()
     {
         RuleFor(request => request.ClientId).NotEmpty();
-        RuleFor(request => request.CaregiverId).NotEmpty();
+        RuleFor(request => request.CaregiverId)
+            .NotEqual(Guid.Empty)
+            .When(request => request.CaregiverId.HasValue);
         RuleFor(request => request.ScheduledStartUtc).Must(BeUtc);
         RuleFor(request => request.ScheduledEndUtc).Must(BeUtc);
         RuleFor(request => request.ScheduledEndUtc).GreaterThan(request => request.ScheduledStartUtc);

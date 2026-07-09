@@ -12,8 +12,12 @@ public class CreateShiftRequest
     /// <summary>Client to serve.</summary>
     public Guid ClientId { get; init; }
 
-    /// <summary>Caregiver to assign.</summary>
-    public Guid CaregiverId { get; init; }
+    /// <summary>
+    /// Caregiver to assign, or <c>null</c> to create an open (unassigned) shift that enters
+    /// the coverage queue for later assignment (D-S6-12). Eligibility guards (double-booking,
+    /// credentials) run only when a caregiver is supplied.
+    /// </summary>
+    public Guid? CaregiverId { get; init; }
 
     /// <summary>Scheduled start (UTC).</summary>
     public DateTime ScheduledStartUtc { get; init; }

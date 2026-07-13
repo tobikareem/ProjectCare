@@ -49,57 +49,48 @@
             <span class="meta">@PagingText(caregiverPage)</span>
         </div>
 
-        @if (isLoading)
-        {
-            <p class="empty-state">Loading caregivers...</p>
-        }
-        else if (FilteredCaregivers.Count == 0)
-        {
-            <p class="empty-state">No caregivers match the current filters.</p>
-        }
-        else
-        {
-            <div class="data-table-wrap">
-                <table class="data-table">
-                    <thead>
-                        <tr>
-                            <th>Name</th>
-                            <th>Type</th>
-                            <th>Rating</th>
-                            <th>Status</th>
-                            <th>View</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        @foreach (var caregiver in FilteredCaregivers)
-                        {
-                            <tr class="@(selectedCaregiverId == caregiver.Id ? "selected-row" : null)">
-                                <td>
-                                    <span class="avatar-sm" aria-hidden="true">@Initials(caregiver.FullName)</span>
-                                    <strong>@caregiver.FullName</strong>
-                                    <span class="meta">User @ShortId(caregiver.UserId)</span>
-                                </td>
-                                <td>@FormatEmploymentType(caregiver.EmploymentType)</td>
-                                <td>@FormatRating(caregiver.AverageRating)</td>
-                                <td>
-                                    <StatusBadge Text="@(caregiver.IsActive ? "Active" : "Inactive")"
-                                                 Tone="@(caregiver.IsActive ? BadgeTone.Success : BadgeTone.Neutral)" />
-                                </td>
-                                <td>
-                                    <button class="text-link" type="button" @onclick="() => SelectCaregiverAsync(caregiver.Id)">View</button>
-                                </td>
-                            </tr>
-                        }
-                    </tbody>
-                </table>
-            </div>
-        }
-
-        <div class="pager-row" aria-label="Caregiver pages">
-            <button class="button button-secondary button-sm" type="button" disabled="@(!CanGoPrevious(caregiverPage) || isLoading)" @onclick="PreviousCaregiverPageAsync">Previous</button>
-            <span class="meta">@PagingText(caregiverPage)</span>
-            <button class="button button-secondary button-sm" type="button" disabled="@(!CanGoNext(caregiverPage) || isLoading)" @onclick="NextCaregiverPageAsync">Next</button>
-        </div>
+        <PagedTable TItem="CaregiverSummaryDto"
+                    Result="DisplayedCaregiverPage"
+                    IsLoading="isLoading"
+                    LoadingText="Loading caregivers..."
+                    EmptyText="No caregivers match the current filters."
+                    TableClass="data-table"
+                    PagerButtonClass="button button-secondary button-sm"
+                    PagerLabel="Caregiver pages"
+                    PageSize="pageSize"
+                    MinPageSize="DefaultPageSize"
+                    EnableViewportPageSize="true"
+                    ShowPagerWhenSinglePage="true"
+                    OnPageChanged="LoadCaregiverPageAsync"
+                    OnPageSizeChanged="ChangeCaregiverPageSizeAsync">
+            <HeaderTemplate>
+                <tr>
+                    <th>Name</th>
+                    <th>Type</th>
+                    <th>Rating</th>
+                    <th>Status</th>
+                    <th>View</th>
+                </tr>
+            </HeaderTemplate>
+            <RowTemplate Context="caregiver">
+                <tr class="@(selectedCaregiverId == caregiver.Id ? "selected-row" : null)">
+                    <td>
+                        <span class="avatar-sm" aria-hidden="true">@Initials(caregiver.FullName)</span>
+                        <strong>@caregiver.FullName</strong>
+                        <span class="meta">User @ShortId(caregiver.UserId)</span>
+                    </td>
+                    <td>@FormatEmploymentType(caregiver.EmploymentType)</td>
+                    <td>@FormatRating(caregiver.AverageRating)</td>
+                    <td>
+                        <StatusBadge Text="@(caregiver.IsActive ? "Active" : "Inactive")"
+                                     Tone="@(caregiver.IsActive ? BadgeTone.Success : BadgeTone.Neutral)" />
+                    </td>
+                    <td>
+                        <button class="text-link" type="button" @onclick="() => SelectCaregiverAsync(caregiver.Id)">View</button>
+                    </td>
+                </tr>
+            </RowTemplate>
+        </PagedTable>
     </section>
 
     <aside class="card profile-panel" aria-labelledby="caregiver-profile-heading">
@@ -208,7 +199,7 @@
 </div>
 
 @code {
-    private const int PageSize = 10;
+    private const int DefaultPageSize = 5;
 
     private PagedResult<CaregiverSummaryDto>? caregiverPage;
     private ApiResponse? caregiverError;
@@ -218,12 +209,24 @@
     private bool isLoading;
     private bool isDetailLoading;
     private int pageNumber = 1;
+    private int pageSize = DefaultPageSize;
     private string searchTerm = string.Empty;
     private string employmentFilter = string.Empty;
     private string statusFilter = string.Empty;
 
     private IReadOnlyList<CaregiverSummaryDto> FilteredCaregivers =>
         caregiverPage?.Items.Where(MatchesFilters).ToArray() ?? [];
+
+    private PagedResult<CaregiverSummaryDto>? DisplayedCaregiverPage =>
+        caregiverPage is null
+            ? null
+            : new PagedResult<CaregiverSummaryDto>
+            {
+                Items = FilteredCaregivers,
+                PageNumber = caregiverPage.PageNumber,
+                PageSize = caregiverPage.PageSize,
+                TotalCount = caregiverPage.TotalCount
+            };
 
     private string CaregiverSummaryText
     {
@@ -245,7 +248,7 @@
         isLoading = true;
         caregiverError = null;
 
-        var response = await CaregiversClient.GetPageAsync(new PagedRequest { PageNumber = pageNumber, PageSize = PageSize });
+        var response = await CaregiversClient.GetPageAsync(new PagedRequest { PageNumber = pageNumber, PageSize = pageSize });
         if (response.Success && response.Data is not null)
         {
             caregiverPage = response.Data;
@@ -278,26 +281,27 @@
         isDetailLoading = false;
     }
 
-    private async Task PreviousCaregiverPageAsync()
+    private async Task LoadCaregiverPageAsync(int requestedPageNumber)
     {
-        if (!CanGoPrevious(caregiverPage))
+        if (requestedPageNumber < 1 || requestedPageNumber == pageNumber)
         {
             return;
         }
 
-        pageNumber--;
+        pageNumber = requestedPageNumber;
         ClearSelection();
         await LoadCaregiversAsync();
     }
 
-    private async Task NextCaregiverPageAsync()
+    private async Task ChangeCaregiverPageSizeAsync(int requestedPageSize)
     {
-        if (!CanGoNext(caregiverPage))
+        if (requestedPageSize < DefaultPageSize || requestedPageSize == pageSize)
         {
             return;
         }
 
-        pageNumber++;
+        pageSize = requestedPageSize;
+        pageNumber = 1;
         ClearSelection();
         await LoadCaregiversAsync();
     }
@@ -350,10 +354,6 @@
     }
 
     private void NavigateToSchedule() => Navigation.NavigateTo("/schedule");
-
-    private static bool CanGoPrevious<T>(PagedResult<T>? page) => page?.HasPreviousPage == true;
-
-    private static bool CanGoNext<T>(PagedResult<T>? page) => page?.HasNextPage == true;
 
     private static string PagingText<T>(PagedResult<T>? page) =>
         page is null ? "Page 1" : $"Page {page.PageNumber} of {Math.Max(page.TotalPages, 1)}";

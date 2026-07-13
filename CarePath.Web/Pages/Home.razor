@@ -131,7 +131,7 @@
         <section class="card section-offset" aria-labelledby="actions-heading">
             <h2 id="actions-heading">Quick actions</h2>
             <div class="quick-actions">
-                <button type="button">＋ Add client</button>
+                <button type="button" @onclick="NavigateToCreateClient">+ Add client</button>
                 <button type="button">＋ Add caregiver</button>
                 <button type="button">$ Generate invoices</button>
                 <button type="button">✓ Review credentials</button>
@@ -290,4 +290,6 @@
     private void NavigateToShift(ShiftSummaryDto shift) => Navigation.NavigateTo($"/schedule/assign/{shift.Id}");
 
     private void NavigateToCreateShift() => Navigation.NavigateTo("/shifts/create");
+
+    private void NavigateToCreateClient() => Navigation.NavigateTo("/clients/create");
 }

@@ -1,15 +1,19 @@
 using System.Net;
 using System.Net.Http.Json;
+using System.Security.Claims;
 using System.Text.Json;
 using Bunit;
 using CarePath.Client.Api;
+using CarePath.Contracts.Admin;
 using CarePath.Contracts.Clients;
 using CarePath.Contracts.Common;
 using CarePath.Contracts.Enumerations;
 using CarePath.Contracts.Identity;
 using CarePath.Contracts.Scheduling;
+using CarePath.Contracts.Transitions;
 using CarePath.Web.Pages;
 using FluentAssertions;
+using Microsoft.AspNetCore.Components.Authorization;
 using Microsoft.AspNetCore.Components;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -41,6 +45,33 @@ public sealed class CaregiverWorkflowTests
             component.Markup.Should().NotContain("Pay rate");
             component.Markup.Should().NotContain("Shifts (MTD)");
             component.Markup.Should().NotContain("Certification type");
+        });
+    }
+
+    [Fact]
+    public void CaregiversRoster_WhenNextClicked_RequestsNextPageWithDefaultPageSize()
+    {
+        // Arrange
+        var handler = new FakeApiHandler()
+            .Get("api/caregivers", CaregiverPage(totalCount: 12));
+        using var context = new BunitContext();
+        AddClients(context, handler);
+
+        // Act
+        var component = context.Render<Caregivers>();
+        component.WaitForElement("button.button-sm:not([disabled])").Click();
+
+        // Assert
+        component.WaitForAssertion(() =>
+        {
+            handler.GetRequestUris.Should().Contain(uri =>
+                uri.StartsWith("api/caregivers?", StringComparison.OrdinalIgnoreCase) &&
+                uri.Contains("pageNumber=1", StringComparison.OrdinalIgnoreCase) &&
+                uri.Contains("pageSize=5", StringComparison.OrdinalIgnoreCase));
+            handler.GetRequestUris.Should().Contain(uri =>
+                uri.StartsWith("api/caregivers?", StringComparison.OrdinalIgnoreCase) &&
+                uri.Contains("pageNumber=2", StringComparison.OrdinalIgnoreCase) &&
+                uri.Contains("pageSize=5", StringComparison.OrdinalIgnoreCase));
         });
     }
 
@@ -84,6 +115,102 @@ public sealed class CaregiverWorkflowTests
         component.Markup.Should().Contain("Hourly pay rate");
         component.Markup.Should().NotContain("Certification type");
         component.Markup.Should().NotContain("Issuing authority");
+    }
+
+    [Fact]
+    public void Clients_WhenAddClientClicked_NavigatesToCreateClient()
+    {
+        // Arrange
+        using var context = new BunitContext();
+        AddClients(context, new FakeApiHandler()
+            .Get("api/clients", ClientPage()));
+
+        // Act
+        var component = context.Render<Clients>();
+        component.WaitForElement("button.button-primary").Click();
+
+        // Assert
+        context.Services.GetRequiredService<NavigationManager>().Uri.Should().EndWith("/clients/create");
+    }
+
+    [Fact]
+    public void Clients_WhenNextClicked_RequestsNextPageWithDefaultPageSize()
+    {
+        // Arrange
+        var handler = new FakeApiHandler()
+            .Get("api/clients", ClientPage(totalCount: 12));
+        using var context = new BunitContext();
+        AddClients(context, handler);
+
+        // Act
+        var component = context.Render<Clients>();
+        component.WaitForElement("button.button-sm:not([disabled])").Click();
+
+        // Assert
+        component.WaitForAssertion(() =>
+        {
+            handler.GetRequestUris.Should().Contain(uri =>
+                uri.StartsWith("api/clients?", StringComparison.OrdinalIgnoreCase) &&
+                uri.Contains("pageNumber=1", StringComparison.OrdinalIgnoreCase) &&
+                uri.Contains("pageSize=5", StringComparison.OrdinalIgnoreCase));
+            handler.GetRequestUris.Should().Contain(uri =>
+                uri.StartsWith("api/clients?", StringComparison.OrdinalIgnoreCase) &&
+                uri.Contains("pageNumber=2", StringComparison.OrdinalIgnoreCase) &&
+                uri.Contains("pageSize=5", StringComparison.OrdinalIgnoreCase));
+        });
+    }
+
+    [Fact]
+    public void ClientCreate_WhenCreateClicked_CallsClientsCreateAndNavigatesToClients()
+    {
+        // Arrange
+        var handler = new FakeApiHandler()
+            .Post("api/clients", ClientDetail());
+        using var context = new BunitContext();
+        AddClients(context, handler);
+        var component = context.Render<ClientCreate>();
+
+        // Act
+        component.Find("input[type='email']").Change("jordan.mitchell@example.test");
+        component.Find("button.button-primary").Click();
+
+        // Assert
+        component.WaitForAssertion(() =>
+        {
+            handler.PostRequests.Should().ContainSingle(request => request.Path == "api/clients");
+            handler.PostRequests.Single().Body.Should().Contain("\"email\":\"jordan.mitchell@example.test\"");
+            PostedDateTime(handler.PostRequests.Single().Body, "dateOfBirth").Should().EndWith("Z");
+            context.Services.GetRequiredService<NavigationManager>().Uri.Should().EndWith("/clients");
+        });
+    }
+
+    [Fact]
+    public void ClientCreate_WhenCreateFails_RendersApiErrorAlert()
+    {
+        // Arrange
+        var handler = new FakeApiHandler()
+            .Post("api/clients", new ApiProblemDetails
+            {
+                Title = "Validation failed",
+                Status = 400,
+                ValidationErrors =
+                [
+                    new ValidationError("Email", "Email is required.", "client.email_required")
+                ],
+            });
+        using var context = new BunitContext();
+        AddClients(context, handler);
+        var component = context.Render<ClientCreate>();
+
+        // Act
+        component.Find("button.button-primary").Click();
+
+        // Assert
+        component.WaitForAssertion(() =>
+        {
+            component.Find("[role='alert']").TextContent.Should().Contain("Email is required.");
+            context.Services.GetRequiredService<NavigationManager>().Uri.Should().EndWith("/");
+        });
     }
 
     [Fact]
@@ -280,6 +407,23 @@ public sealed class CaregiverWorkflowTests
 
         // Assert
         context.Services.GetRequiredService<NavigationManager>().Uri.Should().EndWith("/shifts/create");
+    }
+
+    [Fact]
+    public void Home_WhenAddClientQuickActionClicked_NavigatesToCreateClient()
+    {
+        // Arrange
+        using var context = new BunitContext();
+        AddClients(context, new FakeApiHandler()
+            .Get("api/shifts/coverage", EmptyCoveragePage())
+            .Get("api/shifts", EmptyShiftPage()));
+
+        // Act
+        var component = context.Render<Home>();
+        component.FindAll("button").Single(button => button.TextContent.Contains("Add client")).Click();
+
+        // Assert
+        context.Services.GetRequiredService<NavigationManager>().Uri.Should().EndWith("/clients/create");
     }
 
     [Fact]
@@ -503,6 +647,61 @@ public sealed class CaregiverWorkflowTests
         });
     }
 
+    [Fact]
+    public void UserManagement_WhenNextClicked_RequestsNextPageWithDefaultPageSize()
+    {
+        // Arrange
+        var handler = new FakeApiHandler()
+            .Get("api/admin/users/roles", new[] { UserRole.Admin, UserRole.Coordinator })
+            .Get("api/admin/users", UserAccountPage(totalCount: 12));
+        using var context = new BunitContext();
+        AddClients(context, handler);
+
+        // Act
+        var component = context.Render<UserManagement>();
+        component.WaitForElement("button.button-sm:not([disabled])").Click();
+
+        // Assert
+        component.WaitForAssertion(() =>
+        {
+            handler.GetRequestUris.Should().Contain(uri =>
+                uri.StartsWith("api/admin/users?", StringComparison.OrdinalIgnoreCase) &&
+                uri.Contains("pageNumber=1", StringComparison.OrdinalIgnoreCase) &&
+                uri.Contains("pageSize=5", StringComparison.OrdinalIgnoreCase));
+            handler.GetRequestUris.Should().Contain(uri =>
+                uri.StartsWith("api/admin/users?", StringComparison.OrdinalIgnoreCase) &&
+                uri.Contains("pageNumber=2", StringComparison.OrdinalIgnoreCase) &&
+                uri.Contains("pageSize=5", StringComparison.OrdinalIgnoreCase));
+        });
+    }
+
+    [Fact]
+    public void TransitionsReview_WhenNextClicked_RequestsNextPageWithDefaultPageSize()
+    {
+        // Arrange
+        var handler = new FakeApiHandler()
+            .Get("api/transitions/plans", TransitionPlanPage(totalCount: 12));
+        using var context = new BunitContext();
+        AddClients(context, handler);
+
+        // Act
+        var component = context.Render<TransitionsReview>();
+        component.WaitForElement("button.button-sm:not([disabled])").Click();
+
+        // Assert
+        component.WaitForAssertion(() =>
+        {
+            handler.GetRequestUris.Should().Contain(uri =>
+                uri.StartsWith("api/transitions/plans?", StringComparison.OrdinalIgnoreCase) &&
+                uri.Contains("pageNumber=1", StringComparison.OrdinalIgnoreCase) &&
+                uri.Contains("pageSize=5", StringComparison.OrdinalIgnoreCase));
+            handler.GetRequestUris.Should().Contain(uri =>
+                uri.StartsWith("api/transitions/plans?", StringComparison.OrdinalIgnoreCase) &&
+                uri.Contains("pageNumber=2", StringComparison.OrdinalIgnoreCase) &&
+                uri.Contains("pageSize=5", StringComparison.OrdinalIgnoreCase));
+        });
+    }
+
     private static void AddClients(BunitContext context, FakeApiHandler handler)
     {
         var httpClient = new HttpClient(handler)
@@ -512,9 +711,13 @@ public sealed class CaregiverWorkflowTests
         context.Services.AddSingleton(new CaregiversClient(httpClient));
         context.Services.AddSingleton(new ClientsClient(httpClient));
         context.Services.AddSingleton(new ShiftsClient(httpClient));
+        context.Services.AddSingleton(new AdminUsersClient(httpClient));
+        context.Services.AddSingleton(new TransitionsClient(httpClient));
+        context.Services.AddAuthorizationCore();
+        context.Services.AddSingleton<AuthenticationStateProvider>(new TestAuthStateProvider());
     }
 
-    private static PagedResult<ClientSummaryDto> ClientPage() => new()
+    private static PagedResult<ClientSummaryDto> ClientPage(int totalCount = 1) => new()
     {
         Items =
         [
@@ -529,8 +732,20 @@ public sealed class CaregiverWorkflowTests
             }
         ],
         PageNumber = 1,
-        PageSize = 20,
-        TotalCount = 1,
+        PageSize = 5,
+        TotalCount = totalCount,
+    };
+
+    private static ClientDetailDto ClientDetail() => new()
+    {
+        Id = ClientId,
+        UserId = UserId,
+        FullName = "Jordan Mitchell",
+        PhoneNumber = "410-555-0199",
+        DateOfBirth = new DateTime(1951, 6, 2, 0, 0, 0, DateTimeKind.Utc),
+        Age = 75,
+        ServiceType = ServiceType.InHomeCare,
+        EstimatedWeeklyHours = 40,
     };
 
     private static string PostedDateTime(string body, string propertyName)
@@ -622,7 +837,7 @@ public sealed class CaregiverWorkflowTests
         BestMatches = [],
     };
 
-    private static PagedResult<CaregiverSummaryDto> CaregiverPage() => new()
+    private static PagedResult<CaregiverSummaryDto> CaregiverPage(int totalCount = 1) => new()
     {
         Items =
         [
@@ -637,8 +852,52 @@ public sealed class CaregiverWorkflowTests
             }
         ],
         PageNumber = 1,
-        PageSize = 10,
-        TotalCount = 1,
+        PageSize = 5,
+        TotalCount = totalCount,
+    };
+
+    private static PagedResult<UserAccountDto> UserAccountPage(int totalCount = 1) => new()
+    {
+        Items =
+        [
+            new UserAccountDto
+            {
+                Id = UserId,
+                Email = "admin@example.test",
+                DisplayName = "Demo Administrator",
+                Role = UserRole.Admin,
+                IsActive = true,
+                CanChangeRole = true,
+                CanDeactivate = true,
+            }
+        ],
+        PageNumber = 1,
+        PageSize = 5,
+        TotalCount = totalCount,
+    };
+
+    private static PagedResult<TransitionPlanSummaryDto> TransitionPlanPage(int totalCount = 1) => new()
+    {
+        Items =
+        [
+            new TransitionPlanSummaryDto
+            {
+                Id = Guid.Parse("eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee"),
+                ClientId = ClientId,
+                ClientFullName = "Jordan M.",
+                HospitalName = "Harborview",
+                DischargeDate = new DateTime(2026, 7, 8, 0, 0, 0, DateTimeKind.Utc),
+                TransitionWindowEnd = new DateTime(2026, 8, 7, 0, 0, 0, DateTimeKind.Utc),
+                Status = TransitionPlanStatus.Active,
+                RiskLevel = TransitionRiskLevel.Medium,
+                DaysRemaining = 28,
+                PendingInstructionCount = 0,
+                OpenEscalationCount = 0,
+            }
+        ],
+        PageNumber = 1,
+        PageSize = 5,
+        TotalCount = totalCount,
     };
 
     private static CaregiverDetailDto CaregiverDetail() => new()
@@ -855,6 +1114,22 @@ public sealed class CaregiverWorkflowTests
                 Content = JsonContent.Create(payload, options: JsonOptions),
             };
             return response;
+        }
+    }
+
+    private sealed class TestAuthStateProvider : AuthenticationStateProvider
+    {
+        public override Task<AuthenticationState> GetAuthenticationStateAsync()
+        {
+            var identity = new ClaimsIdentity(
+                [
+                    new Claim(ClaimTypes.Name, "Test Admin"),
+                    new Claim(ClaimTypes.Role, "Admin"),
+                    new Claim(ClaimTypes.Role, "Coordinator"),
+                    new Claim(ClaimTypes.Role, "Clinician")
+                ],
+                "Test");
+            return Task.FromResult(new AuthenticationState(new ClaimsPrincipal(identity)));
         }
     }
 }

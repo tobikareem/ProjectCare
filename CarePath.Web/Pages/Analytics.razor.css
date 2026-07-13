@@ -1,0 +1,95 @@
+.analytics-card-status {
+    margin: 8px 0 4px;
+}
+
+.analytics-meter-fill {
+    display: block;
+    width: var(--analytics-bar-width, 0%);
+    height: 100%;
+    background: var(--teal-700);
+    border-radius: inherit;
+}
+
+.analytics-meter-fill-staffing {
+    background: var(--orange);
+}
+
+.analytics-meter-fill-negative {
+    background: var(--red);
+}
+
+.analytics-bars,
+.analytics-service-lines {
+    display: grid;
+    gap: 18px;
+}
+
+.analytics-bar-row,
+.analytics-service-line {
+    display: grid;
+    gap: 8px;
+}
+
+.analytics-bar-row header,
+.analytics-service-line {
+    min-width: 0;
+}
+
+.analytics-bar-row header,
+.analytics-service-line-value {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+}
+
+.analytics-service-line {
+    padding-bottom: 14px;
+    border-bottom: 1px solid var(--line);
+}
+
+.analytics-service-line:last-child {
+    padding-bottom: 0;
+    border-bottom: 0;
+}
+
+.analytics-service-line-value {
+    font-weight: 750;
+}
+
+.analytics-empty {
+    margin-bottom: 22px;
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+}
+
+.analytics-skeleton-card {
+    min-height: 162px;
+}
+
+.analytics-skeleton {
+    overflow: hidden;
+    background: var(--surface-alt);
+    border-radius: var(--radius);
+}
+
+.analytics-skeleton-value {
+    width: 46%;
+    height: 38px;
+    margin: 12px 0;
+}
+
+.analytics-skeleton-line {
+    width: 64%;
+    height: 18px;
+}
+
+@media (max-width: 780px) {
+    .analytics-bar-row header,
+    .analytics-service-line-value {
+        align-items: flex-start;
+        flex-direction: column;
+        gap: 4px;
+    }
+}

@@ -1,0 +1,182 @@
+@page "/clients/create"
+@using CarePath.Client.Api
+@using CarePath.Client.UI.Components
+@using CarePath.Contracts.Clients
+@using CarePath.Contracts.Common
+@using CarePath.Contracts.Enumerations
+@using Microsoft.AspNetCore.Authorization
+@attribute [Authorize(Roles = "Admin,Coordinator")]
+@inject ClientsClient ClientsClient
+@inject NavigationManager Navigation
+
+<PageTitle>Add client</PageTitle>
+
+<div class="page-heading">
+    <div>
+        <p class="eyebrow">People</p>
+        <h1>Add client</h1>
+        <p class="subtle">Create the account and client profile for care scheduling.</p>
+    </div>
+    <button class="button button-secondary" type="button" @onclick="NavigateToClients">Back to clients</button>
+</div>
+
+@if (createError is not null)
+{
+    <ApiErrorAlert Response="createError" />
+}
+
+<div class="client-form-grid">
+    <section class="card form-section" aria-labelledby="client-create-form-heading">
+        <div class="section-header">
+            <div>
+                <h2 id="client-create-form-heading">Client profile</h2>
+                <span class="subtle">Account, care needs, service line, and billing setup</span>
+            </div>
+            <StatusBadge Text="Draft" Tone="@BadgeTone.Info" />
+        </div>
+
+        <EditForm Model="form" OnValidSubmit="CreateClientAsync">
+            <section class="form-section" aria-labelledby="client-account-heading">
+                <h3 id="client-account-heading">Account</h3>
+                <div class="form-field-grid">
+                    <label class="form-field">First name<InputText @bind-Value="form.FirstName" /></label>
+                    <label class="form-field">Last name<InputText @bind-Value="form.LastName" /></label>
+                    <label class="form-field">Email<InputText type="email" @bind-Value="form.Email" /></label>
+                    <label class="form-field">Phone<InputText type="tel" @bind-Value="form.PhoneNumber" /></label>
+                    <label class="form-field">Temporary password<InputText type="password" @bind-Value="form.TemporaryPassword" /></label>
+                    <label class="form-field">Date of birth<InputDate @bind-Value="form.DateOfBirth" /></label>
+                </div>
+            </section>
+
+            <section class="form-section" aria-labelledby="client-emergency-heading">
+                <h3 id="client-emergency-heading">Emergency contact</h3>
+                <div class="form-field-grid">
+                    <label class="form-field">Contact name<InputText @bind-Value="form.EmergencyContactName" /></label>
+                    <label class="form-field">Contact phone<InputText type="tel" @bind-Value="form.EmergencyContactPhone" /></label>
+                    <label class="form-field">Relationship<InputText @bind-Value="form.EmergencyContactRelationship" /></label>
+                </div>
+            </section>
+
+            <section class="form-section" aria-labelledby="client-service-heading">
+                <h3 id="client-service-heading">Service setup</h3>
+                <div class="form-field-grid">
+                    <label class="form-field">Service type
+                        <InputSelect @bind-Value="form.ServiceType">
+                            <option value="@ServiceType.InHomeCare">In-home care</option>
+                            <option value="@ServiceType.FacilityStaffing">Facility staffing</option>
+                        </InputSelect>
+                    </label>
+                    <label class="form-field">Hourly bill rate<InputNumber id="client-bill-rate" @bind-Value="form.HourlyBillRate" /></label>
+                    <label class="form-field">Estimated weekly hours<InputNumber @bind-Value="form.EstimatedWeeklyHours" /></label>
+                </div>
+            </section>
+
+            <section class="form-section" aria-labelledby="client-needs-heading">
+                <h3 id="client-needs-heading">Care needs</h3>
+                <div class="check-grid">
+                    <label class="check-row"><InputCheckbox @bind-Value="form.RequiresDementiaCare" /> Dementia care</label>
+                    <label class="check-row"><InputCheckbox @bind-Value="form.RequiresMobilityAssistance" /> Mobility assistance</label>
+                    <label class="check-row"><InputCheckbox @bind-Value="form.RequiresMedicationManagement" /> Medication management</label>
+                    <label class="check-row"><InputCheckbox @bind-Value="form.RequiresCompanionship" /> Companionship</label>
+                </div>
+            </section>
+
+            <section class="form-section" aria-labelledby="client-clinical-heading">
+                <h3 id="client-clinical-heading">Care notes</h3>
+                <div class="form-field-grid">
+                    <label class="form-field form-field-wide">Special instructions<InputTextArea @bind-Value="form.SpecialInstructions" /></label>
+                    <label class="form-field form-field-wide">Medical conditions<InputTextArea @bind-Value="form.MedicalConditions" /></label>
+                    <label class="form-field form-field-wide">Allergies<InputTextArea @bind-Value="form.Allergies" /></label>
+                </div>
+            </section>
+
+            <div class="access-action-row">
+                <button class="button button-primary" type="submit" disabled="@isSaving">Create client</button>
+                <button class="button button-secondary" type="button" disabled="@isSaving" @onclick="NavigateToClients">Cancel</button>
+            </div>
+        </EditForm>
+    </section>
+
+    <aside class="card profile-panel" aria-labelledby="client-create-next-heading">
+        <h2 id="client-create-next-heading">Profile setup</h2>
+        <div class="profile-row"><span class="subtle">Step 1</span><span>Account and profile</span></div>
+        <div class="profile-row"><span class="subtle">Step 2</span><span>Create care plan</span></div>
+        <div class="profile-row"><span class="subtle">Step 3</span><span>Schedule first shift</span></div>
+        <div class="info-panel">
+            <strong>After creation</strong>
+            <p class="meta">Finish the care plan or schedule the first shift from the client roster.</p>
+        </div>
+    </aside>
+</div>
+
+@code {
+    private readonly CreateClientForm form = new();
+    private ApiResponse? createError;
+    private bool isSaving;
+
+    private async Task CreateClientAsync()
+    {
+        isSaving = true;
+        createError = null;
+
+        var request = new CreateClientRequest
+        {
+            FirstName = form.FirstName,
+            LastName = form.LastName,
+            Email = form.Email,
+            PhoneNumber = form.PhoneNumber,
+            TemporaryPassword = form.TemporaryPassword,
+            DateOfBirth = DateTime.SpecifyKind(form.DateOfBirth.Date, DateTimeKind.Utc),
+            EmergencyContactName = form.EmergencyContactName,
+            EmergencyContactPhone = form.EmergencyContactPhone,
+            EmergencyContactRelationship = form.EmergencyContactRelationship,
+            RequiresDementiaCare = form.RequiresDementiaCare,
+            RequiresMobilityAssistance = form.RequiresMobilityAssistance,
+            RequiresMedicationManagement = form.RequiresMedicationManagement,
+            RequiresCompanionship = form.RequiresCompanionship,
+            SpecialInstructions = form.SpecialInstructions,
+            MedicalConditions = form.MedicalConditions,
+            Allergies = form.Allergies,
+            ServiceType = form.ServiceType,
+            HourlyBillRate = form.HourlyBillRate,
+            EstimatedWeeklyHours = form.EstimatedWeeklyHours,
+        };
+
+        var response = await ClientsClient.CreateAsync(request);
+        form.TemporaryPassword = string.Empty;
+
+        if (response.Success && response.Data is not null)
+        {
+            Navigation.NavigateTo("/clients");
+            return;
+        }
+
+        createError = response;
+        isSaving = false;
+    }
+
+    private void NavigateToClients() => Navigation.NavigateTo("/clients");
+
+    private sealed class CreateClientForm
+    {
+        public string FirstName { get; set; } = string.Empty;
+        public string LastName { get; set; } = string.Empty;
+        public string Email { get; set; } = string.Empty;
+        public string PhoneNumber { get; set; } = string.Empty;
+        public string? TemporaryPassword { get; set; }
+        public DateTime DateOfBirth { get; set; } = DateTime.UtcNow.Date.AddYears(-75);
+        public string? EmergencyContactName { get; set; }
+        public string? EmergencyContactPhone { get; set; }
+        public string? EmergencyContactRelationship { get; set; }
+        public bool RequiresDementiaCare { get; set; }
+        public bool RequiresMobilityAssistance { get; set; }
+        public bool RequiresMedicationManagement { get; set; }
+        public bool RequiresCompanionship { get; set; }
+        public string? SpecialInstructions { get; set; }
+        public string? MedicalConditions { get; set; }
+        public string? Allergies { get; set; }
+        public ServiceType ServiceType { get; set; } = ServiceType.InHomeCare;
+        public decimal HourlyBillRate { get; set; }
+        public int EstimatedWeeklyHours { get; set; } = 40;
+    }
+}

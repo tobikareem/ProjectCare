@@ -1,5 +1,6 @@
 @page "/billing"
 @attribute [Authorize(Roles = "Admin,Coordinator")]
+@using System.Globalization
 @using CarePath.Client.Api
 @using CarePath.Client.UI.Components
 @using CarePath.Contracts.Billing
@@ -14,258 +15,401 @@
     <div>
         <p class="eyebrow">Business</p>
         <h1>Billing &amp; Invoices</h1>
-        @if (_invoices is not null)
-        {
-            <p class="subtle">@Money(PageOutstanding) outstanding (this page) · @PageOverdueCount overdue (this page)</p>
-        }
-        else
-        {
-            <p class="subtle">Invoices and payment status</p>
-        }
+        <p class="subtle">@HeadingSummary</p>
     </div>
-    <button class="button button-primary" type="button" disabled title="Coming soon"
+    <button class="button button-primary" type="button" disabled title="Invoice generation needs a client picker endpoint"
             aria-label="Generate invoices (coming soon)">$ Generate invoices</button>
 </div>
 
-<div class="metric-grid metric-grid-3">
+<section class="metric-grid metric-grid-3" aria-label="Billing totals">
     <article class="card metric-card">
         <span class="metric-label">Total invoices</span>
         <div class="metric-value">@(_invoices?.TotalCount ?? 0)</div>
-        <span class="trend trend-muted">Across all pages</span>
+        <span class="trend trend-muted">Paged from invoices API</span>
     </article>
     <article class="card metric-card">
-        <span class="metric-label">Outstanding (this page)</span>
-        <div class="metric-value metric-value-amber">@Money(PageOutstanding)</div>
-        <span class="trend trend-amber">@PageOverdueCount overdue on this page</span>
+        <span class="metric-label">Outstanding shown</span>
+        <div class="metric-value metric-value-amber">@Money(VisibleOutstanding)</div>
+        <span class="trend trend-amber">@VisibleOpenCount open on this page</span>
     </article>
     <article class="card metric-card">
-        <span class="metric-label">Overdue (this page)</span>
-        <div class="metric-value @(PageOverdueCount > 0 ? "metric-value-red" : null)">@PageOverdueCount</div>
-        <span class="trend trend-muted">Of @(_invoices?.Items.Count ?? 0) invoices on this page</span>
+        <span class="metric-label">Overdue shown</span>
+        <div class="metric-value @(VisibleOverdueCount > 0 ? "metric-value-red" : null)">@VisibleOverdueCount</div>
+        <span class="trend @(VisibleOverdueCount > 0 ? "trend-red" : "trend-muted")">Current page filters</span>
     </article>
-</div>
+</section>
 
-<div class="filter-bar">
-    <input type="search" placeholder="Search invoices…" aria-label="Search invoices on this page"
-           @bind="_search" @bind:event="oninput" />
-    <select aria-label="Filter by status" @bind="_statusFilter">
+<div class="filter-bar" role="search" aria-label="Invoice filters">
+    <input type="search" placeholder="Search invoices..." aria-label="Search invoices on this page"
+           disabled="@_loading" @bind="_search" @bind:event="oninput" />
+    <select aria-label="Filter by status" disabled="@_loading" @bind="_statusFilter">
         <option value="">All statuses</option>
         @foreach (var status in Enum.GetValues<InvoiceStatus>())
         {
             <option value="@status">@StatusLabel(status)</option>
         }
     </select>
-    <select aria-label="Filter by client" @bind="_clientFilter">
+    <select aria-label="Filter by client" disabled="@_loading" @bind="_clientFilter">
         <option value="">All clients</option>
         @foreach (var client in ClientOptions)
         {
             <option value="@client">@client</option>
         }
     </select>
-    <span class="subtle filter-scope-note">Search and filters apply to the current page (MVP)</span>
+    <button class="button button-secondary button-sm" type="button" disabled="@(!HasFilters || _loading)" @onclick="ClearFilters">
+        Clear
+    </button>
+    <span class="subtle filter-scope-note">Filters apply to the loaded invoice page.</span>
 </div>
 
 @if (_error is not null)
 {
     <ApiErrorAlert Response="_error" />
 }
-else if (_loading)
+else
 {
-    <p class="subtle" role="status">Loading invoices…</p>
-}
-else if (_invoices is not null)
-{
-    var invoices = _invoices;
-
-    <div class="card list-card">
-        <div class="row-list">
-            <div class="invoice-row row-list-header" aria-hidden="true">
-                <span>Invoice #</span><span>Client</span><span>Amount</span><span>Due date</span><span>Status</span><span></span>
-            </div>
-            @if (FilteredInvoices.Count == 0)
-            {
-                <p class="empty-state">
-                    @(invoices.Items.Count == 0 ? "No invoices yet." : "No invoices match the current filters.")
-                </p>
-            }
-            @foreach (var invoice in FilteredInvoices)
-            {
-                <div class="invoice-row">
-                    <span>
-                        <strong>@invoice.InvoiceNumber</strong>
-                        <span class="meta">@ShortDate(invoice.InvoiceDate)</span>
-                    </span>
-                    <span>
-                        @invoice.ClientFullName
-                        @if (invoice.AmountPaid > 0)
-                        {
-                            <span class="meta">Paid @Money(invoice.AmountPaid)</span>
-                        }
-                    </span>
-                    <span><strong>@Money(invoice.Total)</strong></span>
-                    <span>@ShortDate(invoice.DueDate)</span>
-                    <span><StatusBadge Text="@StatusLabel(invoice.Status)" Tone="@StatusBadgeTones.For(invoice.Status)" /></span>
-                    <button class="text-link" type="button" aria-label="View invoice @invoice.InvoiceNumber"
-                            @onclick="() => ViewInvoiceAsync(invoice.Id)">View</button>
+    <div class="billing-workspace">
+        <section class="card table-card" aria-labelledby="invoice-list-heading">
+            <div class="section-header">
+                <div>
+                    <h2 id="invoice-list-heading">Invoice list</h2>
+                    <span class="subtle">@PagingText</span>
                 </div>
-            }
-        </div>
-    </div>
-
-    @if (invoices.TotalPages > 1)
-    {
-        <nav class="cp-pager" aria-label="Invoice pages">
-            <button type="button" class="cp-pager-prev" disabled="@(!invoices.HasPreviousPage)"
-                    @onclick="() => LoadPageAsync(invoices.PageNumber - 1)">Previous</button>
-            <span class="cp-pager-status">Page @invoices.PageNumber of @invoices.TotalPages</span>
-            <button type="button" class="cp-pager-next" disabled="@(!invoices.HasNextPage)"
-                    @onclick="() => LoadPageAsync(invoices.PageNumber + 1)">Next</button>
-        </nav>
-    }
-}
-
-@if (_detailError is not null)
-{
-    <div class="section-offset">
-        <ApiErrorAlert Response="_detailError" />
-    </div>
-}
-else if (_detailLoading)
-{
-    <p class="subtle section-offset" role="status">Loading invoice…</p>
-}
-else if (_detail is not null)
-{
-    var detail = _detail;
-
-    <section class="card section-offset" aria-labelledby="invoice-detail-heading">
-        <div class="section-header">
-            <div>
-                <h2 id="invoice-detail-heading">Invoice @detail.InvoiceNumber</h2>
-                <span class="subtle">@detail.ClientFullName</span>
+                <span class="meta">@VisibleCountText</span>
             </div>
-            <button class="text-link" type="button" @onclick="CloseDetail">Close</button>
-        </div>
-        <div class="profile-list">
-            <div class="profile-row">
-                <span class="subtle">Status</span>
-                <StatusBadge Text="@StatusLabel(detail.Status)" Tone="@StatusBadgeTones.For(detail.Status)" />
+
+            <PagedTable TItem="InvoiceSummaryDto"
+                        Result="DisplayedInvoicePage"
+                        IsLoading="_loading"
+                        LoadingText="Loading invoices..."
+                        EmptyText="@InvoiceEmptyText"
+                        TableClass="data-table"
+                        PagerButtonClass="button button-secondary button-sm"
+                        PagerLabel="Invoice pages"
+                        PageSize="_pageSize"
+                        MinPageSize="DefaultPageSize"
+                        EnableViewportPageSize="true"
+                        ShowPagerWhenSinglePage="true"
+                        OnPageChanged="LoadPageAsync"
+                        OnPageSizeChanged="ChangePageSizeAsync">
+                <HeaderTemplate>
+                    <tr>
+                        <th>Invoice #</th>
+                        <th>Client</th>
+                        <th>Amount</th>
+                        <th>Due date</th>
+                        <th>Status</th>
+                        <th></th>
+                    </tr>
+                </HeaderTemplate>
+                <RowTemplate Context="invoice">
+                    <tr class="@(_selectedInvoiceId == invoice.Id ? "selected-row" : null)">
+                        <td>
+                            <strong>@invoice.InvoiceNumber</strong>
+                            <span class="meta">@ShortDate(invoice.InvoiceDate)</span>
+                        </td>
+                        <td>
+                            @invoice.ClientFullName
+                            <span class="meta">@BalanceSummary(invoice)</span>
+                        </td>
+                        <td><strong>@Money(invoice.Total)</strong></td>
+                        <td>@ShortDate(invoice.DueDate)</td>
+                        <td><StatusBadge Text="@StatusLabel(invoice.Status)" Tone="@StatusBadgeTones.For(invoice.Status)" /></td>
+                        <td>
+                            <button class="text-link" type="button" aria-label="View invoice @invoice.InvoiceNumber"
+                                    disabled="@_detailLoading" @onclick="() => SelectInvoiceAsync(invoice.Id)">
+                                View
+                            </button>
+                        </td>
+                    </tr>
+                </RowTemplate>
+            </PagedTable>
+        </section>
+
+        <aside class="card billing-detail-card" aria-labelledby="invoice-detail-heading">
+            <div class="section-header">
+                <div>
+                    <h2 id="invoice-detail-heading">Invoice detail</h2>
+                    <span class="subtle">@DetailSummary</span>
+                </div>
+                @if (_detail is not null)
+                {
+                    <button class="text-link" type="button" @onclick="CloseDetail">Close</button>
+                }
             </div>
-            <div class="profile-row"><span class="subtle">Invoice date</span><strong>@LongDate(detail.InvoiceDate)</strong></div>
-            <div class="profile-row"><span class="subtle">Due date</span><strong>@LongDate(detail.DueDate)</strong></div>
-            @if (detail.PaidDate is { } paidDate)
+
+            @if (_detailError is not null)
             {
-                <div class="profile-row"><span class="subtle">Paid date</span><strong>@LongDate(paidDate)</strong></div>
+                <ApiErrorAlert Response="_detailError" />
             }
-            <div class="profile-row"><span class="subtle">Subtotal</span><strong>@Money(detail.Subtotal)</strong></div>
-            <div class="profile-row"><span class="subtle">Tax</span><strong>@Money(detail.TaxAmount)</strong></div>
-            <div class="profile-row"><span class="subtle">Total</span><strong>@Money(detail.Total)</strong></div>
-            <div class="profile-row"><span class="subtle">Amount paid</span><strong>@Money(detail.AmountPaid)</strong></div>
-            <div class="profile-row"><span class="subtle">Balance</span><strong>@Money(detail.Balance)</strong></div>
-        </div>
-        @if (detail.LineItems.Count > 0)
-        {
-            <h3 class="section-offset">Line items</h3>
-            <div class="profile-list">
-                @foreach (var line in detail.LineItems)
-                {
-                    <div class="profile-row">
-                        <span>
-                            @line.Description
-                            <span class="meta">@ShortDate(line.ServiceDate) · @Hours(line.BillableHours) hrs</span>
-                        </span>
-                        <strong>@Money(line.Total)</strong>
+            else if (_detailLoading)
+            {
+                <p class="empty-state compact" role="status">Loading invoice...</p>
+            }
+            else if (_detail is null)
+            {
+                <p class="empty-state compact">Select an invoice to review line items, payments, and balance.</p>
+            }
+            else
+            {
+                var detail = _detail;
+
+                <div class="billing-detail-heading">
+                    <div>
+                        <strong>@detail.InvoiceNumber</strong>
+                        <span class="meta">@detail.ClientFullName</span>
                     </div>
-                }
-            </div>
-        }
-        @if (detail.Payments.Count > 0)
-        {
-            <h3 class="section-offset">Payments</h3>
-            <div class="profile-list">
-                @foreach (var payment in detail.Payments)
-                {
-                    <div class="profile-row">
-                        <span class="subtle">@payment.Method · @ShortDate(payment.PaymentDate)</span>
-                        <strong>@Money(payment.Amount)</strong>
+                    <StatusBadge Text="@StatusLabel(detail.Status)" Tone="@StatusBadgeTones.For(detail.Status)" />
+                </div>
+
+                <div class="profile-list">
+                    <div class="profile-row"><span class="subtle">Invoice date</span><strong>@LongDate(detail.InvoiceDate)</strong></div>
+                    <div class="profile-row"><span class="subtle">Due date</span><strong>@LongDate(detail.DueDate)</strong></div>
+                    @if (detail.PaidDate is { } paidDate)
+                    {
+                        <div class="profile-row"><span class="subtle">Paid date</span><strong>@LongDate(paidDate)</strong></div>
+                    }
+                    <div class="profile-row"><span class="subtle">Subtotal</span><strong>@Money(detail.Subtotal)</strong></div>
+                    <div class="profile-row"><span class="subtle">Tax</span><strong>@Money(detail.TaxAmount)</strong></div>
+                    <div class="profile-row"><span class="subtle">Amount paid</span><strong>@Money(detail.AmountPaid)</strong></div>
+                    <div class="profile-row"><span class="subtle">Balance</span><strong>@Money(detail.Balance)</strong></div>
+                </div>
+
+                <section class="section-offset" aria-labelledby="payment-entry-heading">
+                    <div class="section-header">
+                        <div>
+                            <h3 id="payment-entry-heading">Record payment</h3>
+                            <span class="subtle">@PaymentFormSummary</span>
+                        </div>
                     </div>
-                }
-            </div>
-        }
-    </section>
+
+                    @if (_paymentError is not null)
+                    {
+                        <ApiErrorAlert Response="_paymentError" />
+                    }
+
+                    <div class="billing-payment-form">
+                        <label>
+                            <span>Amount</span>
+                            <input type="number" inputmode="decimal" min="0.01" step="0.01" placeholder="0.00"
+                                   disabled="@(!CanRecordPayment || _paymentSubmitting)"
+                                   @bind="_paymentAmountText" @bind:event="oninput" />
+                        </label>
+                        <label>
+                            <span>Method</span>
+                            <select disabled="@(!CanRecordPayment || _paymentSubmitting)" @bind="_paymentMethod">
+                                @foreach (var method in Enum.GetValues<PaymentMethod>())
+                                {
+                                    <option value="@method">@PaymentMethodLabel(method)</option>
+                                }
+                            </select>
+                        </label>
+                        <label>
+                            <span>Payment date</span>
+                            <InputDate disabled="@(!CanRecordPayment || _paymentSubmitting)"
+                                       @bind-Value="_paymentDate" />
+                        </label>
+                        <label>
+                            <span>Reference</span>
+                            <input type="text" maxlength="80" placeholder="Optional"
+                                   disabled="@(!CanRecordPayment || _paymentSubmitting)"
+                                   @bind="_paymentReference" />
+                        </label>
+                    </div>
+                    <div class="button-row billing-action-row">
+                        <button class="button button-primary" type="button" disabled="@(!CanSubmitPayment)"
+                                @onclick="RecordPaymentAsync">
+                            @(_paymentSubmitting ? "Recording..." : "Record payment")
+                        </button>
+                        <button class="button button-secondary" type="button" disabled="@(!CanRecordPayment || _paymentSubmitting)"
+                                @onclick="ResetPaymentForm">
+                            Reset
+                        </button>
+                    </div>
+                </section>
+
+                <section class="section-offset" aria-labelledby="line-items-heading">
+                    <h3 id="line-items-heading">Line items</h3>
+                    @if (detail.LineItems.Count == 0)
+                    {
+                        <p class="empty-state compact">No line items are attached to this invoice.</p>
+                    }
+                    else
+                    {
+                        <div class="data-table-wrap">
+                            <table class="data-table billing-mini-table">
+                                <thead>
+                                    <tr>
+                                        <th>Service</th>
+                                        <th>Date</th>
+                                        <th>Hours</th>
+                                        <th>Total</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var line in detail.LineItems)
+                                    {
+                                        <tr>
+                                            <td>@line.Description</td>
+                                            <td>@ShortDate(line.ServiceDate)</td>
+                                            <td>@Hours(line.BillableHours)</td>
+                                            <td><strong>@Money(line.Total)</strong></td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    }
+                </section>
+
+                <section class="section-offset" aria-labelledby="payments-heading">
+                    <h3 id="payments-heading">Payments</h3>
+                    @if (detail.Payments.Count == 0)
+                    {
+                        <p class="empty-state compact">No payments have been recorded.</p>
+                    }
+                    else
+                    {
+                        <div class="stacked-list">
+                            @foreach (var payment in detail.Payments.OrderByDescending(payment => payment.PaymentDate))
+                            {
+                                <div class="billing-payment-row">
+                                    <div>
+                                        <strong>@Money(payment.Amount)</strong>
+                                        <span class="meta">@PaymentMethodLabel(payment.Method) - @ShortDate(payment.PaymentDate)</span>
+                                        @if (!string.IsNullOrWhiteSpace(payment.ReferenceNumber))
+                                        {
+                                            <span class="meta">Ref @payment.ReferenceNumber</span>
+                                        }
+                                    </div>
+                                    <StatusBadge Text="@PaymentStatusLabel(payment.Status)" Tone="@StatusBadgeTones.For(payment.Status)" />
+                                </div>
+                            }
+                        </div>
+                    }
+                </section>
+            }
+        </aside>
+    </div>
 }
 
 @code {
-    // TODO(PM): flag for a billing summary endpoint (MTD revenue, org-wide outstanding/overdue).
-    // No coordinator-accessible aggregate exists, so the KPI cards are honestly scoped to the
-    // loaded page ("this page") instead of fabricating month-to-date revenue.
+    private const int DefaultPageSize = 8;
+
     private PagedResult<InvoiceSummaryDto>? _invoices;
     private ApiResponse? _error;
     private bool _loading = true;
+    private int _pageSize = DefaultPageSize;
     private string _search = string.Empty;
     private string _statusFilter = string.Empty;
     private string _clientFilter = string.Empty;
+    private Guid? _selectedInvoiceId;
     private InvoiceDetailDto? _detail;
     private ApiResponse? _detailError;
     private bool _detailLoading;
+    private ApiResponse? _paymentError;
+    private bool _paymentSubmitting;
+    private string _paymentAmountText = string.Empty;
+    private PaymentMethod _paymentMethod = PaymentMethod.Check;
+    private DateTime _paymentDate = DateTime.UtcNow.Date;
+    private string? _paymentReference;
 
-    private decimal PageOutstanding => _invoices?.Items.Sum(i => i.Balance) ?? 0m;
+    private IReadOnlyList<InvoiceSummaryDto> FilteredInvoices =>
+        _invoices?.Items.Where(MatchesFilters).ToArray() ?? [];
 
-    private int PageOverdueCount => _invoices?.Items.Count(i => i.Status == InvoiceStatus.Overdue) ?? 0;
+    private PagedResult<InvoiceSummaryDto>? DisplayedInvoicePage =>
+        _invoices is null
+            ? null
+            : new PagedResult<InvoiceSummaryDto>
+            {
+                Items = FilteredInvoices,
+                PageNumber = _invoices.PageNumber,
+                PageSize = _invoices.PageSize,
+                TotalCount = _invoices.TotalCount
+            };
+
+    private decimal VisibleOutstanding => FilteredInvoices.Sum(invoice => invoice.Balance);
+
+    private int VisibleOpenCount => FilteredInvoices.Count(invoice => invoice.Balance > 0);
+
+    private int VisibleOverdueCount => FilteredInvoices.Count(invoice => invoice.Status == InvoiceStatus.Overdue);
+
+    private bool HasFilters =>
+        !string.IsNullOrWhiteSpace(_search) ||
+        !string.IsNullOrWhiteSpace(_statusFilter) ||
+        !string.IsNullOrWhiteSpace(_clientFilter);
 
     private IReadOnlyList<string> ClientOptions =>
         _invoices is null
             ? []
             : _invoices.Items
-                .Select(i => i.ClientFullName)
+                .Select(invoice => invoice.ClientFullName)
                 .Distinct(StringComparer.OrdinalIgnoreCase)
                 .OrderBy(name => name, StringComparer.OrdinalIgnoreCase)
-                .ToList();
+                .ToArray();
 
-    private IReadOnlyList<InvoiceSummaryDto> FilteredInvoices
-    {
-        get
-        {
-            if (_invoices is null)
-            {
-                return [];
-            }
+    private string HeadingSummary =>
+        _invoices is null
+            ? "Invoices and payment status"
+            : $"{Money(VisibleOutstanding)} outstanding shown - {VisibleOverdueCount} overdue shown";
 
-            IEnumerable<InvoiceSummaryDto> items = _invoices.Items;
-            if (!string.IsNullOrWhiteSpace(_search))
-            {
-                items = items.Where(i =>
-                    i.InvoiceNumber.Contains(_search, StringComparison.OrdinalIgnoreCase) ||
-                    i.ClientFullName.Contains(_search, StringComparison.OrdinalIgnoreCase));
-            }
+    private string PagingText =>
+        _invoices is null
+            ? "Page 1"
+            : $"Page {_invoices.PageNumber} of {Math.Max(_invoices.TotalPages, 1)}";
 
-            if (Enum.TryParse<InvoiceStatus>(_statusFilter, out var status))
-            {
-                items = items.Where(i => i.Status == status);
-            }
+    private string VisibleCountText =>
+        _invoices is null
+            ? "No invoices loaded"
+            : $"{FilteredInvoices.Count} shown from {_invoices.Items.Count} loaded";
 
-            if (!string.IsNullOrWhiteSpace(_clientFilter))
-            {
-                items = items.Where(i => string.Equals(i.ClientFullName, _clientFilter, StringComparison.OrdinalIgnoreCase));
-            }
+    private string InvoiceEmptyText =>
+        _invoices is { Items.Count: 0 }
+            ? "No invoices yet."
+            : "No invoices match the current filters on this page.";
 
-            return items.ToList();
-        }
-    }
+    private string DetailSummary =>
+        _detail is null
+            ? "Select an invoice"
+            : $"{Money(_detail.Balance)} balance";
+
+    private bool CanRecordPayment =>
+        _detail is not null &&
+        _detail.Balance > 0m &&
+        _detail.Status is not InvoiceStatus.Paid and not InvoiceStatus.Cancelled;
+
+    private bool CanSubmitPayment =>
+        CanRecordPayment &&
+        !_paymentSubmitting &&
+        TryGetPaymentAmount(out var amount) &&
+        amount > 0m &&
+        amount <= _detail!.Balance &&
+        TryGetPaymentDate(out _);
+
+    private string PaymentFormSummary =>
+        CanRecordPayment
+            ? $"Balance due {Money(_detail!.Balance)}"
+            : "Payment entry is disabled for this invoice.";
 
     protected override Task OnInitializedAsync() => LoadPageAsync(1);
 
     private async Task LoadPageAsync(int pageNumber)
     {
+        if (pageNumber < 1)
+        {
+            return;
+        }
+
         _loading = true;
         _error = null;
 
         try
         {
-            var response = await BillingApi.GetInvoicesAsync(new PagedRequest { PageNumber = pageNumber });
+            var response = await BillingApi.GetInvoicesAsync(new PagedRequest { PageNumber = pageNumber, PageSize = _pageSize });
             if (response is { Success: true, Data: not null })
             {
                 _invoices = response.Data;
+                SyncSelectedInvoiceFromPage();
             }
             else
             {
@@ -274,18 +418,30 @@ else if (_detail is not null)
         }
         catch (HttpRequestException)
         {
-            // PHI-safe generic failure — never surface exception details (D-S6-3).
             _error = ApiResponse.Fail(new ApiError("network.unreachable", "The server could not be reached."));
         }
 
         _loading = false;
     }
 
-    private async Task ViewInvoiceAsync(Guid invoiceId)
+    private async Task ChangePageSizeAsync(int requestedPageSize)
     {
+        if (requestedPageSize < DefaultPageSize || requestedPageSize == _pageSize)
+        {
+            return;
+        }
+
+        _pageSize = requestedPageSize;
+        await LoadPageAsync(1);
+    }
+
+    private async Task SelectInvoiceAsync(Guid invoiceId)
+    {
+        _selectedInvoiceId = invoiceId;
         _detailLoading = true;
         _detail = null;
         _detailError = null;
+        _paymentError = null;
 
         try
         {
@@ -293,6 +449,7 @@ else if (_detail is not null)
             if (response is { Success: true, Data: not null })
             {
                 _detail = response.Data;
+                ResetPaymentForm();
             }
             else
             {
@@ -307,15 +464,163 @@ else if (_detail is not null)
         _detailLoading = false;
     }
 
+    private async Task RecordPaymentAsync()
+    {
+        if (_detail is null || !TryGetPaymentAmount(out var amount) || !TryGetPaymentDate(out var paymentDate))
+        {
+            return;
+        }
+
+        _paymentSubmitting = true;
+        _paymentError = null;
+
+        try
+        {
+            var response = await BillingApi.RecordPaymentAsync(
+                _detail.Id,
+                new RecordPaymentRequest
+                {
+                    Amount = amount,
+                    Method = _paymentMethod,
+                    PaymentDate = DateTime.SpecifyKind(paymentDate.Date, DateTimeKind.Utc),
+                    ReferenceNumber = string.IsNullOrWhiteSpace(_paymentReference) ? null : _paymentReference.Trim()
+                });
+
+            if (response is { Success: true, Data: not null })
+            {
+                _detail = response.Data;
+                _selectedInvoiceId = response.Data.Id;
+                RefreshInvoiceSummary(response.Data);
+                ResetPaymentForm();
+            }
+            else
+            {
+                _paymentError = response;
+            }
+        }
+        catch (HttpRequestException)
+        {
+            _paymentError = ApiResponse.Fail(new ApiError("network.unreachable", "The payment could not be recorded."));
+        }
+
+        _paymentSubmitting = false;
+    }
+
+    private bool MatchesFilters(InvoiceSummaryDto invoice)
+    {
+        if (!string.IsNullOrWhiteSpace(_search)
+            && !invoice.InvoiceNumber.Contains(_search, StringComparison.OrdinalIgnoreCase)
+            && !invoice.ClientFullName.Contains(_search, StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
+        if (Enum.TryParse<InvoiceStatus>(_statusFilter, out var status) && invoice.Status != status)
+        {
+            return false;
+        }
+
+        return string.IsNullOrWhiteSpace(_clientFilter)
+            || string.Equals(invoice.ClientFullName, _clientFilter, StringComparison.OrdinalIgnoreCase);
+    }
+
+    private void ClearFilters()
+    {
+        _search = string.Empty;
+        _statusFilter = string.Empty;
+        _clientFilter = string.Empty;
+    }
+
     private void CloseDetail()
     {
+        _selectedInvoiceId = null;
         _detail = null;
         _detailError = null;
+        _paymentError = null;
+        ResetPaymentForm();
     }
+
+    private void ResetPaymentForm()
+    {
+        _paymentAmountText = CanRecordPayment
+            ? _detail!.Balance.ToString("0.##", CultureInfo.InvariantCulture)
+            : string.Empty;
+        _paymentMethod = PaymentMethod.Check;
+        _paymentDate = DateTime.UtcNow.Date;
+        _paymentReference = null;
+        _paymentError = null;
+    }
+
+    private bool TryGetPaymentAmount(out decimal amount) =>
+        decimal.TryParse(_paymentAmountText, NumberStyles.Number, CultureInfo.InvariantCulture, out amount);
+
+    private bool TryGetPaymentDate(out DateTime paymentDate)
+    {
+        paymentDate = _paymentDate;
+        return paymentDate != default;
+    }
+
+    private void RefreshInvoiceSummary(InvoiceDetailDto detail)
+    {
+        if (_invoices is null)
+        {
+            return;
+        }
+
+        var items = _invoices.Items
+            .Select(invoice => invoice.Id == detail.Id ? ToSummary(detail) : invoice)
+            .ToArray();
+
+        _invoices = new PagedResult<InvoiceSummaryDto>
+        {
+            Items = items,
+            PageNumber = _invoices.PageNumber,
+            PageSize = _invoices.PageSize,
+            TotalCount = _invoices.TotalCount
+        };
+    }
+
+    private void SyncSelectedInvoiceFromPage()
+    {
+        if (_selectedInvoiceId is not { } selectedId || _invoices?.Items.Any(invoice => invoice.Id == selectedId) == true)
+        {
+            return;
+        }
+
+        CloseDetail();
+    }
+
+    private static InvoiceSummaryDto ToSummary(InvoiceDetailDto detail) => new()
+    {
+        Id = detail.Id,
+        InvoiceNumber = detail.InvoiceNumber,
+        ClientId = detail.ClientId,
+        ClientFullName = detail.ClientFullName,
+        InvoiceDate = detail.InvoiceDate,
+        DueDate = detail.DueDate,
+        Status = detail.Status,
+        Total = detail.Total,
+        AmountPaid = detail.AmountPaid,
+        Balance = detail.Balance
+    };
+
+    private static string BalanceSummary(InvoiceSummaryDto invoice) =>
+        invoice.Balance > 0m
+            ? $"{Money(invoice.Balance)} balance"
+            : $"{Money(invoice.AmountPaid)} paid";
 
     private static string StatusLabel(InvoiceStatus status) => status switch
     {
         InvoiceStatus.PartiallyPaid => "Partially paid",
         _ => status.ToString()
     };
+
+    private static string PaymentMethodLabel(PaymentMethod method) => method switch
+    {
+        PaymentMethod.CreditCard => "Credit card",
+        PaymentMethod.BankTransfer => "Bank transfer",
+        _ => method.ToString()
+    };
+
+    private static string PaymentStatusLabel(PaymentStatus status) => status.ToString();
 }

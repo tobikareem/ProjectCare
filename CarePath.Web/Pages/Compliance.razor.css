@@ -1,0 +1,16 @@
+.text-link:disabled {
+    color: var(--muted);
+    cursor: not-allowed;
+    text-decoration: none;
+}
+
+@media (max-width: 760px) {
+    .cert-row {
+        grid-template-columns: 1fr;
+        align-items: start;
+    }
+
+    .row-list-header {
+        display: none;
+    }
+}

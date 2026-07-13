@@ -139,6 +139,17 @@ public sealed class DomainToContractMapperTests
     }
 
     [Fact]
+    public void CreateShiftRequest_CaregiverIdRemainsOptional_ForOpenShiftCreation()
+    {
+        // Arrange / Act — D-S6-12: null creates an open shift for the coverage queue
+        var property = typeof(CreateShiftRequest).GetProperty("CaregiverId");
+
+        // Assert
+        property.Should().NotBeNull();
+        property!.PropertyType.Should().Be(typeof(Guid?));
+    }
+
+    [Fact]
     public void ToDetailDto_WhenMappingShiftWithNullActuals_FlattensZeroBillableHoursAndNoRates()
     {
         // Arrange

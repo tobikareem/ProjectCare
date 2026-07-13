@@ -1,41 +1,52 @@
 @namespace CarePath.Client.UI.Components
 @typeparam TItem
+@using Microsoft.JSInterop
+@implements IAsyncDisposable
+@inject IJSRuntime JS
 
-<div class="cp-paged-table">
-    <table class="cp-table">
-        <thead>
-            @HeaderTemplate
-        </thead>
-        <tbody>
-            @if (Result is { Items.Count: > 0 })
-            {
-                @foreach (var item in Result.Items)
+<div class="cp-paged-table @CssClass">
+    <div class="cp-paged-table-frame" style="@FrameStyle" @ref="frameElement">
+        <table class="@TableClass">
+            <thead>
+                @HeaderTemplate
+            </thead>
+            <tbody>
+                @if (IsLoading)
                 {
-                    @RowTemplate(item)
+                    <tr>
+                        <td class="cp-table-empty" colspan="100" role="status">@LoadingText</td>
+                    </tr>
                 }
-            }
-            else
-            {
-                <tr>
-                    <td class="cp-table-empty" colspan="100">@EmptyText</td>
-                </tr>
-            }
-        </tbody>
-    </table>
+                else if (Result is { Items.Count: > 0 })
+                {
+                    @foreach (var item in Result.Items)
+                    {
+                        @RowTemplate(item)
+                    }
+                }
+                else
+                {
+                    <tr>
+                        <td class="cp-table-empty" colspan="100">@EmptyText</td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
 
-    @if (Result is not null && Result.TotalPages > 1)
+    @if (Result is not null && (ShowPagerWhenSinglePage || Result.TotalPages > 1))
     {
-        <nav class="cp-pager" aria-label="Pagination">
+        <nav class="cp-pager" aria-label="@PagerLabel">
             <button type="button"
-                    class="cp-pager-prev"
-                    disabled="@(!Result.HasPreviousPage)"
+                    class="@PagerButtonClass"
+                    disabled="@(!Result.HasPreviousPage || IsLoading)"
                     @onclick="() => OnPageChanged.InvokeAsync(Result.PageNumber - 1)">
                 Previous
             </button>
-            <span class="cp-pager-status">Page @Result.PageNumber of @Result.TotalPages</span>
+            <span class="cp-pager-status">Page @Result.PageNumber of @Math.Max(Result.TotalPages, 1)</span>
             <button type="button"
-                    class="cp-pager-next"
-                    disabled="@(!Result.HasNextPage)"
+                    class="@PagerButtonClass"
+                    disabled="@(!Result.HasNextPage || IsLoading)"
                     @onclick="() => OnPageChanged.InvokeAsync(Result.PageNumber + 1)">
                 Next
             </button>
@@ -48,11 +59,15 @@
     [Parameter, EditorRequired]
     public PagedResult<TItem>? Result { get; set; }
 
-    /// <summary>Table header row(s) — supply th cells inside tr.</summary>
+    /// <summary>Whether the table body should render a loading row.</summary>
+    [Parameter]
+    public bool IsLoading { get; set; }
+
+    /// <summary>Table header row(s); supply th cells inside tr.</summary>
     [Parameter, EditorRequired]
     public RenderFragment HeaderTemplate { get; set; } = default!;
 
-    /// <summary>Row template invoked per item — supply a tr per item.</summary>
+    /// <summary>Row template invoked per item; supply a tr per item.</summary>
     [Parameter, EditorRequired]
     public RenderFragment<TItem> RowTemplate { get; set; } = default!;
 
@@ -60,7 +75,144 @@
     [Parameter]
     public string EmptyText { get; set; } = "No records found.";
 
+    /// <summary>Message shown while the page is loading. Must be PHI-free.</summary>
+    [Parameter]
+    public string LoadingText { get; set; } = "Loading records...";
+
     /// <summary>Raised with the requested one-based page number when the user pages.</summary>
     [Parameter]
     public EventCallback<int> OnPageChanged { get; set; }
+
+    /// <summary>Raised when the browser viewport suggests a different server page size.</summary>
+    [Parameter]
+    public EventCallback<int> OnPageSizeChanged { get; set; }
+
+    /// <summary>Current server page size. Used to avoid duplicate page-size callbacks.</summary>
+    [Parameter]
+    public int PageSize { get; set; } = 5;
+
+    /// <summary>Use the browser viewport to suggest how many rows fit without pushing below the fold.</summary>
+    [Parameter]
+    public bool EnableViewportPageSize { get; set; }
+
+    /// <summary>Minimum row count when viewport sizing is enabled.</summary>
+    [Parameter]
+    public int MinPageSize { get; set; } = 5;
+
+    /// <summary>Estimated row height in pixels for viewport page-size calculations.</summary>
+    [Parameter]
+    public int RowHeightPx { get; set; } = 58;
+
+    /// <summary>Estimated vertical space outside the list frame.</summary>
+    [Parameter]
+    public int ViewportOffsetPx { get; set; } = 430;
+
+    /// <summary>Renders disabled Previous/Next buttons even when only one page exists.</summary>
+    [Parameter]
+    public bool ShowPagerWhenSinglePage { get; set; }
+
+    /// <summary>CSS class for the outer component wrapper.</summary>
+    [Parameter]
+    public string CssClass { get; set; } = string.Empty;
+
+    /// <summary>CSS class for the table element.</summary>
+    [Parameter]
+    public string TableClass { get; set; } = "cp-table";
+
+    /// <summary>CSS class for Previous and Next buttons.</summary>
+    [Parameter]
+    public string PagerButtonClass { get; set; } = "cp-pager-button";
+
+    /// <summary>Accessible label for the pager navigation.</summary>
+    [Parameter]
+    public string PagerLabel { get; set; } = "Pagination";
+
+    private ElementReference frameElement;
+    private DotNetObjectReference<PagedTable<TItem>>? dotNetReference;
+    private IJSObjectReference? module;
+    private IJSObjectReference? watcher;
+    private int lastSuggestedPageSize;
+
+    private string FrameStyle =>
+        $"--cp-paged-table-max-height: calc(100vh - {ViewportOffsetPx}px);";
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender || !EnableViewportPageSize)
+        {
+            return;
+        }
+
+        try
+        {
+            module = await JS.InvokeAsync<IJSObjectReference>(
+                "import",
+                "./_content/CarePath.Client.UI/carepath-ui.js");
+            dotNetReference = DotNetObjectReference.Create(this);
+            watcher = await module.InvokeAsync<IJSObjectReference>(
+                "watchPagedTable",
+                frameElement,
+                dotNetReference,
+                new
+                {
+                    minPageSize = MinPageSize,
+                    rowHeightPx = RowHeightPx,
+                    viewportOffsetPx = ViewportOffsetPx
+                });
+        }
+        catch (JSException)
+        {
+            // Keep the default page size if browser sizing is unavailable.
+        }
+        catch (InvalidOperationException)
+        {
+            // Static prerendering and tests may not have a live JS runtime.
+        }
+        catch (Exception)
+        {
+            // Tests and locked-down hosts should still render with the default page size.
+        }
+    }
+
+    /// <summary>Receives viewport page-size suggestions from the shared UI JavaScript module.</summary>
+    [JSInvokable]
+    public async Task SetViewportPageSize(int suggestedPageSize)
+    {
+        if (!EnableViewportPageSize || suggestedPageSize < 1)
+        {
+            return;
+        }
+
+        var resolvedPageSize = Math.Max(MinPageSize, suggestedPageSize);
+        if (resolvedPageSize == PageSize || resolvedPageSize == lastSuggestedPageSize)
+        {
+            return;
+        }
+
+        lastSuggestedPageSize = resolvedPageSize;
+        await OnPageSizeChanged.InvokeAsync(resolvedPageSize);
+    }
+
+    /// <inheritdoc />
+    public async ValueTask DisposeAsync()
+    {
+        if (watcher is not null)
+        {
+            try
+            {
+                await watcher.InvokeVoidAsync("dispose");
+                await watcher.DisposeAsync();
+            }
+            catch (JSException)
+            {
+            }
+        }
+
+        if (module is not null)
+        {
+            await module.DisposeAsync();
+        }
+
+        dotNetReference?.Dispose();
+    }
 }

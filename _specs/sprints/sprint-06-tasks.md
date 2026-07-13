@@ -145,9 +145,12 @@ change process). Rules:
 - Badge tone -> wireframe color mapping (already applied in the shared CSS):
   Success=green/green-soft, Warning=amber/amber-soft, Danger=red/red-soft,
   Info=teal-700/teal-100, Neutral=muted/surface-alt.
-- Screens that exist in the wireframe (Overview, Schedule, Coverage queue, Assign caregiver,
-  Caregivers roster/profile detail, Add caregiver, Add certifications, Schedule eligible shifts,
-  review queue, escalations) follow its structure. Screens it lacks reuse its patterns
+- Screens that exist in the wireframe (Overview, Schedule, Coverage queue, Create shift
+  (`page-shift-create`, added 2026-07-09 — entry point for Overview's `＋ Create shift` and
+  Schedule's `＋ New shift`; form maps field-for-field to `CreateShiftRequest` and ends in a
+  required caregiver assignment per D-S6-10), Assign caregiver, Caregivers roster/profile
+  detail, Add caregiver, Add certifications, Schedule eligible shifts, review queue,
+  escalations) follow its structure. Screens it lacks reuse its patterns
   (top-bar + filter row + card/table grid) and get added to the wireframe before implementation.
 - Exit verification includes a side-by-side wireframe-vs-app pass per screen.
 
@@ -174,10 +177,11 @@ The caregiver and scheduling UX follows the updated wireframe exactly:
 - The Schedule page remains the primary place to assign caregivers to shifts. Its `Coverage
   queue` and `Assign caregiver` page are the shift-first workflow; caregiver profile Step 3 is a
   filtered shortcut back into the same assignment rules.
-- Current backend shape: `CreateShiftRequest` creates a scheduled shift with a required
-  `CaregiverId`; `UpdateShiftRequest` can assign, reassign, or clear `CaregiverId`. Sprint 6 may
-  add read/match endpoints or DTOs for open shifts/eligible caregivers, but must not bypass the
-  existing shift validation guards.
+- Current backend shape (amended by D-S6-12, 2026-07-09): `CreateShiftRequest` creates a
+  scheduled shift with an OPTIONAL `CaregiverId` — `null` creates an open shift for the
+  coverage queue; `UpdateShiftRequest` can assign, reassign, or clear `CaregiverId`. Sprint 6
+  may add read/match endpoints or DTOs for open shifts/eligible caregivers, but must not bypass
+  the existing shift validation guards.
 - `Shifts (MTD)` is not `Caregiver.TotalShiftsCompleted`. It is a current-month metric derived
   from successful caregiver check-in/out records and returned only through an authorized
   Admin/Coordinator profile or scheduling DTO.
@@ -206,6 +210,47 @@ change): dashboard `Missed`/`Last check-in` summary columns (per-plan reminder/c
 aggregates), check-in response-text previews for coordinators (would expose `ResponsesJson`
 content — mirror the audited `/content` route pattern if approved), plan-linked visit-note
 lists, and a Transitions KPI/metrics endpoint (pages derive KPIs from paged reads for now).
+
+### D-S6-12 - Open-shift creation: nullable CaregiverId on create (approved by Tobi 2026-07-09)
+
+Proposed by Codex during the Create shift wireframe review; endorsed by Claude; approved by
+Tobi. Amends the D-S6-10 line "CreateShiftRequest creates a scheduled shift with a required
+CaregiverId":
+
+- `CreateShiftRequest.CaregiverId` becomes `Guid?`. `null` creates an OPEN shift
+  (`Status = Scheduled`, `CaregiverId = null`) that enters the existing coverage queue.
+  `Guid.Empty` remains a validation failure. The domain already modeled this —
+  `Shift.CaregiverId` was always nullable with "open shift" documented semantics.
+- Guard split: date-range/UTC, break, rates, service type, and client validation run on every
+  create; double-booking and credential eligibility guards run ONLY when a caregiver is
+  supplied (create) or assigned (update — unchanged). Assignment/reassignment stays on
+  `UpdateShiftRequest` with all existing guards.
+- Two-step UI flow (no new endpoints): Create shift page saves the shift (open or assigned);
+  assignment uses the existing Assign page with the real shift id, so shift-scoped
+  `GetEligibleCaregiversAsync` works as-is. The proposed draft-preview eligibility endpoint is
+  REJECTED — new PHI-adjacent surface with no MVP need.
+- Facility note: there is no Facility entity; facility engagements are `Client` records with
+  `ServiceType.FacilityStaffing`. "Client or facility" fields map to `ClientId`.
+- Wireframe: `page-shift-create` assignment panel is optional ("assign now or leave open");
+  `page-shift-assign` relabeled "Assign open shift"; implementation-facing copy removed.
+
+### D-S6-13 - Shifts list date-range filter for the schedule board (approved by Tobi 2026-07-09)
+
+The weekly schedule board cannot be fed by unfiltered pages (Id-ordered page 1 can miss the
+visible week entirely; Shift is a high-volume table). Authorized addition:
+
+- `GET /api/shifts?pageNumber=&pageSize=&fromUtc=&toUtc=` — optional UTC range with half-open
+  overlap semantics `[fromUtc, toUtc)`: a shift is included when
+  `ScheduledEndTime > fromUtc && ScheduledStartTime < toUtc`, so boundary-touching shifts land
+  in exactly one week. `fromUtc > toUtc` fails with stable code `shift.invalid_range`.
+  Unspecified/local kinds are normalized to UTC server-side.
+- The range composes with the existing role scoping (Admin/Coordinator org-wide;
+  Caregiver own-shifts; Client own/granted) — it never widens visibility, and per-row read
+  audits are unchanged.
+- Client: `ShiftsClient.GetPageAsync(paging, fromUtc?, toUtc?)` (additive optional params;
+  existing call sites unaffected). Coverage queue remains unfiltered per D-S6-10.
+- Pinned by `Sprint4SchedulingServiceTests` range tests and the
+  `Sprint6ClientRouteAlignmentTests` URL pin.
 
 ### D-S6-7 - Accessibility baseline
 
@@ -236,6 +281,7 @@ escalation->acknowledge) is part of exit verification.
 | Login | anonymous | `AuthClient` (D-S6-2) | Generic failure message only |
 | Overview | Coordinator, Admin | ShiftsClient (open/covered shifts), CaregiversClient (active/expiring cert counts), TransitionsClient (open escalations), billing summaries when available | Must match wireframe dashboard; quick action `+ Add caregiver` routes to Step 1 create |
 | Schedule board | Coordinator, Admin | ShiftsClient paged board/list | Weekly board, open/unassigned styling, coverage queue entry point; guard errors surfaced via ApiErrorAlert |
+| Create shift | Coordinator, Admin | ClientsClient.GetPageAsync (client/facility select), ShiftsClient.CreateAsync (open or assigned per D-S6-12) | Wireframe `page-shift-create`; entry from Overview `＋ Create shift` and Schedule `＋ New shift`; "Create & assign" continues to Assign page with the new shift id |
 | Coverage queue | Coordinator, Admin | ShiftsClient open shifts + eligible caregiver/match DTOs from S6-TASK-038 | Shift-first workflow; `Assign caregiver` opens assignment page |
 | Assign caregiver | Coordinator, Admin | ShiftsClient CreateShift/UpdateShift; eligible caregivers from S6-TASK-038; CaregiversClient summaries/details as needed | Creates assigned shifts or reassigns existing shifts; uses existing double-booking/certification guards |
 | Caregivers roster | Coordinator, Admin | CaregiversClient paged `CaregiverSummaryDto` | Columns exactly `Name`, `Type`, `Rating`, `Status`, `View`; no pay/certification/MTD columns |
@@ -316,7 +362,7 @@ Owners: **Claude** = PM/Contracts/Client/Client.UI + sprint docs. **Codex** = We
 | S6-TASK-021 | Client.UI: `KpiCard`, `RiskBadge`, `ShiftCard`, `EscalationBanner`, `PatientInstructionCard` (patient-safe DTO param), `InstructionReviewCard`, `AuditTimeline` (+ `AuditTimelineEntry` record); StatusBadgeTones extended to 6 Transitions enums; aria labels/roles + native-button keyboard operability per D-S6-7 | Claude | S6-TASK-001 | Done 2026-07-06 — 9 files + `wwwroot/carepath-ui.css` (D-S6-9 tokens); verified by full-sln build 0 warnings; stylesheet linked by CarePath.Web (`f019081`) |
 | S6-TASK-022 | Client: `TransitionsClient.GetEscalationQueueAsync` for the D-S6-5 endpoint | Claude | S6-TASK-034 route shape | Done 2026-07-08 — method in `TransitionsClient` (openOnly + paging); route shape pinned by `Sprint6TransitionsClientRouteAlignmentTests` |
 | S6-TASK-030 | Web: Overview page per wireframe (KPI cards, today's schedule, needs-attention list, quick actions). `+ Add caregiver` quick action must route to `page-caregiver-create`; schedule links route to Schedule. Uses typed clients only and renders ApiErrorAlert for network/API failures | Codex | S6-TASK-012, S6-TASK-021 | Pending |
-| S6-TASK-031 | Web: Schedule board + Coverage queue + Assign caregiver page per wireframe. Board shows open/unassigned styling; Coverage queue lists open shifts and best matches; Assign caregiver supports create assigned shift and update/reassign via `ShiftsClient`; guard errors (`shift.double_booked`, `caregiver.certification_expired`) surface through ApiErrorAlert | Codex | S6-TASK-012, S6-TASK-021, S6-TASK-038 | Pending |
+| S6-TASK-031 | Web: Schedule board + Coverage queue + Assign caregiver page per wireframe. Board shows open/unassigned styling; Coverage queue lists open shifts and best matches; Assign caregiver supports create assigned shift and update/reassign via `ShiftsClient`; guard errors (`shift.double_booked`, `caregiver.certification_expired`) surface through ApiErrorAlert | Codex | S6-TASK-012, S6-TASK-021, S6-TASK-038 | Done 2026-07-09 — weekly board loads assigned/open shifts through `ShiftsClient.GetPageAsync(paging, fromUtc, toUtc)`, places shifts by local week/day/hour, supports previous/today/next week navigation, horizontal scrolling, open/completed/cancelled handling, and hover/focus detail cards with summary-only fields; Coverage queue and Assign open shift remain wired. Evidence: `dotnet test CarePath.Web.Tests/CarePath.Web.Tests.csproj /nr:false -p:BaseOutputPath=%TEMP%\carepath-schedule-testbin\` (17 passed); `dotnet build CarePath.sln /nr:false -p:BaseOutputPath=%TEMP%\carepath-solution-buildbin\` (0 warnings/errors); `dotnet test CarePath.sln /nr:false -p:BaseOutputPath=.tmpbuild\` (706 passed; `.tmpbuild` removed afterward). Normal default-output build/test attempted but blocked by active Visual Studio/WebApi DLL locks. |
 | S6-TASK-032 | Web: clinician review queue (clinical DTOs; low-confidence flags; source text visible per D-S5-3) | Codex | S6-TASK-012, S6-TASK-021 | Pending |
 | S6-TASK-033 | Web: activation screen (disabled until instructions terminal; ConfirmESignature; success -> plan Active state visible) | Codex | S6-TASK-032 | Pending |
 | S6-TASK-034 | WebApi: escalation queue endpoint per D-S6-5 + tests (scoping, audit, paged) | Codex | S6-TASK-001 | Done 2026-07-08 — `GetEscalationQueue` endpoint + `GetEscalationQueueAsync` service (openOnly predicate, `GetPagedAsync`, per-row read audit, Coordinator-only) verified in tree with service/controller/contract tests |
@@ -326,6 +372,8 @@ Owners: **Claude** = PM/Contracts/Client/Client.UI + sprint docs. **Codex** = We
 | S6-TASK-041 | Web: Caregivers roster + right-side Profile detail panel per wireframe. Roster columns exactly `Name`, `Type`, `Rating`, `Status`, `View`; `View` loads profile detail with contact, employment/pay rate, availability, skills, certifications, performance/MTD metrics, Add certification, and Schedule eligible shifts actions | Codex | S6-TASK-012, S6-TASK-021, S6-TASK-039 | Pending |
 | S6-TASK-042 | Web: Add caregiver Step 1 + Add certifications Step 2 per wireframe. Step 1 maps field-for-field to `CreateCaregiverRequest` and never includes certifications; Step 2 saves one or more `AddCertificationRequest` records with a saved-list state, `Save and add another`, and `Continue to eligible shifts`; temporary password is never displayed after submit | Codex | S6-TASK-041 | Pending |
 | S6-TASK-043 | Web: Schedule eligible shifts Step 3 per wireframe. After caregiver create/certification or from profile detail, list eligible open shifts for the selected caregiver, explain match reasons, and assign/review shifts through the same Schedule assignment API path; blocked/expired-cert cases render as non-assignable | Codex | S6-TASK-031, S6-TASK-038, S6-TASK-042 | Pending |
+| S6-TASK-044 | Web: Create shift page per wireframe `page-shift-create` (D-S6-12). Route `/shifts/create`; form maps field-for-field to `CreateShiftRequest`; client/facility select via `ClientsClient.GetPageAsync`; actions `Create & assign shift` (navigates to Assign page with new shift id) and `Create open shift` (saves unassigned → Schedule/coverage queue); wire Overview `＋ Create shift` and Schedule `＋ New shift` buttons to this route; guard errors via ApiErrorAlert; bUnit tests | Codex | S6-TASK-012, S6-TASK-031, D-S6-12 backend (done) | Done 2026-07-09 — `ShiftCreate` route `/shifts/create`, Overview/Schedule entry points wired, open/create-then-assign flows use `ShiftsClient.CreateAsync` with `CaregiverId = null`; verified by `dotnet test CarePath.Web.Tests/CarePath.Web.Tests.csproj /nr:false` (12 passed) |
+| S6-TASK-045 | Contracts/Application/Client: D-S6-12 backend — nullable `CreateShiftRequest.CaregiverId`, conditional eligibility guards in `ShiftOperationsService.CreateShiftAsync`, validator `NotEqual(Guid.Empty)` for supplied values, `ShiftsClient.CreateAsync` open-shift docs, contract-shape pin test + open-shift service tests | Claude | S6-TASK-001 | Done 2026-07-09 — all Application tests green (332); wireframe `page-shift-create`/`page-shift-assign` reworked and browser-verified |
 | S6-TASK-040 | bUnit test suite per D-S6-6 incl. PHI-exposure markup assertions. Must cover Overview quick action routing, Schedule coverage assignment, Caregiver roster/profile detail, Add caregiver Step 1, multi-certification Step 2, and eligible-shifts Step 3 in addition to Transitions pages | Codex (pages) + Claude (primitives) | S6-TASK-030..035, S6-TASK-037, S6-TASK-041..043 | Pending |
 | S6-TASK-050 | Browser PHI safety review per D-S6-3: grep Web for console/DTO serialization/storage writes; verify URLs are Guid-only; keyboard-only walkthrough of review->activate, escalation->acknowledge, caregiver create->certify->eligible-shifts, and schedule coverage->assign workflows | Codex + Claude | S6-TASK-040 | Pending |
 | S6-TASK-060 | Exit verification: build 0 warnings, all tests green, reviewer pass, exit-gate items checked; PROGRESS/lessons updated; PM closes after review | Codex + Claude + Tobi | all above | Pending |

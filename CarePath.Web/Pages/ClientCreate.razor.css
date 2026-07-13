@@ -1,0 +1,20 @@
+.client-form-grid {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(280px, 0.35fr);
+    gap: 20px;
+}
+
+.form-field-wide {
+    grid-column: 1 / -1;
+}
+
+.form-field textarea {
+    min-height: 96px;
+    resize: vertical;
+}
+
+@media (max-width: 1080px) {
+    .client-form-grid {
+        grid-template-columns: 1fr;
+    }
+}

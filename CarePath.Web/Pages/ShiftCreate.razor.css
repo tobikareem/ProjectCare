@@ -1,0 +1,17 @@
+.shift-summary-list {
+    display: grid;
+    gap: 8px;
+    font-size: .88rem;
+    max-width: 420px;
+}
+
+.shift-summary-list div {
+    display: flex;
+    justify-content: space-between;
+    gap: 14px;
+}
+
+.optional-label {
+    font-weight: 400;
+    font-size: .82rem;
+}

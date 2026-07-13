@@ -175,11 +175,13 @@
 .cp-api-error-trace { margin: 4px 0 0; color: var(--muted); font-size: 0.8rem; }
 
 /* ---- PagedTable ---- */
+.cp-paged-table-frame { max-height: var(--cp-paged-table-max-height, calc(100vh - 430px)); overflow: auto; }
 .cp-table { width: 100%; border-collapse: collapse; background: var(--surface); border-radius: var(--radius); }
 .cp-table th { padding: 10px 12px; color: var(--muted); text-align: left; font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.04em; border-bottom: 1px solid var(--line); }
 .cp-table td { padding: 10px 12px; color: var(--ink); border-bottom: 1px solid var(--line); }
 .cp-table-empty { color: var(--muted); text-align: center; }
-.cp-pager { display: flex; align-items: center; gap: 12px; margin-top: 10px; }
+.cp-pager { display: flex; align-items: center; justify-content: flex-end; gap: 12px; margin-top: 10px; }
+.cp-pager-button,
 .cp-pager-prev, .cp-pager-next {
   padding: 6px 14px;
   color: var(--teal-700);
@@ -189,6 +191,7 @@
   font-weight: 700;
   cursor: pointer;
 }
+.cp-pager-button:disabled,
 .cp-pager-prev:disabled, .cp-pager-next:disabled { color: var(--muted); background: var(--surface-alt); cursor: not-allowed; }
 .cp-pager-status { color: var(--muted); font-size: 0.9rem; }
 

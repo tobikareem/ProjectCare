@@ -1,21 +1,33 @@
 @page "/"
+@using CarePath.Client.Api
+@using CarePath.Client.UI.Components
+@using CarePath.Contracts.Common
+@using CarePath.Contracts.Enumerations
+@using CarePath.Contracts.Scheduling
+@inject ShiftsClient ShiftsClient
+@inject NavigationManager Navigation
 
 <PageTitle>Operations overview</PageTitle>
 
 <div class="page-heading">
     <div>
-        <p class="eyebrow">Monday, June 22</p>
+        <p class="eyebrow">@DateTime.UtcNow.ToLocalTime().ToString("dddd, MMMM d")</p>
         <h1>Operations overview</h1>
         <p class="subtle">Staff today's care, resolve exceptions, and protect service margins.</p>
     </div>
-    <button class="button button-primary" type="button">＋ Create shift</button>
+    <button class="button button-primary" type="button" @onclick="NavigateToCreateShift">+ Create shift</button>
 </div>
+
+@if (overviewError is not null)
+{
+    <ApiErrorAlert Response="overviewError" />
+}
 
 <section class="metric-grid" aria-label="Key performance indicators">
     <article class="card metric-card">
         <span class="metric-label">Shifts today</span>
-        <div class="metric-value">28</div>
-        <span class="trend">24 staffed · 4 open</span>
+        <div class="metric-value">@(isLoadingOverview ? "-" : TodayShiftCount.ToString())</div>
+        <span class="trend">@TodayShiftTrend</span>
     </article>
     <article class="card metric-card">
         <span class="metric-label">Caregiver utilization</span>
@@ -44,36 +56,35 @@
                 </div>
                 <a class="text-link" href="schedule">Open schedule →</a>
             </div>
-            <ol class="schedule-list">
-                <li class="schedule-row">
-                    <span class="time">8:00 AM</span>
-                    <strong>Jordan M.<span class="meta">In-home care · 4 hours</span></strong>
-                    <span>A. Williams<span class="meta">CNA · GPS required</span></span>
-                    <span class="status status-green">In progress</span>
-                    <button class="text-link" type="button">Details</button>
-                </li>
-                <li class="schedule-row">
-                    <span class="time">10:00 AM</span>
-                    <strong>Harborview Center<span class="meta">Facility staffing · 8 hours</span></strong>
-                    <span>Unassigned<span class="meta">RN required</span></span>
-                    <span class="status status-red">Open</span>
-                    <button class="text-link" type="button">Match</button>
-                </li>
-                <li class="schedule-row">
-                    <span class="time">1:30 PM</span>
-                    <strong>Casey R.<span class="meta">In-home care · 3 hours</span></strong>
-                    <span>D. Okafor<span class="meta">HHA · Dementia care</span></span>
-                    <span class="status status-blue">Confirmed</span>
-                    <button class="text-link" type="button">Details</button>
-                </li>
-                <li class="schedule-row">
-                    <span class="time">6:00 PM</span>
-                    <strong>Northside Rehab<span class="meta">Facility staffing · 12 hours</span></strong>
-                    <span>M. Johnson<span class="meta">LPN · Night shift</span></span>
-                    <span class="status status-amber">At risk</span>
-                    <button class="text-link" type="button">Review</button>
-                </li>
-            </ol>
+
+            @if (isLoadingOverview)
+            {
+                <p class="empty-state">Loading today's shifts...</p>
+            }
+            else if (TodayShifts.Count == 0)
+            {
+                <p class="empty-state">No shifts are scheduled today.</p>
+            }
+            else
+            {
+                <ol class="schedule-list">
+                    @foreach (var shift in TodayShifts.Take(TodayScheduleLimit))
+                    {
+                        <li class="schedule-row">
+                            <span class="time">@shift.ScheduledStartTime.ToLocalTime().ToString("h:mm tt")</span>
+                            <strong>@shift.ClientFullName<span class="meta">@FormatServiceType(shift.ServiceType) · @FormatDuration(shift)</span></strong>
+                            <span>@CaregiverLabel(shift)<span class="meta">@CaregiverMeta(shift)</span></span>
+                            <StatusBadge Text="@StatusLabel(shift)" Tone="@StatusTone(shift)" />
+                            <button class="text-link" type="button" @onclick="() => NavigateToShift(shift)">@(shift.CaregiverId.HasValue ? "Details" : "Match")</button>
+                        </li>
+                    }
+                </ol>
+
+                @if (TodayShifts.Count > TodayScheduleLimit)
+                {
+                    <p class="meta">@($"{TodayShifts.Count - TodayScheduleLimit} more shifts today")</p>
+                }
+            }
         </section>
 
         <section class="card section-offset" aria-labelledby="margin-heading">
@@ -105,10 +116,13 @@
         <section class="card" aria-labelledby="alerts-heading">
             <div class="section-header">
                 <h2 id="alerts-heading">Needs attention</h2>
-                <span class="status status-red">7 items</span>
+                <span class="status status-red">@AttentionItemCount items</span>
             </div>
             <ul class="alert-list">
-                <li class="alert-item"><strong>4 shifts need coverage</strong><p>Two start within the next 6 hours.</p></li>
+                <li class="alert-item">
+                    <strong>@CoverageAttentionTitle</strong>
+                    <p>@CoverageAttentionText</p>
+                </li>
                 <li class="alert-item"><strong>3 visit notes overdue</strong><p>Documentation required before billing.</p></li>
                 <li class="alert-item"><strong>2 credentials expiring</strong><p>CNA and CPR expire within 30 days.</p></li>
             </ul>
@@ -117,7 +131,7 @@
         <section class="card section-offset" aria-labelledby="actions-heading">
             <h2 id="actions-heading">Quick actions</h2>
             <div class="quick-actions">
-                <button type="button">＋ Add client</button>
+                <button type="button" @onclick="NavigateToCreateClient">+ Add client</button>
                 <button type="button">＋ Add caregiver</button>
                 <button type="button">$ Generate invoices</button>
                 <button type="button">✓ Review credentials</button>
@@ -125,3 +139,157 @@
         </section>
     </aside>
 </div>
+
+@code {
+    private const int ShiftPageSize = 100;
+    private const int CoveragePageSize = 100;
+    private const int TodayScheduleLimit = 5;
+    private const int StaticAttentionCount = 5;
+
+    private IReadOnlyList<ShiftSummaryDto> todayShifts = [];
+    private IReadOnlyList<OpenShiftCoverageDto> coverageQueue = [];
+    private ApiResponse? overviewError;
+    private bool isLoadingOverview = true;
+    private int hiddenTodayShiftCount;
+    private int hiddenCoverageCount;
+
+    private IReadOnlyList<ShiftSummaryDto> TodayShifts => todayShifts
+        .Where(shift => shift.Status != ShiftStatus.Cancelled)
+        .OrderBy(shift => shift.ScheduledStartTime)
+        .ToArray();
+
+    private int TodayShiftCount => TodayShifts.Count + hiddenTodayShiftCount;
+
+    private int OpenTodayShiftCount => TodayShifts.Count(shift => !shift.CaregiverId.HasValue);
+
+    private int StaffedTodayShiftCount => Math.Max(0, TodayShiftCount - OpenTodayShiftCount);
+
+    private int CoverageCount => coverageQueue.Count + hiddenCoverageCount;
+
+    private int AttentionItemCount => CoverageCount + StaticAttentionCount;
+
+    private string TodayShiftTrend => isLoadingOverview
+        ? "Loading today"
+        : $"{StaffedTodayShiftCount} staffed · {OpenTodayShiftCount} open";
+
+    private string CoverageAttentionTitle => $"{CoverageCount} shifts need coverage";
+
+    private string CoverageAttentionText
+    {
+        get
+        {
+            var urgentCount = coverageQueue.Count(shift =>
+            {
+                var localStart = shift.ScheduledStartTime.ToLocalTime();
+                var now = DateTime.UtcNow.ToLocalTime();
+                return localStart >= now && localStart <= now.AddHours(6);
+            });
+
+            return urgentCount == 0
+                ? "No open shifts start within the next 6 hours."
+                : $"{urgentCount} start within the next 6 hours.";
+        }
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadOverviewAsync();
+    }
+
+    private async Task LoadOverviewAsync()
+    {
+        isLoadingOverview = true;
+        overviewError = null;
+        hiddenTodayShiftCount = 0;
+        hiddenCoverageCount = 0;
+
+        var todayStartLocal = DateTime.UtcNow.ToLocalTime().Date;
+        var todayEndLocal = todayStartLocal.AddDays(1);
+        var shiftResponse = await ShiftsClient.GetPageAsync(
+            new PagedRequest { PageNumber = 1, PageSize = ShiftPageSize },
+            LocalToUtc(todayStartLocal),
+            LocalToUtc(todayEndLocal));
+        if (shiftResponse.Success && shiftResponse.Data is not null)
+        {
+            todayShifts = shiftResponse.Data.Items;
+            hiddenTodayShiftCount = Math.Max(0, shiftResponse.Data.TotalCount - shiftResponse.Data.Items.Count);
+        }
+        else
+        {
+            todayShifts = [];
+            overviewError = shiftResponse;
+        }
+
+        var coverageResponse = await ShiftsClient.GetCoverageQueueAsync(new PagedRequest { PageNumber = 1, PageSize = CoveragePageSize });
+        if (coverageResponse.Success && coverageResponse.Data is not null)
+        {
+            coverageQueue = coverageResponse.Data.Items;
+            hiddenCoverageCount = Math.Max(0, coverageResponse.Data.TotalCount - coverageResponse.Data.Items.Count);
+        }
+        else if (overviewError is null)
+        {
+            coverageQueue = [];
+            overviewError = coverageResponse;
+        }
+
+        isLoadingOverview = false;
+    }
+
+    private static DateTime LocalToUtc(DateTime localValue)
+    {
+        var local = localValue.Kind == DateTimeKind.Local
+            ? localValue
+            : DateTime.SpecifyKind(localValue, DateTimeKind.Local);
+        return local.ToUniversalTime();
+    }
+
+    private static string FormatServiceType(ServiceType type) => type switch
+    {
+        ServiceType.InHomeCare => "In-home care",
+        ServiceType.FacilityStaffing => "Facility staffing",
+        _ => type.ToString()
+    };
+
+    private static string FormatDuration(ShiftSummaryDto shift)
+    {
+        var duration = shift.ScheduledEndTime - shift.ScheduledStartTime;
+        if (duration < TimeSpan.Zero)
+        {
+            duration = TimeSpan.Zero;
+        }
+
+        var hours = (int)duration.TotalHours;
+        var minutes = duration.Minutes;
+        return minutes == 0 ? $"{hours} hours" : $"{hours} h {minutes} m";
+    }
+
+    private static string CaregiverLabel(ShiftSummaryDto shift) =>
+        string.IsNullOrWhiteSpace(shift.CaregiverFullName) ? "Unassigned" : shift.CaregiverFullName;
+
+    private static string CaregiverMeta(ShiftSummaryDto shift) =>
+        shift.CaregiverId.HasValue ? "Assigned" : "Coverage needed";
+
+    private static string StatusLabel(ShiftSummaryDto shift)
+    {
+        if (!shift.CaregiverId.HasValue)
+        {
+            return "Open";
+        }
+
+        return shift.Status switch
+        {
+            ShiftStatus.InProgress => "In progress",
+            ShiftStatus.NoShow => "No show",
+            _ => shift.Status.ToString()
+        };
+    }
+
+    private static BadgeTone StatusTone(ShiftSummaryDto shift) =>
+        !shift.CaregiverId.HasValue ? BadgeTone.Danger : StatusBadgeTones.For(shift.Status);
+
+    private void NavigateToShift(ShiftSummaryDto shift) => Navigation.NavigateTo($"/schedule/assign/{shift.Id}");
+
+    private void NavigateToCreateShift() => Navigation.NavigateTo("/shifts/create");
+
+    private void NavigateToCreateClient() => Navigation.NavigateTo("/clients/create");
+}

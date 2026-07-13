@@ -16,7 +16,7 @@
         <h1>Compliance</h1>
         @if (_certifications is not null)
         {
-            <p class="subtle">@_certifications.TotalCount items require action · @PageExpiredCount expired · @PageExpiringCount expiring within 30 days (this page)</p>
+            <p class="subtle">@ActionQueueSummary</p>
         }
         else
         {
@@ -33,7 +33,7 @@
 }
 else if (_loading)
 {
-    <p class="subtle" role="status">Loading credentials…</p>
+    <p class="empty-state" role="status">Loading credentials...</p>
 }
 else if (_certifications is not null)
 {
@@ -52,7 +52,7 @@ else if (_certifications is not null)
 
     <div class="row-list">
         <div class="cert-row row-list-header" aria-hidden="true">
-            <span>Certification</span><span>Issued</span><span>Expires</span><span>Status</span><span></span>
+            <span>Caregiver / Certification</span><span>Issued</span><span>Expires</span><span>Status</span><span></span>
         </div>
         @if (certifications.Items.Count == 0)
         {
@@ -62,7 +62,8 @@ else if (_certifications is not null)
         {
             <div class="cert-row @RowClass(certification)">
                 <span>
-                    <strong>@CertTypeLabel(certification.Type)</strong>
+                    <strong>Caregiver record</strong>
+                    <span class="meta">@CertTypeLabel(certification.Type)</span>
                     @if (CertMeta(certification) is { Length: > 0 } meta)
                     {
                         <span class="meta">@meta</span>
@@ -71,7 +72,10 @@ else if (_certifications is not null)
                 <span>@LongDate(certification.IssueDate)</span>
                 <span class="@ExpiryClass(certification)">@ExpiryText(certification)</span>
                 <span><StatusBadge Text="@StatusLabel(certification)" Tone="@StatusTone(certification)" /></span>
-                <span></span>
+                <button class="text-link" type="button" disabled title="@ActionUnavailableText(certification)"
+                        aria-label="@ActionAriaLabel(certification)">
+                    @ActionLabel(certification)
+                </button>
             </div>
         }
     </div>
@@ -89,10 +93,10 @@ else if (_certifications is not null)
 }
 
 @code {
-    // TODO(PM): CertificationDto carries no caregiver display name, so rows show the
-    // certification identity only (the wireframe's first column is "Caregiver / Certification").
-    // TODO(PM): the wireframe's row actions (Start renewal / Send reminder) have no endpoints;
-    // the action column renders empty until those workflows exist.
+    // CertificationDto intentionally carries no caregiver display name, so the first column keeps
+    // identity generic while still surfacing the credential details available from the safe contract.
+    // The wireframe's row actions have no backing endpoints yet; render them disabled instead of
+    // issuing fake calls or raw HTTP requests.
     private PagedResult<CertificationDto>? _certifications;
     private ApiResponse? _error;
     private bool _loading = true;
@@ -100,6 +104,11 @@ else if (_certifications is not null)
     private int PageExpiredCount => _certifications?.Items.Count(c => c.IsExpired) ?? 0;
 
     private int PageExpiringCount => _certifications?.Items.Count(c => c is { IsExpired: false, IsExpiringSoon: true }) ?? 0;
+
+    private string ActionQueueSummary =>
+        _certifications is null
+            ? "Expired and expiring caregiver credentials"
+            : $"{_certifications.TotalCount} items require action · {PageExpiredCount} expired · {PageExpiringCount} expiring within 30 days (this page)";
 
     protected override Task OnInitializedAsync() => LoadPageAsync(1);
 
@@ -187,4 +196,17 @@ else if (_certifications is not null)
         certification.IsExpired ? BadgeTone.Danger
         : certification.IsExpiringSoon ? BadgeTone.Warning
         : BadgeTone.Success;
+
+    private static string ActionLabel(CertificationDto certification) =>
+        certification.IsExpired ? "Start renewal"
+        : certification.IsExpiringSoon ? "Send reminder"
+        : "View";
+
+    private static string ActionUnavailableText(CertificationDto certification) =>
+        certification.IsExpired ? "Renewal workflow is not available yet."
+        : certification.IsExpiringSoon ? "Reminder workflow is not available yet."
+        : "Certification detail workflow is not available yet.";
+
+    private static string ActionAriaLabel(CertificationDto certification) =>
+        $"{ActionLabel(certification)} for {CertTypeLabel(certification.Type)} ({ActionUnavailableText(certification)})";
 }

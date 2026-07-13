@@ -103,54 +103,45 @@
             <button class="button button-secondary" type="button" @onclick="ClearFiltersAsync" disabled="@_loading">Clear</button>
         </div>
 
-        @if (_loading)
-        {
-            <p class="empty-state" role="status">Loading users...</p>
-        }
-        else if (_users is null || _users.Items.Count == 0)
-        {
-            <p class="empty-state">No account users match the current filters.</p>
-        }
-        else
-        {
-            <div class="data-table-wrap">
-                <table class="data-table" aria-label="Users with CarePath accounts">
-                    <thead>
-                        <tr>
-                            <th>User</th>
-                            <th>Signed in</th>
-                            <th>Current role</th>
-                            <th>Account</th>
-                            <th></th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        @foreach (var user in _users.Items)
-                        {
-                            <tr class="@(_selectedUser?.Id == user.Id ? "selected-row" : null)">
-                                <td>
-                                    <span class="avatar-sm" aria-hidden="true">@Initials(user.DisplayName)</span>
-                                    <strong>@user.DisplayName</strong>
-                                    <span class="meta">@user.Email</span>
-                                </td>
-                                <td><StatusBadge Text="@SignInStatus(user)" Tone="@SignInTone(user)" /></td>
-                                <td><StatusBadge Text="@RoleLabel(user.Role)" Tone="@StatusBadgeTones.For(user.Role)" /></td>
-                                <td><StatusBadge Text="@(user.IsActive ? "Active" : "Inactive")" Tone="@(user.IsActive ? BadgeTone.Success : BadgeTone.Neutral)" /></td>
-                                <td>
-                                    <button class="text-link" type="button" @onclick="() => SelectUser(user)">Manage roles</button>
-                                </td>
-                            </tr>
-                        }
-                    </tbody>
-                </table>
-            </div>
-
-            <div class="pager-row" aria-label="User pages">
-                <button class="button button-secondary button-sm" type="button" disabled="@(!_users.HasPreviousPage || _loading)" @onclick="() => LoadUsersAsync(_users.PageNumber - 1)">Previous</button>
-                <span class="meta">@PagingText</span>
-                <button class="button button-secondary button-sm" type="button" disabled="@(!_users.HasNextPage || _loading)" @onclick="() => LoadUsersAsync(_users.PageNumber + 1)">Next</button>
-            </div>
-        }
+        <PagedTable TItem="UserAccountDto"
+                    Result="_users"
+                    IsLoading="_loading"
+                    LoadingText="Loading users..."
+                    EmptyText="No account users match the current filters."
+                    TableClass="data-table"
+                    PagerButtonClass="button button-secondary button-sm"
+                    PagerLabel="User pages"
+                    PageSize="_pageSize"
+                    MinPageSize="DefaultPageSize"
+                    EnableViewportPageSize="true"
+                    ShowPagerWhenSinglePage="true"
+                    OnPageChanged="LoadUsersAsync"
+                    OnPageSizeChanged="ChangeUserPageSizeAsync">
+            <HeaderTemplate>
+                <tr>
+                    <th>User</th>
+                    <th>Signed in</th>
+                    <th>Current role</th>
+                    <th>Account</th>
+                    <th></th>
+                </tr>
+            </HeaderTemplate>
+            <RowTemplate Context="user">
+                <tr class="@(_selectedUser?.Id == user.Id ? "selected-row" : null)">
+                    <td>
+                        <span class="avatar-sm" aria-hidden="true">@Initials(user.DisplayName)</span>
+                        <strong>@user.DisplayName</strong>
+                        <span class="meta">@user.Email</span>
+                    </td>
+                    <td><StatusBadge Text="@SignInStatus(user)" Tone="@SignInTone(user)" /></td>
+                    <td><StatusBadge Text="@RoleLabel(user.Role)" Tone="@StatusBadgeTones.For(user.Role)" /></td>
+                    <td><StatusBadge Text="@(user.IsActive ? "Active" : "Inactive")" Tone="@(user.IsActive ? BadgeTone.Success : BadgeTone.Neutral)" /></td>
+                    <td>
+                        <button class="text-link" type="button" @onclick="() => SelectUser(user)">Manage roles</button>
+                    </td>
+                </tr>
+            </RowTemplate>
+        </PagedTable>
     </section>
 
     <aside class="card detail-card" aria-labelledby="role-editor-heading">
@@ -242,7 +233,7 @@
 </div>
 
 @code {
-    private const int PageSize = 10;
+    private const int DefaultPageSize = 5;
     private static readonly TimeSpan RecentSignInWindow = TimeSpan.FromMinutes(30);
 
     private PagedResult<UserAccountDto>? _users;
@@ -254,6 +245,7 @@
     private bool _loading = true;
     private bool _actionInProgress;
     private bool _createInProgress;
+    private int _pageSize = DefaultPageSize;
     private string _searchText = string.Empty;
     private SearchCriterion _searchCriterion = SearchCriterion.Text;
     private string _roleFilter = string.Empty;
@@ -317,7 +309,7 @@
         try
         {
             var response = await AdminUsers.GetPageAsync(
-                new PagedRequest { PageNumber = pageNumber, PageSize = PageSize },
+                new PagedRequest { PageNumber = pageNumber, PageSize = _pageSize },
                 ParsedRoleFilter(),
                 ParsedStatusFilter(),
                 _searchCriterion == SearchCriterion.Text ? _searchText : null);
@@ -355,6 +347,19 @@
         _selectedUserIdText = string.Empty;
         _searchCriterion = SearchCriterion.Text;
         _selectedUser = null;
+        await LoadUsersAsync(1);
+    }
+
+    private async Task ChangeUserPageSizeAsync(int requestedPageSize)
+    {
+        if (requestedPageSize < DefaultPageSize || requestedPageSize == _pageSize)
+        {
+            return;
+        }
+
+        _pageSize = requestedPageSize;
+        _selectedUser = null;
+        _selectedUserIdText = string.Empty;
         await LoadUsersAsync(1);
     }
 

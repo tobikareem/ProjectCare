@@ -26,8 +26,12 @@ public sealed class ShiftsController : ControllerBase
 
     [HttpGet]
     [Authorize(Roles = "Admin,Coordinator,Caregiver,Client,FacilityManager,Clinician")]
-    public async Task<ActionResult<PagedResult<ShiftSummaryDto>>> GetShifts([FromQuery] PagedRequest request, CancellationToken cancellationToken)
-        => Ok(await shiftService.GetShiftsAsync(request, cancellationToken));
+    public async Task<ActionResult<PagedResult<ShiftSummaryDto>>> GetShifts(
+        [FromQuery] PagedRequest request,
+        [FromQuery] DateTime? fromUtc,
+        [FromQuery] DateTime? toUtc,
+        CancellationToken cancellationToken)
+        => Ok(await shiftService.GetShiftsAsync(request, fromUtc, toUtc, cancellationToken));
 
     [HttpGet("coverage")]
     [Authorize(Roles = "Admin,Coordinator")]

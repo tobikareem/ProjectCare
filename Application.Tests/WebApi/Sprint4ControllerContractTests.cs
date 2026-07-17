@@ -12,7 +12,7 @@ public sealed class Sprint4ControllerContractTests
 {
     [Theory]
     [InlineData(typeof(CaregiversController), "GetCaregivers", "Admin,Coordinator")]
-    [InlineData(typeof(CaregiversController), "GetCaregiver", "Admin,Coordinator,Caregiver")]
+    [InlineData(typeof(CaregiversController), "GetCaregiver", "Admin,Coordinator")]
     [InlineData(typeof(CaregiversController), "CreateCaregiver", "Admin,Coordinator")]
     [InlineData(typeof(CaregiversController), "UpdateCaregiver", "Admin,Coordinator")]
     [InlineData(typeof(CaregiversController), "AddCertification", "Admin,Coordinator")]

@@ -148,6 +148,44 @@ public class RepositoryTests
         totalCount.Should().Be(2);
         items.Should().OnlyContain(user => user.Role == UserRole.Caregiver);
     }
+    [Fact]
+    public async Task GetPagedAsync_WhenOrderKeysProvided_ReturnsDeterministicallyOrderedFilteredPage()
+    {
+        // Arrange
+        await using var context = CreateDbContext();
+        var repository = new Repository<User>(context);
+        var zoeAdams = CreateUser("zoe@example.test");
+        zoeAdams.FirstName = "Zoe";
+        zoeAdams.LastName = "Adams";
+        var amyBrown = CreateUser("amy@example.test");
+        amyBrown.FirstName = "Amy";
+        amyBrown.LastName = "Brown";
+        var alexBrown = CreateUser("alex@example.test");
+        alexBrown.FirstName = "Alex";
+        alexBrown.LastName = "Brown";
+        var filteredOut = CreateUser("caregiver@example.test", UserRole.Caregiver);
+        await repository.AddAsync(amyBrown);
+        await repository.AddAsync(zoeAdams);
+        await repository.AddAsync(alexBrown);
+        await repository.AddAsync(filteredOut);
+        await context.SaveChangesAsync();
+
+        // Act
+        var (items, totalCount) = await repository.GetPagedAsync(
+            user => user.Role == UserRole.Admin,
+            user => user.LastName,
+            user => user.FirstName,
+            pageNumber: 1,
+            pageSize: 10);
+
+        // Assert
+        totalCount.Should().Be(3);
+        items.Select(user => user.Email).Should().Equal(
+            "zoe@example.test",
+            "alex@example.test",
+            "amy@example.test");
+    }
+
     [Theory]
     [InlineData(0, 10, "pageNumber")]
     [InlineData(1, 0, "pageSize")]

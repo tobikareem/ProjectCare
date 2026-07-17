@@ -63,31 +63,28 @@ public sealed class AdminUserManagementService : IAdminUserManagementService
 
         await EnsureCurrentActorIsActiveAdminAsync(cancellationToken);
 
-        var users = await unitOfWork.Users.FindAsync(
+        DomainUserRole? roleFilter = role.HasValue ? (DomainUserRole)(int)role.Value : null;
+        var searchText = string.IsNullOrWhiteSpace(search) ? null : search.Trim().ToLowerInvariant();
+
+        // Filtered + paged at the repository (deterministic LastName/FirstName/Id order);
+        // search matches email and display name ONLY per D-S6-8 — never phone, address,
+        // or any PHI field.
+        var (users, totalCount) = await unitOfWork.Users.GetPagedAsync(
             user =>
-                (!role.HasValue || user.Role == (DomainUserRole)(int)role.Value) &&
-                (!isActive.HasValue || user.IsActive == isActive.Value),
+                (!roleFilter.HasValue || user.Role == roleFilter.Value) &&
+                (!isActive.HasValue || user.IsActive == isActive.Value) &&
+                (searchText == null
+                    || user.Email.ToLower().Contains(searchText)
+                    || (user.FirstName + " " + user.LastName).ToLower().Contains(searchText)),
+            user => user.LastName,
+            user => user.FirstName,
+            request.PageNumber,
+            request.PageSize,
             cancellationToken);
 
-        if (!string.IsNullOrWhiteSpace(search))
-        {
-            var searchText = search.Trim();
-            users = users
-                .Where(user =>
-                    user.Email.Contains(searchText, StringComparison.OrdinalIgnoreCase) ||
-                    user.FullName.Contains(searchText, StringComparison.OrdinalIgnoreCase))
-                .ToArray();
-        }
-
-        var ordered = users
-            .OrderBy(user => user.LastName, StringComparer.OrdinalIgnoreCase)
-            .ThenBy(user => user.FirstName, StringComparer.OrdinalIgnoreCase)
-            .ToArray();
-
-        var page = PagedResultFactory.Page(ordered, request.PageNumber, request.PageSize);
         return PagedResultFactory.Create(
-            await ToDtosAsync(page, cancellationToken),
-            ordered.Length,
+            await ToDtosAsync(users, cancellationToken),
+            totalCount,
             request.PageNumber,
             request.PageSize);
     }
@@ -285,13 +282,29 @@ public sealed class AdminUserManagementService : IAdminUserManagementService
         IReadOnlyList<User> users,
         CancellationToken cancellationToken)
     {
-        var dtos = new List<UserAccountDto>(users.Count);
-        foreach (var user in users)
+        if (users.Count == 0)
         {
-            dtos.Add(await ToDtoAsync(user, cancellationToken));
+            return Array.Empty<UserAccountDto>();
         }
 
-        return dtos;
+        var userIds = users.Select(user => user.Id).ToArray();
+        var caregiverProfiles = await unitOfWork.Caregivers.FindAsync(
+            caregiver => userIds.Contains(caregiver.UserId),
+            cancellationToken);
+        var clientProfiles = await unitOfWork.Clients.FindAsync(
+            client => userIds.Contains(client.UserId),
+            cancellationToken);
+        var caregiverUserIds = caregiverProfiles.Select(caregiver => caregiver.UserId).ToHashSet();
+        var clientUserIds = clientProfiles.Select(client => client.UserId).ToHashSet();
+        var activeAdminCount = await CountActiveAdminsAsync(cancellationToken);
+
+        return users
+            .Select(user => ToDto(
+                user,
+                caregiverUserIds.Contains(user.Id),
+                clientUserIds.Contains(user.Id),
+                IsLastActiveAdmin(user, activeAdminCount)))
+            .ToArray();
     }
 
     private async Task<UserAccountDto> ToDtoAsync(User user, CancellationToken cancellationToken)
@@ -299,6 +312,15 @@ public sealed class AdminUserManagementService : IAdminUserManagementService
         var hasCaregiverProfile = await HasCaregiverProfileAsync(user.Id, cancellationToken);
         var hasClientProfile = await HasClientProfileAsync(user.Id, cancellationToken);
         var lastActiveAdmin = await IsLastActiveAdminAsync(user, cancellationToken);
+        return ToDto(user, hasCaregiverProfile, hasClientProfile, lastActiveAdmin);
+    }
+
+    private static UserAccountDto ToDto(
+        User user,
+        bool hasCaregiverProfile,
+        bool hasClientProfile,
+        bool lastActiveAdmin)
+    {
         var disabledReason = DisabledReason(lastActiveAdmin, hasCaregiverProfile, hasClientProfile);
 
         return new UserAccountDto
@@ -341,13 +363,17 @@ public sealed class AdminUserManagementService : IAdminUserManagementService
     private Task<bool> HasClientProfileAsync(Guid userId, CancellationToken cancellationToken) =>
         unitOfWork.Clients.ExistsAsync(client => client.UserId == userId, cancellationToken);
 
-    private async Task<bool> IsLastActiveAdminAsync(User user, CancellationToken cancellationToken)
-    {
-        return user is { IsActive: true, Role: DomainUserRole.Admin } &&
-            await unitOfWork.Users.CountAsync(
-                candidate => candidate.IsActive && candidate.Role == DomainUserRole.Admin,
-                cancellationToken) <= 1;
-    }
+    private async Task<bool> IsLastActiveAdminAsync(User user, CancellationToken cancellationToken) =>
+        user is { IsActive: true, Role: DomainUserRole.Admin }
+            && IsLastActiveAdmin(user, await CountActiveAdminsAsync(cancellationToken));
+
+    private static bool IsLastActiveAdmin(User user, int activeAdminCount) =>
+        user is { IsActive: true, Role: DomainUserRole.Admin } && activeAdminCount <= 1;
+
+    private Task<int> CountActiveAdminsAsync(CancellationToken cancellationToken) =>
+        unitOfWork.Users.CountAsync(
+            candidate => candidate.IsActive && candidate.Role == DomainUserRole.Admin,
+            cancellationToken);
 
     private Task AuditAsync(
         AuditAction action,

@@ -23,6 +23,14 @@ public sealed class ShiftOperationsService : IShiftOperationsService
     private const string CertificationExpiredCode = "caregiver.certification_expired";
     private const string InvalidLifecycleCode = "shift.invalid_lifecycle";
     private const string InvalidRangeCode = "shift.invalid_range";
+    private const int BestMatchTarget = 3;
+    private const int CandidateScanPageSize = 50;
+
+    // Operational bound on the best-match scan: at most 10 pages (500 candidates) are
+    // examined per coverage request. A niche shift on a larger roster may report fewer
+    // than three matches once the cap is hit; surfacing an explicit "scan capped"
+    // indicator would need a contract addition and its own decision.
+    private const int CandidateScanMaxPages = 10;
 
     private readonly IUnitOfWork unitOfWork;
     private readonly ICurrentUserContext currentUser;
@@ -271,12 +279,13 @@ public sealed class ShiftOperationsService : IShiftOperationsService
             request.PageSize,
             cancellationToken);
 
+        var candidateSource = new ActiveCaregiverCandidateSource(this);
         var items = new List<OpenShiftCoverageDto>();
         foreach (var shift in shifts)
         {
             await AttachShiftClientAsync(shift, cancellationToken);
             await AuditAsync(shift.Id, AuditAction.Read, cancellationToken);
-            var bestMatches = await GetBestMatchesAsync(shift, cancellationToken);
+            var bestMatches = await GetBestMatchesAsync(shift, candidateSource, cancellationToken);
             items.Add(new OpenShiftCoverageDto
             {
                 ShiftId = shift.Id,
@@ -306,6 +315,8 @@ public sealed class ShiftOperationsService : IShiftOperationsService
         await AttachShiftClientAsync(shift, cancellationToken);
         await AuditAsync(shift.Id, AuditAction.Read, cancellationToken);
 
+        // Deliberately unfiltered: unlike the coverage-queue best-match scan (top matches
+        // only), this paged list also shows blocked candidates with their blocking reasons.
         var (caregivers, totalCount) = await unitOfWork.Caregivers.GetPagedAsync(
             request.PageNumber,
             request.PageSize,
@@ -315,6 +326,7 @@ public sealed class ShiftOperationsService : IShiftOperationsService
         var items = new List<EligibleCaregiverDto>();
         foreach (var caregiver in caregivers)
         {
+            await AuditCaregiverReadAsync(caregiver.Id, cancellationToken);
             var certifications = await GetCaregiverCertificationsAsync(caregiver.Id, cancellationToken);
             var assignedShifts = await GetAssignableShiftChecksAsync(caregiver.Id, cancellationToken);
             var eligibility = CaregiverShiftEligibility.Evaluate(caregiver, shift, certifications, assignedShifts);
@@ -359,16 +371,7 @@ public sealed class ShiftOperationsService : IShiftOperationsService
             cancellationToken);
         foreach (var certification in certifications)
         {
-            await auditLogger.LogAsync(
-                new PhiAuditEntry(
-                    currentUser.UserId,
-                    currentUser.UserId.HasValue ? AuditActorType.User : AuditActorType.Anonymous,
-                    DateTime.UtcNow,
-                    AuditAction.Read,
-                    ProtectedResourceType.CaregiverCertification,
-                    certification.Id,
-                    currentUser.CorrelationId),
-                cancellationToken);
+            await AuditCertificationReadAsync(certification.Id, cancellationToken);
         }
 
         var assignedShifts = await GetAssignableShiftChecksAsync(caregiverId, cancellationToken);
@@ -544,29 +547,130 @@ public sealed class ShiftOperationsService : IShiftOperationsService
         }
     }
 
-    private async Task<IReadOnlyList<string>> GetBestMatchesAsync(Shift shift, CancellationToken cancellationToken)
+    private static async Task<IReadOnlyList<string>> GetBestMatchesAsync(
+        Shift shift,
+        ActiveCaregiverCandidateSource candidateSource,
+        CancellationToken cancellationToken)
     {
-        var (caregivers, _) = await unitOfWork.Caregivers.GetPagedAsync(1, 25, cancellationToken);
-        await AttachUsersAsync(caregivers, cancellationToken);
-
-        var matches = new List<string>();
-        foreach (var caregiver in caregivers)
+        var matches = new List<string>(BestMatchTarget);
+        for (var index = 0; matches.Count < BestMatchTarget; index++)
         {
-            var certifications = await GetCaregiverCertificationsAsync(caregiver.Id, cancellationToken);
-            var assignedShifts = await GetAssignableShiftChecksAsync(caregiver.Id, cancellationToken);
-            var eligibility = CaregiverShiftEligibility.Evaluate(caregiver, shift, certifications, assignedShifts);
-            if (eligibility.IsAssignable)
-            {
-                matches.Add(caregiver.User?.FullName ?? string.Empty);
-            }
-
-            if (matches.Count == 3)
+            var candidate = await candidateSource.GetAsync(index, cancellationToken);
+            if (candidate is null)
             {
                 break;
+            }
+
+            var eligibility = CaregiverShiftEligibility.Evaluate(
+                candidate.Caregiver,
+                shift,
+                candidate.Certifications,
+                candidate.AssignedShifts);
+            if (eligibility.IsAssignable)
+            {
+                matches.Add(candidate.Caregiver.User?.FullName ?? string.Empty);
             }
         }
 
         return matches;
+    }
+
+    private sealed record CaregiverCandidate(
+        Caregiver Caregiver,
+        IReadOnlyList<CaregiverCertification> Certifications,
+        IReadOnlyList<Shift> AssignedShifts);
+
+    /// <summary>
+    /// Lazily pages the non-terminated caregiver population (deterministic repository Id
+    /// order, bounded by <see cref="CandidateScanMaxPages"/>) with per-page batched
+    /// user/certification/assigned-shift lookups, caching each loaded page so every
+    /// coverage-queue row scans the same candidate list without re-querying. Caregiver and
+    /// certification reads are audited once, when their page is first loaded.
+    /// </summary>
+    private sealed class ActiveCaregiverCandidateSource
+    {
+        private readonly ShiftOperationsService service;
+        private readonly List<CaregiverCandidate> candidates = [];
+        private int nextPageNumber = 1;
+        private bool exhausted;
+
+        internal ActiveCaregiverCandidateSource(ShiftOperationsService service)
+        {
+            this.service = service;
+        }
+
+        internal async Task<CaregiverCandidate?> GetAsync(int index, CancellationToken cancellationToken)
+        {
+            while (candidates.Count <= index && !exhausted)
+            {
+                await LoadNextPageAsync(cancellationToken);
+            }
+
+            return index < candidates.Count ? candidates[index] : null;
+        }
+
+        private async Task LoadNextPageAsync(CancellationToken cancellationToken)
+        {
+            var (page, totalCount) = await service.unitOfWork.Caregivers.GetPagedAsync(
+                caregiver => caregiver.TerminationDate == null,
+                nextPageNumber,
+                CandidateScanPageSize,
+                cancellationToken);
+            if (page.Count == 0)
+            {
+                exhausted = true;
+                return;
+            }
+
+            var caregiverIds = page.Select(caregiver => caregiver.Id).ToArray();
+            var userIds = page.Select(caregiver => caregiver.UserId).Distinct().ToArray();
+            var users = await service.unitOfWork.Users.FindAsync(
+                user => userIds.Contains(user.Id),
+                cancellationToken);
+            var usersById = users.ToDictionary(user => user.Id);
+            var certifications = await service.unitOfWork.CaregiverCertifications.FindAsync(
+                certification => caregiverIds.Contains(certification.CaregiverId),
+                cancellationToken);
+            var certificationsByCaregiver = certifications
+                .GroupBy(certification => certification.CaregiverId)
+                .ToDictionary(group => group.Key, group => (IReadOnlyList<CaregiverCertification>)group.ToArray());
+            var assignedShifts = await service.unitOfWork.Shifts.FindAsync(
+                shift => shift.CaregiverId.HasValue
+                    && caregiverIds.Contains(shift.CaregiverId.Value)
+                    && shift.Status != ShiftStatus.Cancelled
+                    && shift.Status != ShiftStatus.Completed,
+                cancellationToken);
+            var assignedShiftsByCaregiver = assignedShifts
+                .Where(shift => shift.CaregiverId.HasValue)
+                .GroupBy(shift => shift.CaregiverId!.Value)
+                .ToDictionary(group => group.Key, group => (IReadOnlyList<Shift>)group.ToArray());
+
+            foreach (var caregiver in page)
+            {
+                if (usersById.TryGetValue(caregiver.UserId, out var caregiverUser))
+                {
+                    caregiver.User = caregiverUser;
+                }
+
+                await service.AuditCaregiverReadAsync(caregiver.Id, cancellationToken);
+                var caregiverCertifications = certificationsByCaregiver.GetValueOrDefault(
+                    caregiver.Id,
+                    Array.Empty<CaregiverCertification>());
+                foreach (var certification in caregiverCertifications)
+                {
+                    await service.AuditCertificationReadAsync(certification.Id, cancellationToken);
+                }
+
+                candidates.Add(new CaregiverCandidate(
+                    caregiver,
+                    caregiverCertifications,
+                    assignedShiftsByCaregiver.GetValueOrDefault(caregiver.Id, Array.Empty<Shift>())));
+            }
+
+            exhausted = nextPageNumber * CandidateScanPageSize >= totalCount
+                || nextPageNumber >= CandidateScanMaxPages;
+            nextPageNumber++;
+        }
     }
 
     private async Task<IReadOnlyList<CaregiverCertification>> GetCaregiverCertificationsAsync(
@@ -578,19 +682,34 @@ public sealed class ShiftOperationsService : IShiftOperationsService
             cancellationToken);
         foreach (var certification in certifications)
         {
-            await auditLogger.LogAsync(
-                new PhiAuditEntry(
-                    currentUser.UserId,
-                    currentUser.UserId.HasValue ? AuditActorType.User : AuditActorType.Anonymous,
-                    DateTime.UtcNow,
-                    AuditAction.Read,
-                    ProtectedResourceType.CaregiverCertification,
-                    certification.Id,
-                    currentUser.CorrelationId),
-                cancellationToken);
+            await AuditCertificationReadAsync(certification.Id, cancellationToken);
         }
 
         return certifications;
+    }
+
+    private Task AuditCaregiverReadAsync(Guid caregiverId, CancellationToken cancellationToken) =>
+        AuditEntityAsync(ProtectedResourceType.Caregiver, caregiverId, AuditAction.Read, cancellationToken);
+
+    private Task AuditCertificationReadAsync(Guid certificationId, CancellationToken cancellationToken) =>
+        AuditEntityAsync(ProtectedResourceType.CaregiverCertification, certificationId, AuditAction.Read, cancellationToken);
+
+    private Task AuditEntityAsync(
+        ProtectedResourceType entityType,
+        Guid entityId,
+        AuditAction action,
+        CancellationToken cancellationToken)
+    {
+        return auditLogger.LogAsync(
+            new PhiAuditEntry(
+                currentUser.UserId,
+                currentUser.UserId.HasValue ? AuditActorType.User : AuditActorType.Anonymous,
+                DateTime.UtcNow,
+                action,
+                entityType,
+                entityId,
+                currentUser.CorrelationId),
+            cancellationToken);
     }
 
     private async Task<IReadOnlyList<Shift>> GetAssignableShiftChecksAsync(

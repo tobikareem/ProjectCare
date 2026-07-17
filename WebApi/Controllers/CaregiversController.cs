@@ -28,7 +28,7 @@ public sealed class CaregiversController : ControllerBase
         => Ok(await service.GetCaregiversAsync(request, cancellationToken));
 
     [HttpGet("{id:guid}")]
-    [Authorize(Roles = "Admin,Coordinator,Caregiver")]
+    [Authorize(Roles = "Admin,Coordinator")]
     public async Task<ActionResult<CaregiverDetailDto>> GetCaregiver(Guid id, CancellationToken cancellationToken)
     {
         await EnsureAuthorizedAsync(ProtectedResourceType.Caregiver, id, ObjectAccessAction.Read, cancellationToken);

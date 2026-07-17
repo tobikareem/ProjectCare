@@ -262,6 +262,13 @@
       background: var(--orange-soft); border-radius: 8px;
     }
     .alert-item p { margin: 4px 0 0; font-size: .84rem; color: #69402e; }
+    .alert {
+      padding: 12px 14px; border: 1px solid var(--line);
+      border-radius: 10px; background: var(--surface-alt); color: var(--ink);
+    }
+    .alert p { margin: 5px 0 0; color: var(--muted); font-size: .84rem; }
+    .alert-info { border-color: var(--teal-700); background: var(--teal-100); }
+    .alert-warning { border-color: var(--amber); background: var(--amber-soft); }
 
     .margin-bars { display: grid; gap: 20px; }
     .bar-row header { display: flex; justify-content: space-between; gap: 12px; margin-bottom: 7px; }
@@ -365,11 +372,13 @@
       font-size: .78rem; font-weight: 800;
     }
     .form-field input,
-    .form-field select {
+    .form-field select,
+    .form-field textarea {
       width: 100%; min-height: 42px; padding: 8px 12px;
       border: 1px solid var(--line); border-radius: 9px;
       background: var(--surface); color: var(--ink); font-weight: 500;
     }
+    .form-field textarea { min-height: 82px; resize: vertical; }
     .check-grid {
       display: grid; grid-template-columns: repeat(2,minmax(0,1fr));
       gap: 10px;
@@ -998,7 +1007,7 @@
                   <div class="quick-actions">
                     <button type="button" data-web-page="clients">＋ Add client</button>
                     <button type="button" data-web-page="caregiver-create">＋ Add caregiver</button>
-                    <button type="button" data-web-page="billing">$ Generate invoices</button>
+                    <button type="button" data-web-page="billing-generate">$ Generate invoices</button>
                     <button type="button" data-web-page="compliance">✓ Review credentials</button>
                   </div>
                 </section>
@@ -1924,7 +1933,8 @@
                 <h1>Billing &amp; Invoices</h1>
                 <p class="subtle">$48,200 outstanding · 3 invoices overdue</p>
               </div>
-              <button class="button button-primary" type="button" data-message="Invoice generation opened">$ Generate invoices</button>
+              <button class="button button-primary" type="button" data-web-page="billing-generate">$ Generate invoices</button>
+              <button class="button button-secondary" type="button" data-web-page="billing-reconciliation">Review uninvoiced services</button>
             </div>
 
             <div class="metric-grid" style="grid-template-columns:repeat(3,minmax(0,1fr))">
@@ -1999,6 +2009,179 @@
                   </div>
                 </div>
               </div>
+            </div>
+          </div>
+
+          <!-- ── Generate invoice ── -->
+          <div id="page-billing-generate" class="web-page">
+            <div class="page-heading">
+              <div>
+                <p class="eyebrow">Business · Billing</p>
+                <h1>Generate invoice</h1>
+                <p class="subtle">Review eligible, completed shifts before creating the invoice.</p>
+              </div>
+              <button class="button button-secondary" type="button" data-web-page="billing">← Back to billing</button>
+            </div>
+
+            <div class="setup-steps" aria-label="Invoice generation steps">
+              <div class="setup-step active"><strong>1 · Select</strong><span class="meta">Client, service and period</span></div>
+              <div class="setup-step"><strong>2 · Preview</strong><span class="meta">Verify eligible shifts</span></div>
+              <div class="setup-step"><strong>3 · Generate</strong><span class="meta">Create and open invoice</span></div>
+            </div>
+
+            <div class="caregiver-form-grid">
+              <section class="card form-section" aria-labelledby="invoice-details-heading">
+                <div class="section-header">
+                  <div><h2 id="invoice-details-heading">Invoice details</h2><p class="subtle">Client search and results are server-paged.</p></div>
+                </div>
+                <div class="form-field-grid">
+                  <label class="form-field">Client or facility
+                    <select><option>Harborview Center</option><option>Jordan M.</option><option>Casey R.</option></select>
+                  </label>
+                  <label class="form-field">Service line
+                    <select><option>Facility staffing</option><option>In-home care</option></select>
+                  </label>
+                  <label class="form-field">Period start <input type="date" value="2026-06-01"></label>
+                  <label class="form-field">Period end <input type="date" value="2026-07-01"></label>
+                  <label class="form-field">Due date <input type="date" value="2026-07-31"></label>
+                  <label class="form-field">Tax amount <input type="number" value="0.00" min="0" step="0.01"></label>
+                </div>
+                <label class="form-field">Internal invoice note
+                  <textarea placeholder="Optional billing note — do not enter clinical details"></textarea>
+                </label>
+                <div><button class="button button-primary" type="button" data-web-page="billing-preview">Preview billable shifts →</button></div>
+              </section>
+
+              <aside class="card form-section" aria-labelledby="preview-checks-heading">
+                <div><p class="eyebrow">Before generation</p><h2 id="preview-checks-heading">What Preview checks</h2></div>
+                <div class="profile-row"><span>Shift status</span><strong>Completed</strong></div>
+                <div class="profile-row"><span>Time records</span><strong>Valid check-in/out</strong></div>
+                <div class="profile-row"><span>Billing period</span><strong>Within selected dates</strong></div>
+                <div class="profile-row"><span>Prior billing</span><strong>Not already invoiced</strong></div>
+                <div class="alert alert-info" role="note"><strong>No invoice is created yet</strong><p>Preview is read-only. You can return and edit these selections before generating.</p></div>
+              </aside>
+            </div>
+          </div>
+
+          <!-- ── Preview billable shifts ── -->
+          <div id="page-billing-preview" class="web-page">
+            <div class="page-heading">
+              <div>
+                <p class="eyebrow">Business · Billing</p>
+                <h1>Preview billable shifts</h1>
+                <p class="subtle">Harborview Center · Facility staffing · Jun 1–30, 2026</p>
+              </div>
+              <button class="button button-secondary" type="button" data-web-page="billing-generate">← Edit invoice details</button>
+            </div>
+
+            <div class="setup-steps" aria-label="Invoice generation steps">
+              <div class="setup-step"><strong>1 · Select</strong><span class="meta">Details complete</span></div>
+              <div class="setup-step active"><strong>2 · Preview</strong><span class="meta">Verify eligible shifts</span></div>
+              <div class="setup-step"><strong>3 · Generate</strong><span class="meta">Create and open invoice</span></div>
+            </div>
+
+            <div class="caregiver-form-grid">
+              <section class="card form-section" aria-labelledby="preview-selection-heading">
+                <div class="section-header"><div><h2 id="preview-selection-heading">Selected billing details</h2><p class="subtle">Read-only snapshot used for this preview.</p></div><button class="text-link" type="button" data-web-page="billing-generate">Edit</button></div>
+                <div class="form-field-grid">
+                  <div class="profile-row"><span>Client / facility</span><strong>Harborview Center</strong></div>
+                  <div class="profile-row"><span>Service line</span><strong>Facility staffing</strong></div>
+                  <div class="profile-row"><span>Billing period</span><strong>Jun 1–30, 2026</strong></div>
+                  <div class="profile-row"><span>Due date</span><strong>Jul 31, 2026</strong></div>
+                </div>
+              </section>
+
+              <aside class="card form-section" aria-labelledby="preview-summary-heading">
+                <div><p class="eyebrow">Preview result</p><h2 id="preview-summary-heading">Invoice summary</h2></div>
+                <div class="profile-row"><span>Eligible shifts</span><strong>12</strong></div>
+                <div class="profile-row"><span>Billable hours</span><strong>86.5 hrs</strong></div>
+                <div class="profile-row"><span>Subtotal</span><strong>$3,027.50</strong></div>
+                <div class="profile-row"><span>Tax</span><strong>$0.00</strong></div>
+                <div class="profile-row"><span>Total</span><strong>$3,027.50</strong></div>
+                <div class="alert alert-warning" role="note">
+                  <strong>4 shifts not included</strong>
+                  <p style="display:flex;flex-wrap:wrap;gap:10px;margin-bottom:0">
+                    <button class="text-link" type="button" data-web-page="billing-reconciliation">1 scheduled</button>
+                    <button class="text-link" type="button" data-web-page="billing-reconciliation">1 missing checkout</button>
+                    <button class="text-link" type="button" data-web-page="billing-reconciliation">2 already invoiced</button>
+                  </p>
+                </div>
+              </aside>
+            </div>
+
+            <section class="card" style="margin-top:20px;padding:0" aria-labelledby="billable-shifts-heading">
+              <div class="section-header" style="padding:18px 20px">
+                <div><h2 id="billable-shifts-heading">Billable shifts</h2><p class="subtle">Clinical notes, caregiver pay and margin are not included in this view.</p></div>
+              </div>
+              <div class="data-table-wrap">
+                <table>
+                  <thead><tr><th>Service date</th><th>Caregiver / role</th><th>Scheduled window</th><th>Actual hours</th><th>Bill rate</th><th>Line total</th><th>Status</th></tr></thead>
+                  <tbody>
+                    <tr><td>Jun 28, 2026</td><td>Casey Morgan<span class="meta">RN</span></td><td>7:00 AM–3:00 PM</td><td>7.5 hrs</td><td>$35.00/hr</td><td><strong>$262.50</strong></td><td><span class="status status-green">Eligible</span></td></tr>
+                    <tr><td>Jun 27, 2026</td><td>David Okafor<span class="meta">LPN</span></td><td>7:00 AM–3:00 PM</td><td>8.0 hrs</td><td>$35.00/hr</td><td><strong>$280.00</strong></td><td><span class="status status-green">Eligible</span></td></tr>
+                    <tr><td>Jun 25, 2026</td><td>Casey Morgan<span class="meta">RN</span></td><td>3:00 PM–11:00 PM</td><td>7.5 hrs</td><td>$35.00/hr</td><td><strong>$262.50</strong></td><td><span class="status status-green">Eligible</span></td></tr>
+                  </tbody>
+                </table>
+              </div>
+              <div class="section-header" style="padding:16px 20px;border-top:1px solid var(--line)">
+                <span class="subtle">Showing 1–3 of 12 · Page 1 of 4</span>
+                <div style="display:flex;gap:8px"><button class="button button-secondary" type="button" disabled>Previous</button><button class="button button-secondary" type="button" data-message="Next preview page opened">Next</button></div>
+              </div>
+            </section>
+
+            <div class="card" style="margin-top:20px;display:flex;align-items:center;justify-content:space-between;gap:18px">
+              <p class="subtle" style="margin:0">Eligibility and prior billing are checked again when you generate the invoice.</p>
+              <button class="button button-primary" type="button" data-message="Invoice generated — opening invoice detail">Generate $3,027.50 invoice</button>
+            </div>
+          </div>
+
+          <!-- ── Billing reconciliation ── -->
+          <div id="page-billing-reconciliation" class="web-page">
+            <div class="page-heading">
+              <div>
+                <p class="eyebrow">Business · Billing</p>
+                <h1>Billing reconciliation</h1>
+                <p class="subtle">Find and resolve delivered services that have not reached an invoice.</p>
+              </div>
+              <div style="display:flex;gap:10px;flex-wrap:wrap">
+                <button class="button button-secondary" type="button" data-web-page="billing">← Back to billing</button>
+                <button class="button button-primary" type="button" data-web-page="billing-generate">Generate invoice</button>
+              </div>
+            </div>
+
+            <div class="metric-grid" style="grid-template-columns:repeat(4,minmax(0,1fr))">
+              <article class="card metric-card"><span class="metric-label">Revenue at risk</span><div class="metric-value" style="color:var(--red)">$6,842</div><span class="trend" style="color:var(--red)">31 unresolved services</span></article>
+              <article class="card metric-card"><span class="metric-label">Missing checkout</span><div class="metric-value">9</div><span class="trend">Needs time correction</span></article>
+              <article class="card metric-card"><span class="metric-label">Missing rate</span><div class="metric-value">4</div><span class="trend">Cannot calculate charge</span></article>
+              <article class="card metric-card"><span class="metric-label">Over 30 days</span><div class="metric-value">6</div><span class="trend" style="color:var(--amber)">Priority follow-up</span></article>
+            </div>
+
+            <div class="filter-bar">
+              <select aria-label="Reconciliation status"><option>All unresolved reasons</option><option>Missing checkout</option><option>Invalid time</option><option>Missing rate</option><option>Completed, not invoiced</option><option>Already invoiced</option></select>
+              <select aria-label="Age"><option>All ages</option><option>0–7 days</option><option>8–30 days</option><option>Over 30 days</option></select>
+              <select aria-label="Service line"><option>All service lines</option><option>In-home care</option><option>Facility staffing</option></select>
+              <input type="search" aria-label="Search client or facility" placeholder="Search client or facility…">
+            </div>
+
+            <section class="card" style="padding:0" aria-labelledby="reconciliation-table-heading">
+              <div class="section-header" style="padding:18px 20px"><div><h2 id="reconciliation-table-heading">Services requiring review</h2><p class="subtle">Server-paged · oldest unresolved service first</p></div></div>
+              <div class="data-table-wrap">
+                <table>
+                  <thead><tr><th>Service date</th><th>Client / facility</th><th>Caregiver / role</th><th>Issue</th><th>Potential revenue</th><th>Age</th><th>Action</th></tr></thead>
+                  <tbody>
+                    <tr><td>May 30, 2026</td><td>Harborview Center</td><td>Casey Morgan<span class="meta">RN</span></td><td><span class="status status-red">Missing checkout</span></td><td>$280 est.</td><td>32 days</td><td><button class="text-link" type="button" data-message="Shift and time correction details opened">Review shift</button></td></tr>
+                    <tr><td>Jun 4, 2026</td><td>Jordan M.</td><td>David Okafor<span class="meta">LPN</span></td><td><span class="status status-amber">Missing rate</span></td><td>Pending rate</td><td>27 days</td><td><button class="text-link" type="button" data-message="Shift billing-rate details opened">Add rate</button></td></tr>
+                    <tr><td>Jun 12, 2026</td><td>Casey R.</td><td>Casey Morgan<span class="meta">RN</span></td><td><span class="status status-amber">Not invoiced</span></td><td>$245.00</td><td>19 days</td><td><button class="text-link" type="button" data-web-page="billing-generate">Add to invoice</button></td></tr>
+                    <tr><td>Jun 18, 2026</td><td>Northside Rehab</td><td>David Okafor<span class="meta">LPN</span></td><td><span class="status status-green">Already invoiced</span></td><td>$280.00 billed</td><td>—</td><td><button class="text-link" type="button" data-message="Invoice INV-2026-0047 opened">View invoice</button></td></tr>
+                  </tbody>
+                </table>
+              </div>
+              <div class="section-header" style="padding:16px 20px;border-top:1px solid var(--line)"><span class="subtle">Showing 1–4 of 31 · Page 1 of 8</span><div style="display:flex;gap:8px"><button class="button button-secondary" type="button" disabled>Previous</button><button class="button button-secondary" type="button" data-message="Next reconciliation page opened">Next</button></div></div>
+            </section>
+
+            <div class="alert alert-warning" role="note" style="margin-top:20px">
+              <strong>Revenue-leakage control</strong>
+              <p>Resolved items leave this queue only after the shift becomes invoice-eligible or an authorized user records a non-billable reason. Records are never deleted.</p>
             </div>
           </div>
 

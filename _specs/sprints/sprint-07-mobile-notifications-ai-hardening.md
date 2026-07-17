@@ -182,6 +182,43 @@ change-password endpoint + client method, and mobile/web first-login UX.
 - [ ] Add PHI-safe logging tests.
 - [ ] Add end-to-end workflow tests or scripted demo.
 
+## Later Business-Operations Backlog (Not Yet Committed to Sprint 7)
+
+These are separate from client/facility Billing and require product, accounting, compliance, and
+deployment review before implementation. They are recorded now so neither payroll obligations nor
+manual-only invoicing becomes an architectural assumption.
+
+### Payroll / Caregiver payments
+
+- [ ] **S7-BACKLOG-PAY-001 — Payroll discovery and approval:** decide W-2 versus 1099 rules,
+  overtime, breaks, reimbursements, adjustments, pay periods, approval roles, Coordinator access to
+  compensation, external payroll provider, BAA/security requirements, and accounting exports.
+- [ ] **S7-BACKLOG-PAY-002 — Payroll wireframe and three-document spec:** create a separate
+  Admin payroll area plus caregiver-self earnings/pay-statement view; do not add payroll status or
+  caregiver payment fields to client Billing/Invoice contracts.
+- [ ] **S7-BACKLOG-PAY-003 — Payroll backend foundation:** only after PAY-001/002 approval, design
+  payable-time snapshots, approval and adjustment audit trail, idempotent provider/export boundary,
+  least-privilege compensation endpoints, retention, reconciliation, and tests.
+- [ ] **S7-BACKLOG-PAY-004 — Payroll UI and verification:** implement approved Admin and optional
+  Coordinator review workflow, caregiver owner-only history, access tests, financial-data leakage
+  checks, reconciliation, and provider sandbox verification.
+
+### Automated invoice generation
+
+- [ ] **S7-BACKLOG-AUTO-INV-001 — Automation design decision:** compare a hosted .NET
+  `BackgroundService` with an Azure Functions `TimerTrigger` against deployment topology,
+  multi-instance locking, retries, observability, cost, and operational ownership; select one.
+- [ ] **S7-BACKLOG-AUTO-INV-002 — Billing schedule model and controls:** define per-client cadence,
+  timezone and cut-off, service-line grouping, payment terms, pause/opt-out, first-run/backfill rules,
+  dry-run preview, approval-versus-auto-send policy, and Admin-only configuration/audit UI.
+- [ ] **S7-BACKLOG-AUTO-INV-003 — Idempotent nightly generation worker:** reuse D-S6-18's single
+  eligibility/reconciliation service, acquire a distributed execution lock, persist run/checkpoint
+  records, prevent duplicate shift billing at the database, retry safely, and route exceptions into
+  Billing reconciliation. Never log client/caregiver display values.
+- [ ] **S7-BACKLOG-AUTO-INV-004 — Automation verification and rollout:** clock/boundary,
+  concurrency, retry, partial-failure, backfill, daylight-saving, duplicate-prevention, audit, and
+  PHI-safe telemetry tests; staged dry-run rollout with alerts and a documented kill switch.
+
 ## Exit Gate
 
 - [ ] Caregiver can complete a shift from mobile.

@@ -390,6 +390,89 @@ public sealed class Sprint4SchedulingServiceTests
     }
 
     [Fact]
+    public async Task GetCoverageQueueAsync_WhenMultipleOpenShiftsShareCandidates_AuditsEachCandidateReadOnce()
+    {
+        // Arrange — two open shifts scan the same cached candidate page; each caregiver
+        // and certification Read is audited once at page load, never once per shift row
+        var context = CreateContext();
+        var openShiftA = ExistingShift(WindowStart, WindowEnd, ShiftStatus.Scheduled);
+        var openShiftB = ExistingShift(WindowStart.AddDays(3), WindowEnd.AddDays(3), ShiftStatus.Scheduled);
+        openShiftA.ClientId = context.Client.Id;
+        openShiftA.CaregiverId = null;
+        openShiftB.ClientId = context.Client.Id;
+        openShiftB.CaregiverId = null;
+        context.UnitOfWork.Shifts.Setup(repository => repository.GetPagedAsync(
+                It.IsAny<Expression<Func<Shift, bool>>>(), 1, 10, It.IsAny<CancellationToken>()))
+            .ReturnsAsync((new[] { openShiftA, openShiftB }, 2));
+        var candidates = new[] { "Amara", "Bola", "Chidi", "Dayo" }
+            .Select(firstName =>
+            {
+                var user = new User
+                {
+                    Id = Guid.NewGuid(),
+                    FirstName = firstName,
+                    LastName = "Candidate",
+                    Email = $"{Guid.NewGuid():N}@example.test",
+                    PhoneNumber = "555-0100",
+                    Role = UserRole.Caregiver,
+                };
+                return new Caregiver { Id = Guid.NewGuid(), UserId = user.Id, User = user };
+            })
+            .ToArray();
+        context.UnitOfWork.Caregivers.Setup(repository => repository.GetPagedAsync(
+                It.IsAny<Expression<Func<Caregiver, bool>>>(), 1, 50, It.IsAny<CancellationToken>()))
+            .ReturnsAsync((candidates, 4));
+        var candidateUsers = candidates.Select(candidate => candidate.User).ToArray();
+        context.UnitOfWork.Users.Setup(repository => repository.FindAsync(
+                It.IsAny<Expression<Func<User, bool>>>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync((Expression<Func<User, bool>> predicate, CancellationToken _) => candidateUsers.Where(predicate.Compile()).ToArray());
+        var candidateCertifications = candidates
+            .Select(candidate =>
+            {
+                var certification = Certification(WindowEnd.Date.AddDays(30));
+                certification.CaregiverId = candidate.Id;
+                return certification;
+            })
+            .ToArray();
+        context.UnitOfWork.CaregiverCertifications.Setup(repository => repository.FindAsync(
+                It.IsAny<Expression<Func<CaregiverCertification, bool>>>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(candidateCertifications);
+
+        // Act
+        var result = await context.Service.GetCoverageQueueAsync(new CarePath.Contracts.Common.PagedRequest { PageNumber = 1, PageSize = 10 });
+
+        // Assert — Times.Once per candidate pins the dedup: re-auditing per shift row
+        // would log Amara/Bola/Chidi twice (both rows scan them) and fail these verifies
+        result.Items.Should().HaveCount(2);
+        foreach (var candidate in candidates)
+        {
+            context.AuditLogger.Verify(logger => logger.LogAsync(
+                It.Is<PhiAuditEntry>(entry =>
+                    entry.EntityType == ProtectedResourceType.Caregiver &&
+                    entry.EntityId == candidate.Id &&
+                    entry.Action == AuditAction.Read),
+                It.IsAny<CancellationToken>()), Times.Once);
+        }
+
+        foreach (var certification in candidateCertifications)
+        {
+            context.AuditLogger.Verify(logger => logger.LogAsync(
+                It.Is<PhiAuditEntry>(entry =>
+                    entry.EntityType == ProtectedResourceType.CaregiverCertification &&
+                    entry.EntityId == certification.Id &&
+                    entry.Action == AuditAction.Read),
+                It.IsAny<CancellationToken>()), Times.Once);
+        }
+
+        context.AuditLogger.Verify(logger => logger.LogAsync(
+            It.Is<PhiAuditEntry>(entry => entry.EntityType == ProtectedResourceType.Caregiver),
+            It.IsAny<CancellationToken>()), Times.Exactly(candidates.Length));
+        context.AuditLogger.Verify(logger => logger.LogAsync(
+            It.Is<PhiAuditEntry>(entry => entry.EntityType == ProtectedResourceType.CaregiverCertification),
+            It.IsAny<CancellationToken>()), Times.Exactly(candidateCertifications.Length));
+    }
+
+    [Fact]
     public async Task GetCoverageQueueAsync_WhenNoCandidateMatches_StopsScanningAtTheOperationalPageCap()
     {
         // Arrange — an unfillable shift on a huge roster must not walk the whole table

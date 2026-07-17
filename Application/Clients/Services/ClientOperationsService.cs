@@ -187,7 +187,7 @@ public sealed class ClientOperationsService : IClientOperationsService
             return null;
         }
 
-        await EnsureCanReadClientAsync(client, AccessScope.Full, cancellationToken);
+        await EnsureCanReadClientAsync(client.Id, AccessScope.Full, cancellationToken);
 
         client.User = await GetUserAsync(client.UserId, cancellationToken);
         await AuditAsync(ProtectedResourceType.Client, client.Id, AuditAction.Read, cancellationToken);
@@ -315,28 +315,44 @@ public sealed class ClientOperationsService : IClientOperationsService
         return carePlan.ToDto();
     }
 
-    public async Task<PagedResult<CarePlanDto>> GetCarePlansAsync(
+    public async Task<CarePlanDto> GetCarePlanAsync(
+        Guid carePlanId,
+        CancellationToken cancellationToken = default)
+    {
+        // The controller's CarePlan IDOR guard runs first (D-S6-14); this in-service check is
+        // deliberate second-layer enforcement so the clinical read stays safe even if a future
+        // call site bypasses the controller.
+        var carePlan = await GetCarePlanEntityAsync(carePlanId, cancellationToken);
+        await EnsureCanReadClientAsync(carePlan.ClientId, AccessScope.Full, cancellationToken);
+        await AuditAsync(ProtectedResourceType.CarePlan, carePlan.Id, AuditAction.Read, cancellationToken);
+        return carePlan.ToDto();
+    }
+
+    public async Task<PagedResult<CarePlanSummaryDto>> GetCarePlansAsync(
         Guid clientId,
         PagedRequest request,
         CancellationToken cancellationToken = default)
     {
         var client = await GetClientEntityAsync(clientId, cancellationToken);
-        await EnsureCanReadClientAsync(client, AccessScope.Full, cancellationToken);
+        await EnsureCanReadClientAsync(client.Id, AccessScope.Full, cancellationToken);
 
-        var carePlans = await unitOfWork.CarePlans.FindAsync(
+        // D-S6-14: minimum-necessary summary rows only; the clinical text is served by the
+        // audited per-plan detail read. Filtered, ordered, and paged at the repository.
+        var (carePlans, totalCount) = await unitOfWork.CarePlans.GetPagedDescendingAsync(
             carePlan => carePlan.ClientId == client.Id,
+            carePlan => carePlan.StartDate,
+            request.PageNumber,
+            request.PageSize,
             cancellationToken);
-        var ordered = carePlans.OrderByDescending(carePlan => carePlan.StartDate).ToArray();
-        var page = PagedResultFactory.Page(ordered, request.PageNumber, request.PageSize);
 
-        foreach (var carePlan in page)
+        foreach (var carePlan in carePlans)
         {
             await AuditAsync(ProtectedResourceType.CarePlan, carePlan.Id, AuditAction.Read, cancellationToken);
         }
 
         return PagedResultFactory.Create(
-            page.Select(carePlan => carePlan.ToDto()).ToArray(),
-            ordered.Length,
+            carePlans.Select(carePlan => carePlan.ToSummaryDto()).ToArray(),
+            totalCount,
             request.PageNumber,
             request.PageSize);
     }
@@ -419,7 +435,7 @@ public sealed class ClientOperationsService : IClientOperationsService
     }
 
     private async Task EnsureCanReadClientAsync(
-        Client client,
+        Guid clientId,
         AccessScope requiredScope,
         CancellationToken cancellationToken)
     {
@@ -432,7 +448,7 @@ public sealed class ClientOperationsService : IClientOperationsService
         {
             var grantResult = await clientAccessEvaluator.EvaluateAsync(
                 currentUser.UserId.Value,
-                client.Id,
+                clientId,
                 requiredScope,
                 cancellationToken);
             if (grantResult.IsAuthorized)
@@ -441,20 +457,20 @@ public sealed class ClientOperationsService : IClientOperationsService
             }
         }
 
-        if (HasRole(ApplicationRoles.Caregiver) && await IsCurrentCaregiverAssignedToClientAsync(client.Id, cancellationToken))
+        if (HasRole(ApplicationRoles.Caregiver) && await IsCurrentCaregiverAssignedToClientAsync(clientId, cancellationToken))
         {
             return;
         }
 
         if (HasRole(ApplicationRoles.Clinician)
             && await unitOfWork.TransitionPlans.ExistsAsync(
-                plan => plan.ClientId == client.Id && plan.Status != TransitionPlanStatus.Cancelled,
+                plan => plan.ClientId == clientId && plan.Status != TransitionPlanStatus.Cancelled,
                 cancellationToken))
         {
             return;
         }
 
-        await AuditAsync(ProtectedResourceType.Client, client.Id, AuditAction.AccessDenied, cancellationToken);
+        await AuditAsync(ProtectedResourceType.Client, clientId, AuditAction.AccessDenied, cancellationToken);
         throw new ResourceAccessDeniedException("RoleInsufficient", isPhiResource: true);
     }
 
@@ -562,9 +578,3 @@ public sealed class ClientOperationsService : IClientOperationsService
             cancellationToken);
     }
 }
-
-
-
-
-
-

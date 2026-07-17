@@ -20,6 +20,10 @@ public sealed class AdminUserManagementService : IAdminUserManagementService
     private const string LastActiveAdmin = "Last active admin";
     private const string ProfileRoleCoupled = "Profile role coupled";
 
+    // Matches the Names=100 string-length convention; the rejection message stays
+    // generic so the attempted search text is never echoed back to the caller.
+    private const int SearchMaxLength = 100;
+
     private static readonly IReadOnlyList<ContractUserRole> AvailableRoles =
         Enum.GetValues<ContractUserRole>();
 
@@ -57,6 +61,11 @@ public sealed class AdminUserManagementService : IAdminUserManagementService
         CancellationToken cancellationToken = default)
     {
         if (role.HasValue && !Enum.IsDefined(role.Value))
+        {
+            throw new ValidationException("The request is invalid.");
+        }
+
+        if (search is not null && search.Length > SearchMaxLength)
         {
             throw new ValidationException("The request is invalid.");
         }

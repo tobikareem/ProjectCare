@@ -142,4 +142,23 @@ public interface IRepository<T> where T : BaseEntity
         int pageNumber,
         int pageSize,
         CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Retrieves a one-based filtered page of non-deleted entities ordered descending by the
+    /// supplied key (with the entity identifier as an ascending tiebreaker so paging stays
+    /// deterministic when key values collide) and the total matching row count.
+    /// </summary>
+    /// <typeparam name="TKey">Sort key type.</typeparam>
+    /// <param name="predicate">LINQ expression used to filter entities.</param>
+    /// <param name="orderByDescending">Descending sort key.</param>
+    /// <param name="pageNumber">One-based page number. Must be greater than zero.</param>
+    /// <param name="pageSize">Number of rows per page. Must be greater than zero.</param>
+    /// <param name="cancellationToken">Token to cancel the asynchronous operation.</param>
+    /// <returns>A tuple containing the materialized page items and total matching row count.</returns>
+    Task<(IReadOnlyList<T> Items, int TotalCount)> GetPagedDescendingAsync<TKey>(
+        Expression<Func<T, bool>> predicate,
+        Expression<Func<T, TKey>> orderByDescending,
+        int pageNumber,
+        int pageSize,
+        CancellationToken cancellationToken = default);
 }

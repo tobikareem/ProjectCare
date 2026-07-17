@@ -139,6 +139,72 @@ public sealed class DomainToContractMapperTests
     }
 
     [Fact]
+    public void CarePlanSummaryDto_WhenInspected_CarriesExactlyTheMinimumNecessaryFields()
+    {
+        // Arrange / Act — D-S6-14 allowlist: the list view gets these six fields and nothing else
+        var propertyNames = typeof(CarePlanSummaryDto)
+            .GetProperties(BindingFlags.Public | BindingFlags.Instance)
+            .Select(property => property.Name)
+            .ToArray();
+
+        // Assert
+        propertyNames.Should().BeEquivalentTo(
+            new[] { "Id", "ClientId", "Title", "StartDate", "EndDate", "IsActive" });
+    }
+
+    [Fact]
+    public void CarePlanSummaryDto_WhenInspected_NeverCarriesClinicalTextFields()
+    {
+        // Arrange — D-S6-14 denylist: fails if anyone adds a clinical field to the summary
+        var clinicalMarkers = new[]
+        {
+            "Description", "Goal", "Intervention", "Note", "Diagnosis",
+            "Condition", "Medication", "Assessment", "Instruction",
+        };
+
+        // Act
+        var offendingProperties = typeof(CarePlanSummaryDto)
+            .GetProperties(BindingFlags.Public | BindingFlags.Instance)
+            .Where(property => clinicalMarkers.Any(marker =>
+                property.Name.Contains(marker, StringComparison.OrdinalIgnoreCase)))
+            .Select(property => property.Name)
+            .ToArray();
+
+        // Assert
+        offendingProperties.Should().BeEmpty();
+    }
+
+    [Fact]
+    public void ToSummaryDto_WhenMappingCarePlan_MapsEveryApprovedFieldExplicitly()
+    {
+        // Arrange
+        var carePlan = new CarePlan
+        {
+            Id = Guid.NewGuid(),
+            ClientId = Guid.NewGuid(),
+            Title = "Post-surgical support",
+            Description = "synthetic clinical description",
+            StartDate = new DateTime(2026, 6, 1, 0, 0, 0, DateTimeKind.Utc),
+            EndDate = new DateTime(2026, 9, 1, 0, 0, 0, DateTimeKind.Utc),
+            IsActive = true,
+            Goals = "synthetic goals",
+            Interventions = "synthetic interventions",
+            Notes = "synthetic notes",
+        };
+
+        // Act
+        var dto = carePlan.ToSummaryDto();
+
+        // Assert
+        dto.Id.Should().Be(carePlan.Id);
+        dto.ClientId.Should().Be(carePlan.ClientId);
+        dto.Title.Should().Be("Post-surgical support");
+        dto.StartDate.Should().Be(carePlan.StartDate);
+        dto.EndDate.Should().Be(carePlan.EndDate);
+        dto.IsActive.Should().BeTrue();
+    }
+
+    [Fact]
     public void CreateShiftRequest_CaregiverIdRemainsOptional_ForOpenShiftCreation()
     {
         // Arrange / Act — D-S6-12: null creates an open shift for the coverage queue

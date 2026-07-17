@@ -32,7 +32,11 @@ public interface IClientOperationsService
         UpdateCarePlanRequest request,
         CancellationToken cancellationToken = default);
 
-    Task<PagedResult<CarePlanDto>> GetCarePlansAsync(
+    Task<CarePlanDto> GetCarePlanAsync(
+        Guid carePlanId,
+        CancellationToken cancellationToken = default);
+
+    Task<PagedResult<CarePlanSummaryDto>> GetCarePlansAsync(
         Guid clientId,
         PagedRequest request,
         CancellationToken cancellationToken = default);

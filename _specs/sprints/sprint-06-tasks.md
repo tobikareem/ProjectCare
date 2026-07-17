@@ -279,6 +279,23 @@ DECISION (two coordinated changes, one slice):
   (Sprint 7), any create/update contract change. CarePath.Web consumption is a separate
   Codex-owned task.
 
+### D-S6-15 - Coverage-queue candidate audit dedup (accepted by Tobi 2026-07-17)
+
+PROBLEM: `GetCoverageQueueAsync` caches caregiver candidate pages
+(`ActiveCaregiverCandidateSource`) and reuses them across every open-shift row in one
+response. Caregiver and certification `Read` audit events are emitted once per candidate
+when its page is first loaded — not once per shift row that discloses the candidate in
+`BestMatches`. A hipaa-check flagged this "one read, N disclosures" granularity as an
+undecided trade-off.
+
+DECISION: per-page-load audit dedup is accepted for this read-only, Admin/Coordinator-only
+matching flow. One audited `Read` per caregiver/certification per coverage request is the
+recorded semantics; row-level disclosure correlation is not required. The behavior is
+pinned by `GetCoverageQueueAsync_WhenMultipleOpenShiftsShareCandidates_AuditsEachCandidateReadOnce`
+(Sprint4SchedulingServiceTests) — a change back to per-row auditing (or a per-row source
+rebuild that double-audits) fails that test, forcing a revisit of this decision.
+Contrast: `GetEligibleCaregiversAsync` remains fresh-audit-per-call (no caching).
+
 ### D-S6-7 - Accessibility baseline
 
 Every interactive primitive: keyboard operable, labeled (aria-label or visible label), visible
@@ -401,7 +418,7 @@ Owners: **Claude** = PM/Contracts/Client/Client.UI + sprint docs. **Codex** = We
 | S6-TASK-043 | Web: Schedule eligible shifts Step 3 per wireframe. After caregiver create/certification or from profile detail, list eligible open shifts for the selected caregiver, explain match reasons, and assign/review shifts through the same Schedule assignment API path; blocked/expired-cert cases render as non-assignable | Codex | S6-TASK-031, S6-TASK-038, S6-TASK-042 | Done 2026-07-16 — server paging, match/block reasons, disabled ineligible actions, assignment through `ShiftsClient`, and post-assignment page clamping implemented; paging/blocking tests green |
 | S6-TASK-044 | Web: Create shift page per wireframe `page-shift-create` (D-S6-12). Route `/shifts/create`; form maps field-for-field to `CreateShiftRequest`; client/facility select via `ClientsClient.GetPageAsync`; actions `Create & assign shift` (navigates to Assign page with new shift id) and `Create open shift` (saves unassigned → Schedule/coverage queue); wire Overview `＋ Create shift` and Schedule `＋ New shift` buttons to this route; guard errors via ApiErrorAlert; bUnit tests | Codex | S6-TASK-012, S6-TASK-031, D-S6-12 backend (done) | Done 2026-07-09 — `ShiftCreate` route `/shifts/create`, Overview/Schedule entry points wired, open/create-then-assign flows use `ShiftsClient.CreateAsync` with `CaregiverId = null`; verified by `dotnet test CarePath.Web.Tests/CarePath.Web.Tests.csproj /nr:false` (12 passed) |
 | S6-TASK-045 | Contracts/Application/Client: D-S6-12 backend — nullable `CreateShiftRequest.CaregiverId`, conditional eligibility guards in `ShiftOperationsService.CreateShiftAsync`, validator `NotEqual(Guid.Empty)` for supplied values, `ShiftsClient.CreateAsync` open-shift docs, contract-shape pin test + open-shift service tests | Claude | S6-TASK-001 | Done 2026-07-09 — all Application tests green (332); wireframe `page-shift-create`/`page-shift-assign` reworked and browser-verified |
-| S6-TASK-046 | Contracts/Application/Client: D-S6-14 backend — `CarePlanSummaryDto` + explicit mapper; list route converted to repository-paged summaries (StartDate desc, Id tiebreak, per-row read audit); new audited `GET /api/care-plans/{id:guid}` detail read behind the CarePlan IDOR guard PLUS an in-service `EnsureCanReadClientAsync` second layer; `ClientsClient` retype + `GetCarePlanAsync`; allowlist/denylist/mapper/service/controller/client/repo tests | Claude | S6-TASK-001, D-S6-14 | Done 2026-07-17 — build 0 warnings; Domain 268 + Application 378 + Infrastructure 86 + Web 39 green; reviewer clean (defense-in-depth improvement applied); full hipaa-check PASS. Follow-ups: pre-existing Clinician denial in `EnsureCanWriteClientClinicalRecordAsync` (ticketed separately); systemic duplicate read-audit rows (guard + service) noted for a dedicated cleanup decision |
+| S6-TASK-046 | Contracts/Application/Client: D-S6-14 backend — `CarePlanSummaryDto` + explicit mapper; list route converted to repository-paged summaries (StartDate desc, Id tiebreak, per-row read audit); new audited `GET /api/care-plans/{id:guid}` detail read behind the CarePlan IDOR guard PLUS an in-service `EnsureCanReadClientAsync` second layer; `ClientsClient` retype + `GetCarePlanAsync`; allowlist/denylist/mapper/service/controller/client/repo tests | Claude | S6-TASK-001, D-S6-14 | Done 2026-07-17 — build 0 warnings; Domain 268 + Application 381 + Infrastructure 86 + Web 39 green (381 includes 3 hipaa-check hardening tests: audit-dedup pin per D-S6-15 + admin search length limit); reviewer clean (defense-in-depth improvement applied); full hipaa-check PASS. Follow-ups: pre-existing Clinician denial in `EnsureCanWriteClientClinicalRecordAsync` (ticketed separately); systemic duplicate read-audit rows (guard + service) noted for a dedicated cleanup decision |
 | S6-TASK-040 | bUnit test suite per D-S6-6 incl. PHI-exposure markup assertions. Must cover Overview quick action routing, Schedule coverage assignment, Caregiver roster/profile detail, Add caregiver Step 1, multi-certification Step 2, and eligible-shifts Step 3 in addition to Transitions pages | Codex (pages) + Claude (primitives) | S6-TASK-030..035, S6-TASK-037, S6-TASK-041..043 | Pending |
 | S6-TASK-050 | Browser PHI safety review per D-S6-3: grep Web for console/DTO serialization/storage writes; verify URLs are Guid-only; keyboard-only walkthrough of review->activate, escalation->acknowledge, caregiver create->certify->eligible-shifts, and schedule coverage->assign workflows | Codex + Claude | S6-TASK-040 | Pending |
 | S6-TASK-060 | Exit verification: build 0 warnings, all tests green, reviewer pass, exit-gate items checked; PROGRESS/lessons updated; PM closes after review | Codex + Claude + Tobi | all above | Pending |

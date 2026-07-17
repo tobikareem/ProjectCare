@@ -272,6 +272,62 @@ public sealed class AdminUserManagementServiceTests
     }
 
     [Fact]
+    public async Task GetUsersAsync_WhenSearchExceedsMaximumLength_ThrowsGenericValidationWithoutEchoingSearch()
+    {
+        var actorId = Guid.NewGuid();
+        var unitOfWork = CreateUnitOfWork();
+        var service = CreateService(unitOfWork, actorId);
+        var overLimitSearch = new string('a', 101);
+
+        var act = async () => await service.GetUsersAsync(
+            new PagedRequest { PageNumber = 1, PageSize = 10 },
+            search: overLimitSearch);
+
+        (await act.Should().ThrowAsync<ValidationException>())
+            .Which.Message.Should().NotContain(overLimitSearch);
+        unitOfWork.Users.Verify(repository => repository.GetPagedAsync(
+            It.IsAny<Expression<Func<User, bool>>>(),
+            It.IsAny<Expression<Func<User, string>>>(),
+            It.IsAny<Expression<Func<User, string>>>(),
+            It.IsAny<int>(),
+            It.IsAny<int>(),
+            It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task GetUsersAsync_WhenSearchIsExactlyMaximumLength_ReachesRepositoryPredicate()
+    {
+        var actorId = Guid.NewGuid();
+        var atLimitSearch = new string('a', 100);
+        var matching = User(DomainUserRole.Coordinator, email: $"{atLimitSearch}@example.test");
+        var unitOfWork = CreateUnitOfWork();
+        unitOfWork.Users.Setup(repository => repository.GetByIdAsync(actorId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(User(DomainUserRole.Admin, actorId));
+        Expression<Func<User, bool>>? capturedPredicate = null;
+        unitOfWork.Users.Setup(repository => repository.GetPagedAsync(
+                It.IsAny<Expression<Func<User, bool>>>(),
+                It.IsAny<Expression<Func<User, string>>>(),
+                It.IsAny<Expression<Func<User, string>>>(),
+                1,
+                10,
+                It.IsAny<CancellationToken>()))
+            .Callback<Expression<Func<User, bool>>, Expression<Func<User, string>>, Expression<Func<User, string>>?, int, int, CancellationToken>(
+                (predicate, _, _, _, _, _) => capturedPredicate = predicate)
+            .ReturnsAsync((new[] { matching }, 1));
+        SetupBatchedProfileLookups(unitOfWork, activeAdminCount: 2);
+        var service = CreateService(unitOfWork, actorId);
+
+        var result = await service.GetUsersAsync(
+            new PagedRequest { PageNumber = 1, PageSize = 10 },
+            search: atLimitSearch);
+
+        result.Items.Should().ContainSingle(item => item.Id == matching.Id);
+        var predicate = capturedPredicate!.Compile();
+        predicate(matching).Should().BeTrue("an at-limit search term must still reach the repository predicate");
+        predicate(User(DomainUserRole.Coordinator, email: "other@example.test")).Should().BeFalse("non-matching text is excluded");
+    }
+
+    [Fact]
     public async Task GetUsersAsync_ComputesGuardrailActionFieldsForEachRow()
     {
         var actorId = Guid.NewGuid();

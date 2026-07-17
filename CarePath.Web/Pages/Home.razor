@@ -4,6 +4,8 @@
 @using CarePath.Contracts.Common
 @using CarePath.Contracts.Enumerations
 @using CarePath.Contracts.Scheduling
+@using Microsoft.AspNetCore.Authorization
+@attribute [Authorize(Roles = "Admin,Coordinator")]
 @inject ShiftsClient ShiftsClient
 @inject NavigationManager Navigation
 
@@ -30,19 +32,19 @@
         <span class="trend">@TodayShiftTrend</span>
     </article>
     <article class="card metric-card">
-        <span class="metric-label">Caregiver utilization</span>
-        <div class="metric-value">84%</div>
-        <span class="trend">↑ 6% from last week</span>
+        <span class="metric-label">Today's shift coverage</span>
+        <div class="metric-value">@(isLoadingOverview ? "-" : TodayCoverageText)</div>
+        <span class="trend">@TodayCoverageTrend</span>
     </article>
     <article class="card metric-card">
         <span class="metric-label">Weekly billable hours</span>
-        <div class="metric-value">812</div>
-        <span class="trend">92% of target</span>
+        <div class="metric-value">—</div>
+        <span class="trend-muted">Billing summary unavailable</span>
     </article>
     <article class="card metric-card">
         <span class="metric-label">Projected gross margin</span>
-        <div class="metric-value">39.6%</div>
-        <span class="trend">Within blended target</span>
+        <div class="metric-value">—</div>
+        <span class="trend-muted">Admin analytics unavailable</span>
     </article>
 </section>
 
@@ -91,24 +93,11 @@
             <div class="section-header">
                 <div>
                     <h2 id="margin-heading">Service-line margins</h2>
-                    <span class="subtle">Month-to-date vs target</span>
+                    <span class="subtle">Month-to-date reporting</span>
                 </div>
-                <button class="text-link" type="button">View analysis →</button>
+                <button class="text-link" type="button" @onclick="NavigateToBilling">Open billing →</button>
             </div>
-            <div class="margin-bars">
-                <div class="bar-row">
-                    <header><strong>In-home care</strong><span>42.1% / 40-45% target</span></header>
-                    <div class="bar-track" role="progressbar" aria-label="In-home care margin" aria-valuemin="0" aria-valuemax="50" aria-valuenow="42.1">
-                        <span class="bar-fill bar-fill-home"></span>
-                    </div>
-                </div>
-                <div class="bar-row">
-                    <header><strong>Healthcare staffing</strong><span>28.4% / 25-30% target</span></header>
-                    <div class="bar-track" role="progressbar" aria-label="Healthcare staffing margin" aria-valuemin="0" aria-valuemax="50" aria-valuenow="28.4">
-                        <span class="bar-fill bar-fill-staffing"></span>
-                    </div>
-                </div>
-            </div>
+            <p class="empty-state compact">Service-line margin data is not available from the operations summary API.</p>
         </section>
     </div>
 
@@ -123,8 +112,6 @@
                     <strong>@CoverageAttentionTitle</strong>
                     <p>@CoverageAttentionText</p>
                 </li>
-                <li class="alert-item"><strong>3 visit notes overdue</strong><p>Documentation required before billing.</p></li>
-                <li class="alert-item"><strong>2 credentials expiring</strong><p>CNA and CPR expire within 30 days.</p></li>
             </ul>
         </section>
 
@@ -132,9 +119,9 @@
             <h2 id="actions-heading">Quick actions</h2>
             <div class="quick-actions">
                 <button type="button" @onclick="NavigateToCreateClient">+ Add client</button>
-                <button type="button">＋ Add caregiver</button>
-                <button type="button">$ Generate invoices</button>
-                <button type="button">✓ Review credentials</button>
+                <button type="button" @onclick="NavigateToCreateCaregiver">＋ Add caregiver</button>
+                <button type="button" @onclick="NavigateToBilling">$ Generate invoices</button>
+                <button type="button" @onclick="NavigateToCredentials">✓ Review credentials</button>
             </div>
         </section>
     </aside>
@@ -144,7 +131,6 @@
     private const int ShiftPageSize = 100;
     private const int CoveragePageSize = 100;
     private const int TodayScheduleLimit = 5;
-    private const int StaticAttentionCount = 5;
 
     private IReadOnlyList<ShiftSummaryDto> todayShifts = [];
     private IReadOnlyList<OpenShiftCoverageDto> coverageQueue = [];
@@ -166,11 +152,23 @@
 
     private int CoverageCount => coverageQueue.Count + hiddenCoverageCount;
 
-    private int AttentionItemCount => CoverageCount + StaticAttentionCount;
+    private int AttentionItemCount => CoverageCount;
+
+    private int TodayCoveragePercent => TodayShiftCount == 0
+        ? 0
+        : (int)Math.Round(StaffedTodayShiftCount * 100m / TodayShiftCount);
+
+    private string TodayCoverageText => hiddenTodayShiftCount > 0 ? "—" : $"{TodayCoveragePercent}%";
+
+    private string TodayCoverageTrend => hiddenTodayShiftCount > 0
+        ? "Coverage summary requires all daily shifts"
+        : $"{StaffedTodayShiftCount} staffed · {OpenTodayShiftCount} open";
 
     private string TodayShiftTrend => isLoadingOverview
         ? "Loading today"
-        : $"{StaffedTodayShiftCount} staffed · {OpenTodayShiftCount} open";
+        : hiddenTodayShiftCount > 0
+            ? "Staffing breakdown requires all daily shifts"
+            : $"{StaffedTodayShiftCount} staffed · {OpenTodayShiftCount} open";
 
     private string CoverageAttentionTitle => $"{CoverageCount} shifts need coverage";
 
@@ -292,4 +290,10 @@
     private void NavigateToCreateShift() => Navigation.NavigateTo("/shifts/create");
 
     private void NavigateToCreateClient() => Navigation.NavigateTo("/clients/create");
+
+    private void NavigateToCreateCaregiver() => Navigation.NavigateTo("/caregivers/create");
+
+    private void NavigateToBilling() => Navigation.NavigateTo("/billing");
+
+    private void NavigateToCredentials() => Navigation.NavigateTo("/compliance");
 }

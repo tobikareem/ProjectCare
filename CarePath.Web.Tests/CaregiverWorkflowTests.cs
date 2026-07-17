@@ -427,6 +427,23 @@ public sealed class CaregiverWorkflowTests
     }
 
     [Fact]
+    public void Home_WhenAddCaregiverQuickActionClicked_NavigatesToCreateCaregiver()
+    {
+        // Arrange
+        using var context = new BunitContext();
+        AddClients(context, new FakeApiHandler()
+            .Get("api/shifts/coverage", EmptyCoveragePage())
+            .Get("api/shifts", EmptyShiftPage()));
+        var component = context.Render<Home>();
+
+        // Act
+        component.FindAll("button").Single(button => button.TextContent.Contains("Add caregiver")).Click();
+
+        // Assert
+        context.Services.GetRequiredService<NavigationManager>().Uri.Should().EndWith("/caregivers/create");
+    }
+
+    [Fact]
     public void Home_WhenRendered_UsesShiftAndCoverageDataForOverview()
     {
         // Arrange
@@ -457,7 +474,12 @@ public sealed class CaregiverWorkflowTests
             component.Markup.Should().Contain("Casey R.");
             component.Markup.Should().Contain("Harborview Center");
             component.Markup.Should().Contain("4 shifts need coverage");
-            component.Markup.Should().Contain("9 items");
+            component.Markup.Should().Contain("4 items");
+            component.Markup.Should().Contain("Today's shift coverage");
+            component.Markup.Should().Contain("67%");
+            component.Markup.Should().NotContain("84%");
+            component.Markup.Should().NotContain("812");
+            component.Markup.Should().NotContain("39.6%");
         });
     }
 
@@ -702,6 +724,107 @@ public sealed class CaregiverWorkflowTests
         });
     }
 
+    [Fact]
+    public void AddCaregiverStep1_WhenSubmitted_MapsRequestClearsPasswordAndNavigatesToCertifications()
+    {
+        var handler = new FakeApiHandler().Post("api/caregivers", CaregiverDetail());
+        using var context = new BunitContext();
+        AddClients(context, handler);
+        var component = context.Render<CaregiverCreate>();
+
+        component.Find("input[type='email']").Change("amara.williams@example.test");
+        component.Find("input[type='password']").Change("Temporary-Only-42!");
+        component.Find("button[type='submit']").Click();
+
+        component.WaitForAssertion(() =>
+        {
+            handler.PostRequests.Should().ContainSingle(request => request.Path == "api/caregivers");
+            handler.PostRequests.Single().Body.Should().Contain("\"email\":\"amara.williams@example.test\"");
+            context.Services.GetRequiredService<NavigationManager>().Uri
+                .Should().EndWith($"/caregivers/{CaregiverId}/certifications");
+            component.Find("input[type='password']").GetAttribute("value").Should().BeEmpty();
+            component.Markup.Should().NotContain("Temporary-Only-42!");
+        });
+    }
+
+    [Fact]
+    public void AddCertificationsStep2_WhenSaved_PostsCertificationAndSupportsAnotherSave()
+    {
+        var handler = new FakeApiHandler()
+            .Get($"api/caregivers/{CaregiverId}", CaregiverDetailWithCertifications())
+            .Post($"api/caregivers/{CaregiverId}/certifications", CertificationDto(CertificationType.CPR, "CPR-2000"));
+        using var context = new BunitContext();
+        AddClients(context, handler);
+        var component = context.Render<CaregiverCertifications>(parameters =>
+            parameters.Add(p => p.CaregiverId, CaregiverId));
+
+        component.WaitForElement("button[type='submit']").Click();
+        component.WaitForAssertion(() => handler.PostRequests.Should().HaveCount(1));
+        component.Find("button[type='submit']").Click();
+
+        component.WaitForAssertion(() =>
+        {
+            handler.PostRequests.Should().HaveCount(2);
+            handler.PostRequests.Should().OnlyContain(request =>
+                request.Path == $"api/caregivers/{CaregiverId}/certifications");
+            handler.GetRequests.Count(path => path == $"api/caregivers/{CaregiverId}").Should().BeGreaterThanOrEqualTo(3);
+        });
+    }
+
+    [Fact]
+    public void EligibleShiftsStep3_WhenNextClicked_UsesServerPaging()
+    {
+        var handler = new FakeApiHandler()
+            .Get($"api/caregivers/{CaregiverId}/eligible-shifts", EligibleShiftPage(totalCount: 12));
+        using var context = new BunitContext();
+        AddClients(context, handler);
+        var component = context.Render<CaregiverEligibleShifts>(parameters =>
+            parameters.Add(p => p.CaregiverId, CaregiverId));
+
+        component.WaitForElement("button.button-sm:not([disabled])").Click();
+
+        component.WaitForAssertion(() => handler.GetRequestUris.Should().Contain(uri =>
+            uri.Contains("eligible-shifts", StringComparison.OrdinalIgnoreCase) &&
+            uri.Contains("pageNumber=2", StringComparison.OrdinalIgnoreCase) &&
+            uri.Contains("pageSize=5", StringComparison.OrdinalIgnoreCase)));
+    }
+
+    [Fact]
+    public void EligibleShiftsStep3_WhenBlocked_ShowsReasonAndDisablesAssignment()
+    {
+        using var context = new BunitContext();
+        AddClients(context, new FakeApiHandler()
+            .Get($"api/caregivers/{CaregiverId}/eligible-shifts", BlockedEligibleShiftPage()));
+
+        var component = context.Render<CaregiverEligibleShifts>(parameters =>
+            parameters.Add(p => p.CaregiverId, CaregiverId));
+
+        component.WaitForAssertion(() =>
+        {
+            component.Markup.Should().Contain("Credential expired");
+            component.Find("button.text-link").HasAttribute("disabled").Should().BeTrue();
+        });
+    }
+
+    [Fact]
+    public void UserManagement_WhenRendered_SurfacesGuardReasonAndNextSignInNotice()
+    {
+        using var context = new BunitContext();
+        AddClients(context, new FakeApiHandler()
+            .Get("api/admin/users/roles", new[] { UserRole.Admin, UserRole.Coordinator })
+            .Get("api/admin/users", UserAccountPage(disabledReason: "The last active Admin cannot be demoted.")));
+        var component = context.Render<UserManagement>();
+
+        component.WaitForElement("button.text-link").Click();
+
+        component.WaitForAssertion(() =>
+        {
+            component.Markup.Should().Contain("Role changes apply at next sign-in");
+            component.Markup.Should().Contain("The last active Admin cannot be demoted.");
+            component.Find("select#assign-role").HasAttribute("disabled").Should().BeTrue();
+        });
+    }
+
     private static void AddClients(BunitContext context, FakeApiHandler handler)
     {
         var httpClient = new HttpClient(handler)
@@ -856,7 +979,7 @@ public sealed class CaregiverWorkflowTests
         TotalCount = totalCount,
     };
 
-    private static PagedResult<UserAccountDto> UserAccountPage(int totalCount = 1) => new()
+    private static PagedResult<UserAccountDto> UserAccountPage(int totalCount = 1, string? disabledReason = null) => new()
     {
         Items =
         [
@@ -867,8 +990,9 @@ public sealed class CaregiverWorkflowTests
                 DisplayName = "Demo Administrator",
                 Role = UserRole.Admin,
                 IsActive = true,
-                CanChangeRole = true,
-                CanDeactivate = true,
+                CanChangeRole = disabledReason is null,
+                CanDeactivate = disabledReason is null,
+                DisabledReason = disabledReason,
             }
         ],
         PageNumber = 1,
@@ -967,7 +1091,7 @@ public sealed class CaregiverWorkflowTests
         IssuingAuthority = "Synthetic Training Authority",
     };
 
-    private static PagedResult<EligibleOpenShiftDto> EligibleShiftPage() => new()
+    private static PagedResult<EligibleOpenShiftDto> EligibleShiftPage(int totalCount = 1) => new()
     {
         Items =
         [
@@ -987,7 +1111,30 @@ public sealed class CaregiverWorkflowTests
             }
         ],
         PageNumber = 1,
-        PageSize = 20,
+        PageSize = 5,
+        TotalCount = totalCount,
+    };
+
+    private static PagedResult<EligibleOpenShiftDto> BlockedEligibleShiftPage() => new()
+    {
+        Items =
+        [
+            new EligibleOpenShiftDto
+            {
+                ShiftId = ShiftId,
+                ClientId = ClientId,
+                ClientDisplayName = "Jordan M.",
+                ScheduledStartTime = new DateTime(2026, 7, 10, 9, 0, 0, DateTimeKind.Utc),
+                ScheduledEndTime = new DateTime(2026, 7, 10, 13, 0, 0, DateTimeKind.Utc),
+                ServiceType = ServiceType.InHomeCare,
+                Status = ShiftStatus.Scheduled,
+                RequirementLabels = ["Valid credential"],
+                IsAssignable = false,
+                BlockingReasons = ["Credential expired"],
+            }
+        ],
+        PageNumber = 1,
+        PageSize = 5,
         TotalCount = 1,
     };
 

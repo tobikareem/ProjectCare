@@ -263,3 +263,8 @@
 .cp-audit-timeline-action { font-weight: 700; }
 .cp-audit-timeline-actor { color: var(--teal-700); }
 .cp-audit-timeline-description { color: var(--muted); }
+.error-boundary {
+  max-width: 680px;
+  margin: 32px auto;
+  border-left: 4px solid var(--red);
+}

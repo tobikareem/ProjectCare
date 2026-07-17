@@ -364,9 +364,9 @@
             if (response is { Success: true })
             {
                 var planId = selectedPlan.Id;
-                successMessage = "Instruction review saved.";
                 await SelectPlanAsync(planId);
                 await LoadQueueAsync();
+                successMessage = "Instruction review saved.";
             }
             else
             {
@@ -405,8 +405,8 @@
             if (response is { Success: true, Data: not null })
             {
                 selectedPlan = response.Data;
-                successMessage = "Plan activated. Reminders can now be scheduled by the server workflow.";
                 await LoadQueueAsync();
+                successMessage = "Plan activated. Reminders can now be scheduled by the server workflow.";
             }
             else
             {

@@ -209,10 +209,10 @@
 
             if (response is { Success: true })
             {
-                successMessage = "Escalation acknowledgement recorded.";
                 selectedEscalation = null;
                 resolutionNote = string.Empty;
                 await LoadQueueAsync();
+                successMessage = "Escalation acknowledgement recorded.";
             }
             else
             {

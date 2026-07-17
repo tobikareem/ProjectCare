@@ -1,0 +1,43 @@
+@inherits ErrorBoundary
+@inject ILogger<SanitizedErrorBoundary> Logger
+
+@if (CurrentException is null)
+{
+    @ChildContent
+}
+else
+{
+    <section class="card error-boundary" role="alert" aria-labelledby="unexpected-error-heading">
+        <p class="eyebrow">CarePath</p>
+        <h1 id="unexpected-error-heading">Something went wrong</h1>
+        <p>The page could not be completed. No patient or client details were included in this message.</p>
+        <p class="meta">Reference: @correlationId</p>
+        <button class="button button-primary" type="button" @onclick="RecoverPage">Try again</button>
+    </section>
+}
+
+@code {
+    private string correlationId = string.Empty;
+
+    /// <inheritdoc />
+    protected override Task OnErrorAsync(Exception exception)
+    {
+        correlationId = Guid.NewGuid().ToString("N");
+        // Do not call base.OnErrorAsync: the default WebAssembly logger can emit the full
+        // exception detail to the browser console, where exception text may contain PHI.
+        Logger.LogError(
+            "Unhandled web UI error type {ExceptionType}; reference {CorrelationId}",
+            exception.GetType().Name,
+            correlationId);
+        return Task.CompletedTask;
+    }
+
+    private void RecoverPage() => RecoverFromNavigation();
+
+    /// <summary>Clears the sanitized error state after retry or route navigation.</summary>
+    public void RecoverFromNavigation()
+    {
+        correlationId = string.Empty;
+        Recover();
+    }
+}

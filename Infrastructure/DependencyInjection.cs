@@ -15,6 +15,7 @@ using CarePath.Infrastructure.Storage;
 using CarePath.Infrastructure.Scheduling;
 using CarePath.Application.Scheduling.Queries;
 using CarePath.Infrastructure.Transitions.Services;
+using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
@@ -109,6 +110,12 @@ public static class DependencyInjection
         services.AddScoped<IPhiAuditLogger, LoggingPhiAuditLogger>();
         services.AddScoped<IFileStorageService, DisabledFileStorageService>();
         services.AddScoped<IShiftBillingQuery, ShiftBillingQuery>();
+        services.AddScoped<IBillingEligibilityQuery, BillingEligibilityQuery>();
+        services.AddScoped<IBillingReconciliationStore, BillingReconciliationStore>();
+        services.AddSingleton<IInvoicePreviewTokenService, InvoicePreviewTokenService>();
+        // Stable application name so preview tokens survive across instances once key-ring
+        // persistence is configured for the deployment environment (pre-production follow-up).
+        services.AddDataProtection().SetApplicationName("CarePath");
         services.AddScoped<IAssignmentHistoryQuery, AssignmentHistoryQuery>();
         services.AddScoped<IPersistenceConflictDetector, SqlServerPersistenceConflictDetector>();
         services.AddScoped<IDischargeExtractionService, RuleBasedDischargeExtractionService>();

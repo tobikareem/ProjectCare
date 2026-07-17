@@ -65,8 +65,12 @@ public class InvoiceLineItem : BaseEntity
 
     // Computed Properties
 
-    /// <summary>Billable total for this line item: <see cref="BillableHours"/> × <see cref="RatePerHour"/>.</summary>
-    public decimal Total => BillableHours * RatePerHour;
+    /// <summary>
+    /// Billable total for this line item: <see cref="BillableHours"/> × <see cref="RatePerHour"/>,
+    /// rounded to two decimals with <see cref="MidpointRounding.AwayFromZero"/> (D-S6-18 currency
+    /// rule — invoice subtotals are sums of rounded lines).
+    /// </summary>
+    public decimal Total => Math.Round(BillableHours * RatePerHour, 2, MidpointRounding.AwayFromZero);
 
     /// <summary>
     /// Internal labour cost: <see cref="BillableHours"/> × <see cref="CostPerHour"/>.

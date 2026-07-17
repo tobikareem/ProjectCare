@@ -3,6 +3,7 @@ using System.Data;
 using CarePath.Application;
 using CarePath.Application.Abstractions.Audit;
 using CarePath.Application.Abstractions.Auth;
+using CarePath.Application.Abstractions.Billing;
 using CarePath.Application.Abstractions.Storage;
 using CarePath.Application.Clients.Services;
 using CarePath.Application.Clients.Validators;
@@ -1042,6 +1043,9 @@ public class Sprint4OperationsServiceTests
         services.AddSingleton(Mock.Of<IPhiAuditLogger>());
         services.AddSingleton(Mock.Of<IFileStorageService>());
         services.AddSingleton(Mock.Of<IDischargeExtractionService>());
+        services.AddSingleton(Mock.Of<IBillingEligibilityQuery>());
+        services.AddSingleton(Mock.Of<IInvoicePreviewTokenService>());
+        services.AddSingleton(Mock.Of<IBillingReconciliationStore>());
 
         // Act
         using var provider = services.AddApplication().BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true, ValidateOnBuild = true });

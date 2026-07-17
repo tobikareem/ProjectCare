@@ -471,11 +471,45 @@
     }
 
     /* ── Visit notes ── */
+    .workspace-grid {
+      display:grid; grid-template-columns:minmax(0,1.45fr) minmax(280px,.75fr);
+      gap:20px;
+    }
+    .detail-card,.shift-picker { align-self:start; }
+    .detail-heading { display:flex;align-items:center;gap:12px;margin-bottom:18px; }
+    .detail-facts { display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin:0 0 18px; }
+    .detail-facts div,.clinical-grid section { padding:10px;background:var(--surface-alt);border:1px solid var(--line);border-radius:10px; }
+    .detail-facts dt { color:var(--muted);font-size:.72rem;font-weight:800;text-transform:uppercase; }
+    .detail-facts dd { margin:4px 0 0;font-weight:800; }
+    .badge-row { display:flex;flex-wrap:wrap;gap:8px;margin-bottom:18px; }
+    .stacked-list,.shift-list,.note-list { display:grid;gap:10px; }
+    .visit-notes-grid { display:grid;grid-template-columns:minmax(260px,.58fr) minmax(0,1.42fr);gap:20px; }
+    .shift-select {
+      display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:12px;
+      width:100%;min-height:62px;padding:10px 12px;color:var(--ink);text-align:left;
+      background:var(--surface);border:1px solid var(--line);border-radius:10px;cursor:pointer;
+    }
+    .shift-select:hover,.selected-shift { background:var(--surface-alt); }
     .note-card {
       padding: 16px; border: 1px solid var(--line); border-radius: 12px;
       display: grid; grid-template-columns: 1fr auto; gap: 10px; align-items: start;
+      border-left:4px solid var(--green);
     }
+    .note-card-concern { border-left-color:var(--red); }
+    .note-meta-row { display:flex;align-items:center;gap:10px;margin-bottom:6px; }
+    .note-badges { margin-top:10px;margin-bottom:0; }
+    .clinical-grid { display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px; }
+    .clinical-grid h3 { margin-bottom:6px; }
+    .clinical-grid p { margin-bottom:0;color:var(--muted); }
     .note-card + .note-card { margin-top: 10px; }
+
+    @media (max-width:1080px) {
+      .workspace-grid,.visit-notes-grid,.clinical-grid { grid-template-columns:1fr; }
+    }
+    @media (max-width:640px) {
+      .shift-select,.note-card { grid-template-columns:1fr;align-items:flex-start; }
+      .detail-facts { grid-template-columns:1fr; }
+    }
 
     /* ── Billing ── */
     .invoice-row {
@@ -634,7 +668,7 @@
 
     .mobile-nav {
       position: absolute; z-index: 5; right: 0; bottom: 0; left: 0;
-      display: grid; grid-template-columns: repeat(5,1fr);
+      display: grid; grid-template-columns: repeat(6,1fr);
       padding: 9px 8px 13px; background: rgb(255 255 255 / 96%);
       border-top: 1px solid var(--line); backdrop-filter: blur(12px);
     }
@@ -1393,6 +1427,21 @@
                     <div class="profile-row"><span class="subtle">No-shows</span><span>0</span></div>
                   </section>
 
+                  <section aria-labelledby="profile-client-history-heading">
+                    <div class="section-header" style="margin:0 0 8px">
+                      <div><h3 id="profile-client-history-heading">Recent client assignments</h3><span class="subtle">Latest 2 of 37 relationships</span></div>
+                      <button class="text-link" type="button" data-web-page="caregiver-client-assignments">View all 37</button>
+                    </div>
+                    <div class="credential-row">
+                      <div><strong>Jordan M.</strong><span class="meta">Jan 8, 2026 – Present · next shift Jul 18 · 18 completed</span></div>
+                      <span class="status status-green">Current</span>
+                    </div>
+                    <div class="credential-row">
+                      <div><strong>Casey R.</strong><span class="meta">Mar 4 – Jun 30, 2026 · 12 completed shifts</span></div>
+                      <span class="status status-blue">Previous</span>
+                    </div>
+                  </section>
+
                   <div class="access-action-row">
                     <button class="button button-primary" type="button" data-web-page="caregiver-eligible-shifts">Schedule eligible shifts</button>
                     <button class="button button-secondary" type="button" data-web-page="schedule">Open schedule</button>
@@ -1693,81 +1742,137 @@
               <div>
                 <p class="eyebrow">People</p>
                 <h1>Clients</h1>
-                <p class="subtle">18 active clients · 4 with open shifts this week</p>
+                <p class="subtle">4 active clients · 5 total</p>
               </div>
-              <button class="button button-primary" type="button" data-message="Add client opened">＋ Add client</button>
+              <button class="button button-primary" type="button" data-message="Add client page opened">+ Add client</button>
             </div>
 
             <div class="filter-bar">
-              <input type="search" placeholder="Search by name or care type…">
+              <input type="search" placeholder="Search by name…" aria-label="Search clients by name">
               <select aria-label="Service type"><option>All services</option><option>In-home care</option><option>Facility staffing</option></select>
-              <select aria-label="Status"><option>All statuses</option><option>Active</option><option>On hold</option></select>
+              <select aria-label="Status"><option>All statuses</option><option>Active</option><option>Inactive</option></select>
             </div>
 
-            <div class="card" style="padding:0">
-              <div class="data-table-wrap">
-                <table class="data-table">
-                  <thead>
-                    <tr>
-                      <th>Client</th>
-                      <th>Service</th>
-                      <th>Care needs</th>
-                      <th>Bill rate</th>
-                      <th>Hrs/wk</th>
-                      <th>Caregiver</th>
-                      <th></th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    <tr>
-                      <td><span class="avatar-sm">JM</span><strong>Jordan M.</strong><span class="meta">Age 74 · Active care plan</span></td>
-                      <td>In-home care</td>
-                      <td>Personal care, Dementia</td>
-                      <td>$35/hr</td>
-                      <td>20 hrs</td>
-                      <td>A. Williams</td>
-                      <td><button class="text-link" data-message="Client profile opened">View</button></td>
-                    </tr>
-                    <tr>
-                      <td><span class="avatar-sm">CR</span><strong>Casey R.</strong><span class="meta">Age 81 · Active care plan</span></td>
-                      <td>In-home care</td>
-                      <td>Companionship, Mobility</td>
-                      <td>$33/hr</td>
-                      <td>15 hrs</td>
-                      <td>D. Okafor</td>
-                      <td><button class="text-link" data-message="Client profile opened">View</button></td>
-                    </tr>
-                    <tr>
-                      <td><span class="avatar-sm">BT</span><strong>Beverly T.</strong><span class="meta">Age 68 · Active care plan</span></td>
-                      <td>In-home care</td>
-                      <td>Medication, Meal prep</td>
-                      <td>$38/hr</td>
-                      <td>30 hrs</td>
-                      <td>D. Okafor</td>
-                      <td><button class="text-link" data-message="Client profile opened">View</button></td>
-                    </tr>
-                    <tr>
-                      <td><span class="avatar-sm">HV</span><strong>Harborview Center</strong><span class="meta">Facility · RN/LPN coverage</span></td>
-                      <td>Facility staffing</td>
-                      <td>RN, LPN</td>
-                      <td>$80/hr (RN)</td>
-                      <td>48 hrs</td>
-                      <td>S. Park (RN)</td>
-                      <td><button class="text-link" data-message="Client profile opened">View</button></td>
-                    </tr>
-                    <tr>
-                      <td><span class="avatar-sm">NR</span><strong>Northside Rehab</strong><span class="meta">Facility · LPN coverage</span></td>
-                      <td>Facility staffing</td>
-                      <td>LPN</td>
-                      <td>$60/hr (LPN)</td>
-                      <td>36 hrs</td>
-                      <td>M. Johnson</td>
-                      <td><button class="text-link" data-message="Client profile opened">View</button></td>
-                    </tr>
-                  </tbody>
-                </table>
-              </div>
+            <div class="workspace-grid">
+              <section class="card" aria-labelledby="wireframe-client-list-heading">
+                <div class="section-header">
+                  <div><h2 id="wireframe-client-list-heading">Client list</h2><span class="subtle">Paged from the clients API</span></div>
+                  <span class="meta">Page 1 of 1</span>
+                </div>
+                <div class="data-table-wrap">
+                  <table class="data-table" aria-label="Client list">
+                    <thead><tr><th>Client</th><th>Service</th><th>Age</th><th>Status</th><th></th></tr></thead>
+                    <tbody>
+                      <tr class="selected-row"><td><span class="avatar-sm">JM</span><strong>Jordan M.</strong><span class="meta">Client 8b74c2d1</span></td><td><span class="status status-blue">In-home care</span></td><td>74</td><td><span class="status status-green">Active</span></td><td><button class="text-link" type="button" data-message="Jordan M. detail loaded">View</button></td></tr>
+                      <tr><td><span class="avatar-sm">CR</span><strong>Casey R.</strong><span class="meta">Client 2f03a981</span></td><td><span class="status status-blue">In-home care</span></td><td>81</td><td><span class="status status-green">Active</span></td><td><button class="text-link" type="button" data-message="Casey R. detail loaded">View</button></td></tr>
+                      <tr><td><span class="avatar-sm">BT</span><strong>Beverly T.</strong><span class="meta">Client 9ae74d20</span></td><td><span class="status status-blue">In-home care</span></td><td>68</td><td><span class="status status-green">Active</span></td><td><button class="text-link" type="button" data-message="Beverly T. detail loaded">View</button></td></tr>
+                      <tr><td><span class="avatar-sm">HV</span><strong>Harborview Center</strong><span class="meta">Client 310cf524</span></td><td><span class="status status-amber">Facility staffing</span></td><td>—</td><td><span class="status status-green">Active</span></td><td><button class="text-link" type="button" data-message="Harborview detail loaded">View</button></td></tr>
+                    </tbody>
+                  </table>
+                </div>
+                <div class="pager-row" aria-label="Client pages"><button class="button button-secondary button-sm" type="button" disabled>Previous</button><span class="meta">Page 1 of 1</span><button class="button button-secondary button-sm" type="button" disabled>Next</button></div>
+              </section>
+
+              <aside class="card detail-card" aria-labelledby="wireframe-client-detail-heading">
+                <div class="section-header"><div><h2 id="wireframe-client-detail-heading">Client detail</h2><span class="subtle">Care team history and care plans</span></div></div>
+                <div class="detail-heading"><span class="avatar-lg">JM</span><div><strong>Jordan Mitchell</strong><span class="meta">In-home care · 20 hrs/wk</span></div></div>
+                <dl class="detail-facts"><div><dt>Age</dt><dd>74</dd></div><div><dt>Status</dt><dd>Active</dd></div><div><dt>Care plans</dt><dd>Summary endpoint needed</dd></div></dl>
+                <h3>Care needs</h3>
+                <div class="badge-row"><span class="status status-blue">Dementia</span><span class="status status-blue">Mobility</span><span class="status status-blue">Medication</span></div>
+                <div class="section-header section-offset" style="margin-bottom:8px">
+                  <div><h3>Recent caregiver assignments</h3><span class="subtle">Latest 2 of 78 relationships</span></div>
+                  <button class="text-link" type="button" data-web-page="client-caregiver-assignments">View all 78</button>
+                </div>
+                <div class="stacked-list">
+                  <div class="credential-row"><div><strong>Amara Williams</strong><span class="meta">Jan 8, 2026 – Present · next shift Jul 18 · 18 completed</span></div><span class="status status-green">Current</span></div>
+                  <div class="credential-row"><div><strong>David Okafor</strong><span class="meta">Sep 12 – Dec 20, 2025 · 24 completed shifts</span></div><span class="status status-blue">Previous</span></div>
+                </div>
+                <h3>Care plans</h3>
+                <div class="stacked-list"><p class="empty-state compact">Care plans need a summary endpoint before this page can list them without shipping clinical plan text to the browser.</p></div>
+              </aside>
             </div>
+          </div>
+
+          <!-- ── Client: All Caregiver Assignments ── -->
+          <div id="page-client-caregiver-assignments" class="web-page">
+            <div class="page-heading">
+              <div><p class="eyebrow">Clients · Jordan Mitchell</p><h1>Caregiver assignment history</h1><p class="subtle">78 caregiver relationships derived from scheduled and completed shifts</p></div>
+              <button class="button button-secondary" type="button" data-web-page="clients">← Back to client detail</button>
+            </div>
+            <div class="metric-grid" style="grid-template-columns:repeat(3,minmax(0,1fr))">
+              <article class="card metric-card"><span class="metric-label">Current caregivers</span><div class="metric-value">3</div><span class="trend">Upcoming or active shifts</span></article>
+              <article class="card metric-card"><span class="metric-label">Previous caregivers</span><div class="metric-value">75</div><span class="trend">Historical assignments</span></article>
+              <article class="card metric-card"><span class="metric-label">Completed shifts</span><div class="metric-value">164</div><span class="trend">Across all caregivers</span></article>
+            </div>
+            <div class="filter-bar">
+              <input type="search" placeholder="Search caregiver…" aria-label="Search assigned caregivers">
+              <select aria-label="Assignment status"><option>All assignments</option><option>Current</option><option>Previous</option></select>
+              <input type="date" aria-label="Assignments from date">
+              <input type="date" aria-label="Assignments to date">
+            </div>
+            <section class="card" style="padding:0" aria-labelledby="client-caregiver-table-heading">
+              <div class="section-header" style="padding:18px 20px 8px"><div><h2 id="client-caregiver-table-heading">Caregivers for Jordan Mitchell</h2><span class="subtle">Most recent activity first · 25 rows per page</span></div><span class="meta">Page 1 of 4</span></div>
+              <div class="data-table-wrap"><table class="data-table" aria-label="Caregiver assignment history for Jordan Mitchell">
+                <thead><tr><th>Caregiver</th><th>Relationship dates</th><th>Last shift</th><th>Next shift</th><th>Completed</th><th>Status</th></tr></thead>
+                <tbody>
+                  <tr><td><span class="avatar-sm">AW</span><strong>Amara Williams</strong></td><td>Jan 8, 2026 – Present</td><td>Jul 16, 2026</td><td>Jul 18, 2026</td><td>18 shifts</td><td><span class="status status-green">Current</span></td></tr>
+                  <tr><td><span class="avatar-sm">SP</span><strong>Sora Park</strong></td><td>May 10, 2026 – Present</td><td>Jul 14, 2026</td><td>Jul 22, 2026</td><td>9 shifts</td><td><span class="status status-green">Current</span></td></tr>
+                  <tr><td><span class="avatar-sm">DO</span><strong>David Okafor</strong></td><td>Sep 12 – Dec 20, 2025</td><td>Dec 20, 2025</td><td>—</td><td>24 shifts</td><td><span class="status status-blue">Previous</span></td></tr>
+                  <tr><td><span class="avatar-sm">TA</span><strong>Tunde Adeyemi</strong></td><td>Jun 2 – Aug 29, 2025</td><td>Aug 29, 2025</td><td>—</td><td>14 shifts</td><td><span class="status status-blue">Previous</span></td></tr>
+                </tbody>
+              </table></div>
+              <div class="pager-row" aria-label="Caregiver assignment pages"><button class="button button-secondary button-sm" type="button" disabled>Previous</button><span class="meta">Showing 1–25 of 78 · Page 1 of 4</span><button class="button button-secondary button-sm" type="button">Next</button></div>
+            </section>
+          </div>
+
+          <!-- ── Caregiver: All Client Assignments ── -->
+          <div id="page-caregiver-client-assignments" class="web-page">
+            <div class="page-heading">
+              <div><p class="eyebrow">Caregivers · Amara Williams</p><h1>Client assignment history</h1><p class="subtle">37 client relationships derived from Amara's scheduled and completed shifts</p></div>
+              <button class="button button-secondary" type="button" data-web-page="caregivers">← Back to caregiver profile</button>
+            </div>
+            <div class="filter-bar">
+              <input type="search" placeholder="Search client…" aria-label="Search assigned clients">
+              <select aria-label="Assignment status"><option>All assignments</option><option>Current</option><option>Previous</option></select>
+              <input type="date" aria-label="Assignments from date">
+              <input type="date" aria-label="Assignments to date">
+            </div>
+            <section class="card" style="padding:0" aria-labelledby="caregiver-client-table-heading">
+              <div class="section-header" style="padding:18px 20px 8px"><div><h2 id="caregiver-client-table-heading">Clients assigned to Amara Williams</h2><span class="subtle">Most recent activity first · 25 rows per page</span></div><span class="meta">Page 1 of 2</span></div>
+              <div class="data-table-wrap"><table class="data-table" aria-label="Client assignment history for Amara Williams">
+                <thead><tr><th>Client</th><th>Service</th><th>Relationship dates</th><th>Last shift</th><th>Next shift</th><th>Completed</th><th>Status</th></tr></thead>
+                <tbody>
+                  <tr><td><span class="avatar-sm">JM</span><strong>Jordan M.</strong></td><td>Personal care</td><td>Jan 8, 2026 – Present</td><td>Jul 16, 2026</td><td>Jul 18, 2026</td><td>18</td><td><span class="status status-green">Current</span></td></tr>
+                  <tr><td><span class="avatar-sm">BT</span><strong>Beverly T.</strong></td><td>Meal preparation</td><td>Jul 2, 2026 – Present</td><td>Jul 15, 2026</td><td>Jul 19, 2026</td><td>3</td><td><span class="status status-green">Current</span></td></tr>
+                  <tr><td><span class="avatar-sm">CR</span><strong>Casey R.</strong></td><td>Companionship</td><td>Mar 4 – Jun 30, 2026</td><td>Jun 30, 2026</td><td>—</td><td>12</td><td><span class="status status-blue">Previous</span></td></tr>
+                  <tr><td><span class="avatar-sm">NC</span><strong>Northside Center</strong></td><td>Facility staffing</td><td>Jan 6 – Feb 28, 2026</td><td>Feb 28, 2026</td><td>—</td><td>8</td><td><span class="status status-blue">Previous</span></td></tr>
+                </tbody>
+              </table></div>
+              <div class="pager-row" aria-label="Client assignment pages"><button class="button button-secondary button-sm" type="button" disabled>Previous</button><span class="meta">Showing 1–25 of 37 · Page 1 of 2</span><button class="button button-secondary button-sm" type="button">Next</button></div>
+            </section>
+          </div>
+
+          <!-- ── Client self: My Caregivers ── -->
+          <div id="page-my-caregivers" class="web-page">
+            <div class="page-heading">
+              <div><p class="eyebrow">My care team</p><h1>My caregivers</h1><p class="subtle">Current care team and limited previous-caregiver history</p></div>
+            </div>
+            <div class="filter-bar">
+              <select aria-label="Filter my caregivers"><option>All caregivers</option><option>Current</option><option>Previous</option></select>
+            </div>
+            <section class="card" style="padding:0" aria-labelledby="my-caregivers-table-heading">
+              <div class="section-header" style="padding:18px 20px 8px"><div><h2 id="my-caregivers-table-heading">Caregiver relationships</h2><span class="subtle">Only your own assignments · current first</span></div><span class="meta">Page 1 of 2</span></div>
+              <div class="data-table-wrap"><table class="data-table" aria-label="My caregiver history">
+                <thead><tr><th>Caregiver</th><th>Relationship dates</th><th>Next scheduled visit</th><th>Status</th></tr></thead>
+                <tbody>
+                  <tr><td><span class="avatar-sm">AW</span><strong>Amara W.</strong></td><td>Jan 8, 2026 – Present</td><td>Jul 18, 2026 · 8:00 AM</td><td><span class="status status-green">Current</span></td></tr>
+                  <tr><td><span class="avatar-sm">SP</span><strong>Sora P.</strong></td><td>May 10, 2026 – Present</td><td>Jul 22, 2026 · 9:00 AM</td><td><span class="status status-green">Current</span></td></tr>
+                  <tr><td><span class="avatar-sm">DO</span><strong>David O.</strong></td><td>Sep 12 – Dec 20, 2025</td><td>—</td><td><span class="status status-blue">Previous</span></td></tr>
+                </tbody>
+              </table></div>
+              <div class="pager-row" aria-label="My caregiver pages"><button class="button button-secondary button-sm" type="button" disabled>Previous</button><span class="meta">Showing 1–10 of 14</span><button class="button button-secondary button-sm" type="button">Next</button></div>
+            </section>
+            <p class="meta" style="margin-top:12px">Contact details, employment information, credentials, ratings, rates, and other clients are not included in this view.</p>
           </div>
 
           <!-- ── Visit Notes ── -->
@@ -1776,63 +1881,38 @@
               <div>
                 <p class="eyebrow">Documentation</p>
                 <h1>Visit notes</h1>
-                <p class="subtle">3 pending · 2 overdue · 42 submitted this month</p>
+                <p class="subtle">2 notes for Jordan M.</p>
               </div>
-              <div style="display:flex;gap:10px;flex-wrap:wrap">
-                <select class="button button-secondary" style="cursor:pointer" aria-label="Filter notes"><option>All notes</option><option>Pending</option><option>Overdue</option><option>Submitted</option></select>
-              </div>
+              <select class="button button-secondary" aria-label="Filter notes"><option>All notes</option><option>Concerns flagged</option><option>No concerns</option></select>
             </div>
 
-            <div style="display:grid;gap:10px">
-              <div class="note-card" style="border-left:4px solid var(--red)">
-                <div>
-                  <div style="display:flex;align-items:center;gap:10px;margin-bottom:6px">
-                    <span class="status status-red">Overdue</span>
-                    <span class="meta" style="margin:0">June 20 · 8:00 AM shift</span>
-                  </div>
-                  <strong>Jordan M.</strong> — Amara Williams (CNA)
-                  <p class="meta" style="margin-top:4px">Personal care · 4 hours · GPS check-in confirmed</p>
-                  <p class="meta">Activities, vitals, and client signature still required.</p>
+            <div class="visit-notes-grid">
+              <section class="card shift-picker" aria-labelledby="wireframe-shift-list-heading">
+                <div class="section-header"><div><h2 id="wireframe-shift-list-heading">Shifts</h2><span class="subtle">Select a shift to load its notes</span></div><span class="meta">Page 1 of 3</span></div>
+                <div class="shift-list">
+                  <button class="shift-select selected-shift" type="button" aria-pressed="true" data-message="Jordan M. notes loaded"><span><strong>Jordan M.</strong><span class="meta">Jul 16, 8:00 AM - 12:00 PM · In-home care</span></span><span><span class="status status-green">Completed</span><span class="meta">Amara Williams</span></span></button>
+                  <button class="shift-select" type="button" aria-pressed="false" data-message="Casey R. notes loaded"><span><strong>Casey R.</strong><span class="meta">Jul 16, 1:30 PM - 4:30 PM · In-home care</span></span><span><span class="status status-blue">Scheduled</span><span class="meta">David Okafor</span></span></button>
+                  <button class="shift-select" type="button" aria-pressed="false" data-message="Harborview notes loaded"><span><strong>Harborview Center</strong><span class="meta">Jul 17, 7:00 AM - 3:00 PM · Facility staffing</span></span><span><span class="status status-amber">In progress</span><span class="meta">Sora Park</span></span></button>
                 </div>
-                <button class="button button-primary button-sm" type="button" data-message="Visit note editor opened">Complete note</button>
-              </div>
+                <div class="pager-row" aria-label="Shift pages"><button class="button button-secondary button-sm" type="button" disabled>Previous</button><span class="meta">Page 1 of 3</span><button class="button button-secondary button-sm" type="button" data-message="Next shift page loaded">Next</button></div>
+              </section>
 
-              <div class="note-card" style="border-left:4px solid var(--red)">
-                <div>
-                  <div style="display:flex;align-items:center;gap:10px;margin-bottom:6px">
-                    <span class="status status-red">Overdue</span>
-                    <span class="meta" style="margin:0">June 21 · 1:30 PM shift</span>
+              <section class="notes-column" aria-labelledby="wireframe-notes-list-heading">
+                <div class="card">
+                  <div class="section-header"><div><h2 id="wireframe-notes-list-heading">Notes list</h2><span class="subtle">Jordan M. · Jul 16, 8:00 AM - 12:00 PM</span></div></div>
+                  <div class="note-list">
+                    <article class="note-card note-card-concern"><div><div class="note-meta-row"><span class="status status-red">Concern flagged</span><span class="meta">Jul 16, 12:05 PM</span></div><strong>Jordan M.</strong><span class="meta">Amara Williams · In-home care</span><div class="badge-row note-badges"><span class="status status-blue">Personal care</span><span class="status status-blue">Medication</span><span class="status status-blue">Meal prep</span></div></div><button class="button button-primary button-sm" type="button" data-message="Audited note detail loaded">View note</button></article>
+                    <article class="note-card"><div><div class="note-meta-row"><span class="status status-green">Submitted</span><span class="meta">Jul 9, 12:02 PM</span></div><strong>Jordan M.</strong><span class="meta">Amara Williams · In-home care</span><div class="badge-row note-badges"><span class="status status-blue">Personal care</span><span class="status status-blue">Companionship</span></div></div><button class="button button-primary button-sm" type="button" data-message="Audited note detail loaded">View note</button></article>
                   </div>
-                  <strong>Casey R.</strong> — David Okafor (HHA)
-                  <p class="meta" style="margin-top:4px">Companionship · 3 hours</p>
-                  <p class="meta">Draft saved — 2 required fields incomplete.</p>
                 </div>
-                <button class="button button-primary button-sm" type="button" data-message="Visit note draft opened">Finish draft</button>
-              </div>
 
-              <div class="note-card" style="border-left:4px solid var(--amber)">
-                <div>
-                  <div style="display:flex;align-items:center;gap:10px;margin-bottom:6px">
-                    <span class="status status-amber">Pending</span>
-                    <span class="meta" style="margin:0">Today · 8:00 AM shift</span>
-                  </div>
-                  <strong>Jordan M.</strong> — Amara Williams (CNA)
-                  <p class="meta" style="margin-top:4px">Shift in progress — note due at check-out</p>
-                </div>
-                <button class="button button-secondary button-sm" type="button" data-message="Shift detail opened">View shift</button>
-              </div>
-
-              <div class="note-card" style="opacity:.7">
-                <div>
-                  <div style="display:flex;align-items:center;gap:10px;margin-bottom:6px">
-                    <span class="status status-green">Submitted</span>
-                    <span class="meta" style="margin:0">June 21 · 8:00 AM shift</span>
-                  </div>
-                  <strong>Beverly T.</strong> — David Okafor (HHA)
-                  <p class="meta" style="margin-top:4px">Medication, meal prep · 6 hours · All fields complete</p>
-                </div>
-                <button class="button button-secondary button-sm" type="button" data-message="Visit note opened">View note</button>
-              </div>
+                <aside class="card detail-card section-offset" aria-labelledby="wireframe-note-detail-heading">
+                  <div class="section-header"><div><h2 id="wireframe-note-detail-heading">Audited note detail</h2><span class="subtle">Clinical text appears only after opening a note</span></div></div>
+                  <dl class="detail-facts"><div><dt>Visit time</dt><dd>Jul 16, 2026 12:05 PM</dd></div><div><dt>Vitals</dt><dd>BP 128/76 · HR 72</dd></div><div><dt>Photos</dt><dd>0</dd></div></dl>
+                  <h3>Completed tasks</h3><div class="badge-row"><span class="status status-blue">Personal care</span><span class="status status-blue">Medication</span><span class="status status-blue">Meal prep</span></div>
+                  <div class="clinical-grid"><section><h3>Activities</h3><p>Assisted with bathing, dressing, and prepared lunch.</p></section><section><h3>Client condition</h3><p>Alert and engaged; mobility slower than usual.</p></section><section><h3>Medication observations</h3><p>Scheduled medication observed and documented.</p></section><section><h3>Concerns</h3><p>Reported mild dizziness when standing; coordinator review requested.</p></section></div>
+                </aside>
+              </section>
             </div>
           </div>
 
@@ -3170,6 +3250,49 @@
               </div>
             </div>
 
+            <!-- ── Mobile: My Clients ── -->
+            <div class="mobile-screen" id="mobile-clients" role="region" aria-label="My clients screen">
+              <div class="mobile-statusbar" aria-hidden="true"><span>9:41</span><span>● ● ◒</span></div>
+              <header class="mobile-header-flat">
+                <span aria-hidden="true" style="font-size:1.2rem">♙</span>
+                <h1>My Clients</h1>
+              </header>
+              <div class="mobile-content-flat">
+                <p class="subtle" style="font-size:.8rem;margin-bottom:14px">Only clients from your own shift assignments are shown.</p>
+                <div class="filter-bar" style="margin-bottom:14px">
+                  <select aria-label="Filter my client assignments" style="width:100%"><option>All assignments</option><option>Current</option><option>Previous</option></select>
+                </div>
+
+                <section class="mobile-section" aria-labelledby="mobile-current-clients-heading">
+                  <h2 id="mobile-current-clients-heading">Current assignments</h2>
+                  <div class="card" style="margin-bottom:10px">
+                    <div class="profile-row"><span><strong>Jordan M.</strong><span class="meta">Personal care · since Jan 8, 2026</span></span><span class="status status-green">Current</span></div>
+                    <div class="profile-row"><span class="subtle">Next shift</span><span>Jul 18 · 8:00 AM</span></div>
+                    <div class="profile-row"><span class="subtle">Completed together</span><span>18 shifts</span></div>
+                  </div>
+                  <div class="card" style="margin-bottom:14px">
+                    <div class="profile-row"><span><strong>Beverly T.</strong><span class="meta">Meal preparation · since Jul 2, 2026</span></span><span class="status status-green">Current</span></div>
+                    <div class="profile-row"><span class="subtle">Next shift</span><span>Jul 19 · 9:00 AM</span></div>
+                    <div class="profile-row"><span class="subtle">Completed together</span><span>3 shifts</span></div>
+                  </div>
+                </section>
+
+                <section class="mobile-section" aria-labelledby="mobile-previous-clients-heading">
+                  <h2 id="mobile-previous-clients-heading">Previous assignments</h2>
+                  <div class="card">
+                    <div class="profile-row"><span><strong>Casey R.</strong><span class="meta">Companionship</span></span><span class="status status-blue">Previous</span></div>
+                    <div class="profile-row"><span class="subtle">Assignment dates</span><span>Mar 4 – Jun 30, 2026</span></div>
+                    <div class="profile-row"><span class="subtle">Completed together</span><span>12 shifts</span></div>
+                  </div>
+                </section>
+                <div class="pager-row" aria-label="My client assignment pages">
+                  <button class="button button-secondary button-sm" type="button" disabled>Previous</button>
+                  <span class="meta">1–10 of 37</span>
+                  <button class="button button-secondary button-sm" type="button">Next</button>
+                </div>
+              </div>
+            </div>
+
             <!-- Mobile: Recovery (Transitions) screen -->
             <div id="mobile-transitions" class="mobile-screen" role="region" aria-label="Recovery plan screen">
               <header class="mobile-header-flat">
@@ -3290,6 +3413,9 @@
               </button>
               <button type="button" data-mobile-screen="mobile-notes-screen">
                 <span aria-hidden="true">✎</span><span>Notes</span>
+              </button>
+              <button type="button" data-mobile-screen="mobile-clients">
+                <span aria-hidden="true">♙</span><span>Clients</span>
               </button>
               <button type="button" data-mobile-screen="mobile-profile">
                 <span aria-hidden="true">♙</span><span>Profile</span>

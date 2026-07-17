@@ -1,6 +1,7 @@
 using CarePath.Client.Http;
 using CarePath.Contracts.Clients;
 using CarePath.Contracts.Common;
+using CarePath.Contracts.Scheduling;
 
 namespace CarePath.Client.Api;
 
@@ -33,6 +34,21 @@ public sealed class ClientsClient : ApiClientBase
         Guid clientId,
         CancellationToken cancellationToken = default) =>
         GetAsync<ClientDetailDto>($"api/clients/{clientId}", cancellationToken);
+
+    /// <summary>Searches a client's paged caregiver relationship history without placing PHI filters in the URL.</summary>
+    public Task<ApiResponse<PagedResult<CaregiverAssignmentSummaryDto>>> SearchCaregiverAssignmentsAsync(
+        Guid clientId,
+        AssignmentHistorySearchRequest request,
+        CancellationToken cancellationToken = default) =>
+        PostAsync<AssignmentHistorySearchRequest, PagedResult<CaregiverAssignmentSummaryDto>>(
+            $"api/clients/{clientId}/caregiver-assignments/search", request, cancellationToken);
+
+    /// <summary>Searches the signed-in client's minimum-necessary caregiver history.</summary>
+    public Task<ApiResponse<PagedResult<MyCaregiverAssignmentSummaryDto>>> SearchMyCaregiversAsync(
+        AssignmentHistorySearchRequest request,
+        CancellationToken cancellationToken = default) =>
+        PostAsync<AssignmentHistorySearchRequest, PagedResult<MyCaregiverAssignmentSummaryDto>>(
+            "api/clients/me/caregiver-assignments/search", request, cancellationToken);
 
     /// <summary>Creates a client (Admin/Coordinator).</summary>
     /// <param name="request">The create request. Never logged client-side.</param>

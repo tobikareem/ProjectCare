@@ -1,0 +1,27 @@
+@page "/caregivers/{CaregiverId:guid}/client-assignments"
+@using CarePath.Client.Api
+@using CarePath.Client.UI.Components
+@using CarePath.Contracts.Common
+@using CarePath.Contracts.Scheduling
+@using Microsoft.AspNetCore.Authorization
+@attribute [Authorize(Roles = "Admin,Coordinator")]
+@inject CaregiversClient CaregiversClient
+@inject NavigationManager Navigation
+
+<PageTitle>Client assignment history</PageTitle>
+<div class="page-heading"><div><p class="eyebrow">Caregivers</p><h1>Client assignment history</h1><p class="subtle">Current and previous relationships derived from shifts</p></div><button class="button button-secondary" type="button" @onclick="NavigateBack">← Back to caregiver profile</button></div>
+<div class="filter-bar" role="search" aria-label="Client assignment filters"><input type="search" placeholder="Search client..." @bind="searchTerm" aria-label="Search client assignments" /><select @bind="status" aria-label="Assignment status"><option value="">All assignments</option><option value="Current">Current</option><option value="Previous">Previous</option></select><input type="date" @bind="fromDate" aria-label="Assignments from date" /><input type="date" @bind="toDate" aria-label="Assignments to date" /><button class="button button-primary" type="button" @onclick="ApplyFiltersAsync">Apply filters</button></div>
+@if (error is not null) { <ApiErrorAlert Response="error" /> }
+<section class="card assignment-table" aria-labelledby="assignment-table-heading"><div class="section-header"><div><h2 id="assignment-table-heading">Clients</h2><span class="subtle">Most recent activity first · server paginated</span></div><span class="meta">@PageText</span></div>
+<PagedTable TItem="ClientAssignmentSummaryDto" Result="page" IsLoading="isLoading" LoadingText="Loading client assignments..." EmptyText="No client assignments match these filters." TableClass="data-table" PagerButtonClass="button button-secondary button-sm" PagerLabel="Client assignment pages" PageSize="PageSize" MinPageSize="PageSize" ShowPagerWhenSinglePage="true" OnPageChanged="LoadPageAsync"><HeaderTemplate><tr><th>Client</th><th>Service</th><th>Relationship dates</th><th>Last shift</th><th>Next shift</th><th>Completed</th><th>Status</th></tr></HeaderTemplate><RowTemplate Context="item"><tr><td><strong>@item.ClientDisplayName</strong></td><td>@item.ServiceType</td><td>@DateRange(item)</td><td>@DateOrDash(item.LastShiftAtUtc)</td><td>@DateOrDash(item.NextShiftAtUtc)</td><td>@item.CompletedShiftCount</td><td><StatusBadge Text="@item.Status.ToString()" Tone="@(item.Status == AssignmentRelationshipStatus.Current ? BadgeTone.Success : BadgeTone.Info)" /></td></tr></RowTemplate></PagedTable></section>
+@code {
+    private const int PageSize = 25;
+    [Parameter] public Guid CaregiverId { get; set; }
+    private PagedResult<ClientAssignmentSummaryDto>? page; private ApiResponse? error; private bool isLoading; private string searchTerm = string.Empty; private string status = string.Empty; private DateTime? fromDate; private DateTime? toDate;
+    private string PageText => page is null ? "Page 1" : $"Page {page.PageNumber} of {Math.Max(page.TotalPages, 1)} · {page.TotalCount} relationships";
+    protected override Task OnParametersSetAsync() => LoadPageAsync(1); private Task ApplyFiltersAsync() => LoadPageAsync(1);
+    private void NavigateBack() => Navigation.NavigateTo("/caregivers");
+    private async Task LoadPageAsync(int pageNumber) { isLoading = true; error = null; page = null; var response = await CaregiversClient.SearchClientAssignmentsAsync(CaregiverId, BuildRequest(pageNumber)); if (response.Success && response.Data is not null) page = response.Data; else { page = null; error = response; } isLoading = false; }
+    private AssignmentHistorySearchRequest BuildRequest(int pageNumber) => new() { PageNumber = pageNumber, PageSize = PageSize, SearchTerm = searchTerm, Status = Enum.TryParse<AssignmentRelationshipStatus>(status, out var parsed) ? parsed : null, FromUtc = fromDate.HasValue ? DateTime.SpecifyKind(fromDate.Value, DateTimeKind.Local).ToUniversalTime() : null, ToUtc = toDate.HasValue ? DateTime.SpecifyKind(toDate.Value.AddDays(1), DateTimeKind.Local).ToUniversalTime() : null };
+    private static string DateRange(ClientAssignmentSummaryDto item) => $"{item.FirstAssignedAtUtc.ToLocalTime():MMM d, yyyy} – {(item.Status == AssignmentRelationshipStatus.Current ? "Present" : item.LastAssignedAtUtc.ToLocalTime().ToString("MMM d, yyyy"))}"; private static string DateOrDash(DateTime? value) => value.HasValue ? value.Value.ToLocalTime().ToString("MMM d, yyyy") : "—";
+}

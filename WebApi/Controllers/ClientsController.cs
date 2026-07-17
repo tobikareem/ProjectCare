@@ -3,6 +3,8 @@ using CarePath.Application.Clients.Services;
 using CarePath.Application.Common.Exceptions;
 using CarePath.Contracts.Clients;
 using CarePath.Contracts.Common;
+using CarePath.Contracts.Scheduling;
+using CarePath.Application.Scheduling.Services;
 using CarePath.WebApi.Middleware;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -18,12 +20,14 @@ public sealed class ClientsController : ControllerBase
     private readonly IClientOperationsService clientService;
     private readonly IClientAccessGrantService grantService;
     private readonly IIdorGuard idorGuard;
+    private readonly IAssignmentHistoryService assignmentHistoryService;
 
-    public ClientsController(IClientOperationsService clientService, IClientAccessGrantService grantService, IIdorGuard idorGuard)
+    public ClientsController(IClientOperationsService clientService, IClientAccessGrantService grantService, IIdorGuard idorGuard, IAssignmentHistoryService assignmentHistoryService)
     {
         this.clientService = clientService;
         this.grantService = grantService;
         this.idorGuard = idorGuard;
+        this.assignmentHistoryService = assignmentHistoryService;
     }
 
     [HttpGet]
@@ -39,6 +43,24 @@ public sealed class ClientsController : ControllerBase
         var client = await clientService.GetClientAsync(id, cancellationToken);
         return client is null ? ClientNotFound() : Ok(client);
     }
+
+    [HttpPost("{id:guid}/caregiver-assignments/search")]
+    [Authorize(Roles = "Admin,Coordinator")]
+    public async Task<ActionResult<PagedResult<CaregiverAssignmentSummaryDto>>> SearchCaregiverAssignments(
+        Guid id,
+        [FromBody] AssignmentHistorySearchRequest request,
+        CancellationToken cancellationToken)
+    {
+        await EnsureAuthorizedAsync(ProtectedResourceType.Client, id, ObjectAccessAction.Read, cancellationToken);
+        return Ok(await assignmentHistoryService.GetCaregiversForClientAsync(id, request, cancellationToken));
+    }
+
+    [HttpPost("me/caregiver-assignments/search")]
+    [Authorize(Roles = "Client")]
+    public async Task<ActionResult<PagedResult<MyCaregiverAssignmentSummaryDto>>> SearchMyCaregivers(
+        [FromBody] AssignmentHistorySearchRequest request,
+        CancellationToken cancellationToken) =>
+        Ok(await assignmentHistoryService.GetMyCaregiversAsync(request, cancellationToken));
 
     [HttpPost]
     [Authorize(Roles = "Admin,Coordinator")]

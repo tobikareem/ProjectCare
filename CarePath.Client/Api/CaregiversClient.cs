@@ -36,6 +36,21 @@ public sealed class CaregiversClient : ApiClientBase
         CancellationToken cancellationToken = default) =>
         GetAsync<CaregiverDetailDto>($"api/caregivers/{caregiverId}", cancellationToken);
 
+    /// <summary>Searches a caregiver's paged client relationship history for staff.</summary>
+    public Task<ApiResponse<PagedResult<ClientAssignmentSummaryDto>>> SearchClientAssignmentsAsync(
+        Guid caregiverId,
+        AssignmentHistorySearchRequest request,
+        CancellationToken cancellationToken = default) =>
+        PostAsync<AssignmentHistorySearchRequest, PagedResult<ClientAssignmentSummaryDto>>(
+            $"api/caregivers/{caregiverId}/client-assignments/search", request, cancellationToken);
+
+    /// <summary>Searches the signed-in caregiver's own client relationship history.</summary>
+    public Task<ApiResponse<PagedResult<MyClientAssignmentSummaryDto>>> SearchMyClientsAsync(
+        AssignmentHistorySearchRequest request,
+        CancellationToken cancellationToken = default) =>
+        PostAsync<AssignmentHistorySearchRequest, PagedResult<MyClientAssignmentSummaryDto>>(
+            "api/caregivers/me/client-assignments/search", request, cancellationToken);
+
     /// <summary>Creates a caregiver (Admin/Coordinator).</summary>
     /// <param name="request">The create request. Never logged client-side.</param>
     /// <param name="cancellationToken">Token to cancel the operation.</param>

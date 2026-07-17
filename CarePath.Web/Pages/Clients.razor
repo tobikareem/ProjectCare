@@ -4,6 +4,7 @@
 @using CarePath.Contracts.Clients
 @using CarePath.Contracts.Common
 @using CarePath.Contracts.Enumerations
+@using CarePath.Contracts.Scheduling
 @using Microsoft.AspNetCore.Authorization
 @attribute [Authorize(Roles = "Admin,Coordinator,Clinician")]
 @inject ClientsClient ClientsClient
@@ -145,6 +146,40 @@
                 }
             </div>
 
+            <section aria-labelledby="client-caregiver-preview-heading">
+                <div class="section-header compact-header">
+                    <div>
+                        <h3 id="client-caregiver-preview-heading">Recent caregiver assignments</h3>
+                        <span class="subtle">Latest @caregiverPreview?.Items.Count of @caregiverPreview?.TotalCount relationships</span>
+                    </div>
+                    <button class="text-link" type="button" @onclick="NavigateToCaregiverHistory">View all</button>
+                </div>
+                @if (assignmentPreviewError is not null)
+                {
+                    <ApiErrorAlert Response="assignmentPreviewError" />
+                }
+                else if (caregiverPreview is null)
+                {
+                    <p class="empty-state compact">Loading caregiver assignments...</p>
+                }
+                else if (caregiverPreview.Items.Count == 0)
+                {
+                    <p class="empty-state compact">No caregiver assignments found.</p>
+                }
+                else
+                {
+                    <div class="stacked-list">
+                        @foreach (var assignment in caregiverPreview.Items)
+                        {
+                            <div class="care-plan-row">
+                                <span><strong>@assignment.CaregiverDisplayName</strong><span class="meta">@FormatRelationshipDates(assignment.FirstAssignedAtUtc, assignment.LastAssignedAtUtc) · @assignment.CompletedShiftCount completed</span></span>
+                                <StatusBadge Text="@assignment.Status.ToString()" Tone="@(assignment.Status == AssignmentRelationshipStatus.Current ? BadgeTone.Success : BadgeTone.Info)" />
+                            </div>
+                        }
+                    </div>
+                }
+            </section>
+
             <h3>Care plans</h3>
             <div class="stacked-list">
                 <p class="empty-state compact">
@@ -161,7 +196,9 @@
     private PagedResult<ClientSummaryDto>? clientPage;
     private ApiResponse? clientError;
     private ApiResponse? clientDetailError;
+    private ApiResponse? assignmentPreviewError;
     private ClientDetailDto? selectedClient;
+    private PagedResult<CaregiverAssignmentSummaryDto>? caregiverPreview;
     private Guid? selectedClientId;
     private bool isLoading;
     private bool isDetailLoading;
@@ -226,13 +263,24 @@
     {
         selectedClientId = clientId;
         selectedClient = null;
+        caregiverPreview = null;
         clientDetailError = null;
+        assignmentPreviewError = null;
         isDetailLoading = true;
 
         var response = await ClientsClient.GetAsync(clientId);
         if (response.Success && response.Data is not null)
         {
             selectedClient = response.Data;
+            var previewResponse = await ClientsClient.SearchCaregiverAssignmentsAsync(clientId, new AssignmentHistorySearchRequest { PageNumber = 1, PageSize = 2 });
+            if (previewResponse.Success && previewResponse.Data is not null)
+            {
+                caregiverPreview = previewResponse.Data;
+            }
+            else
+            {
+                assignmentPreviewError = previewResponse;
+            }
         }
         else
         {
@@ -294,6 +342,8 @@
         selectedClientId = null;
         selectedClient = null;
         clientDetailError = null;
+        assignmentPreviewError = null;
+        caregiverPreview = null;
     }
 
     private static string PagingText<T>(PagedResult<T>? page) =>
@@ -348,4 +398,15 @@
     }
 
     private void NavigateToCreateClient() => Navigation.NavigateTo("/clients/create");
+
+    private void NavigateToCaregiverHistory()
+    {
+        if (selectedClientId.HasValue)
+        {
+            Navigation.NavigateTo($"/clients/{selectedClientId.Value}/caregiver-assignments");
+        }
+    }
+
+    private static string FormatRelationshipDates(DateTime first, DateTime last) =>
+        $"{first.ToLocalTime():MMM d, yyyy} – {(last > DateTime.UtcNow ? "Present" : last.ToLocalTime().ToString("MMM d, yyyy"))}";
 }

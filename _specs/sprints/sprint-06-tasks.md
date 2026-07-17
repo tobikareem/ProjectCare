@@ -353,6 +353,63 @@ through a dedicated client-self surface. This does not widen either staff assign
   uses the approved D-S6-16 deterministic `AssignmentRelationship` audit plus parent/counterpart
   ID-only read audits. Searches remain in the authenticated request body, never the URL.
 
+### D-S6-18 - Invoice generation preview and double-billing guard (approved by Tobi 2026-07-17)
+
+Admin and Coordinator generate one invoice for a selected client, service line, and half-open UTC
+period (`PeriodStartUtc <= ScheduledStartTime < PeriodEndUtc`). Wireframe states
+`page-billing-generate` (editable selection) and `page-billing-preview` (read-only preview result)
+are the visual source of truth for the Select -> Preview -> Generate flow.
+
+- Reuse the existing server-paged `ClientsClient.GetPageAsync` for client/facility selection; a
+  separate picker endpoint is not required. In Sprint 6, a facility is represented by its existing
+  Client billing account; no new Facility entity is introduced. Future name search uses an
+  authenticated request body. Selecting an account may prefill its service type and billing rate,
+  but the server remains authoritative and the user must choose when more than one applies.
+- Add `POST /api/invoices/preview` for `Admin,Coordinator`. Its body contains `ClientId`,
+  `ServiceType`, period, and paging only. The dedicated response carries minimum-necessary billable
+  rows plus eligible count, billable hours, and subtotal aggregates across the full result set.
+- Each eligible row includes the performing caregiver's display name and qualification label so
+  staff can verify who delivered the service. The label is the sorted set of professional
+  credentials (RN/LPN/GNA/CNA/HHA/CRMA) valid on the service date; training credentials are omitted
+  and an empty set renders `Caregiver`. It still excludes caregiver ID, contact
+  details, pay rate, cost/margin, notes, GPS, visit-note data, diagnoses, and clinical fields.
+  Reads and creation emit ID-only audit events; logs and errors never include display values.
+- Eligibility requires the selected client/service line, `Completed` status, valid actual
+  check-in/out, positive time after breaks, an in-period scheduled start, and no existing link from
+  a non-deleted invoice line. Exclusion counts are links to a separately paged, authorized review
+  result. Review rows expose only service/client/caregiver summary, safe reason, age, estimated
+  billable value when calculable, and the corrective destination. `Already invoiced` links to the
+  invoice that owns the line and is not counted as revenue at risk.
+- Preview and create call the same eligibility query. Creation re-evaluates transactionally. Add a
+  unique filtered index on non-null `InvoiceLineItems.ShiftId` so overlapping periods or concurrent
+  requests cannot bill a shift twice; duplicate-data migration preflight fails rather than mutates.
+  A uniqueness race returns a sanitized refresh/re-preview error.
+- Preview returns an opaque, expiring `PreviewToken` bound to the client, service line, period,
+  eligible shift IDs, billable inputs, and totals. Create adds that token to the existing request
+  fields (`DueDate`, non-negative `TaxAmount`, optional PHI-free billing note). If eligibility or
+  totals changed, create returns a sanitized `409 invoice.preview_stale`; it never silently creates
+  a different invoice. Success opens invoice detail; empty/all-excluded previews cannot generate.
+- Billable hours follow the existing minute calculation after breaks. Each line total is rounded
+  to two decimal places using `MidpointRounding.AwayFromZero`; subtotal is the sum of rounded lines.
+  UTC period boundaries remain start-inclusive/end-exclusive.
+- Full revenue-leakage protection is part of this slice through `page-billing-reconciliation`:
+  server-paged unresolved services, reason and aging filters, oldest-first prioritization, totals,
+  and corrective links. Items leave the unresolved queue only when invoice-eligible or when an
+  authorized user records a required, audited non-billable reason; source records are never deleted.
+- Exclusion precedence is one reason per shift: `AlreadyInvoiced`, `NonBillableResolved`,
+  `CancelledOrNoShow`, `NotCompleted`, `MissingActualTime`, `InvalidBillableTime`, `MissingBillRate`,
+  then `Eligible`. Already-invoiced and resolved rows are informational and excluded from revenue at
+  risk. Scheduled/in-progress shifts become leakage candidates only after scheduled end plus 24
+  hours; KPI totals cover the entire filtered result, not only the displayed page.
+- Persist non-billable decisions as append-only `BillingReconciliationResolution` records linked to
+  Shift, with reason enum, resolver ID, UTC timestamp, and optional PHI-free note. Corrections never
+  delete/overwrite prior resolutions; reopening appends a superseding record. Missing-time correction
+  uses a dedicated audited Admin/Coordinator command; bill-rate correction continues through the
+  guarded shift update path. All reconciliation searches are body-based, maximum 92-day windows,
+  page-size bounded, and ordered oldest service first then Shift ID.
+- Out of scope: bulk multi-client and recurring invoices, invoice editing, PDF/export, insurance
+  claims, caregiver payroll, payment-processing changes, and clinical text on invoices.
+
 ### D-S6-7 - Accessibility baseline
 
 Every interactive primitive: keyboard operable, labeled (aria-label or visible label), visible
@@ -372,6 +429,7 @@ escalation->acknowledge) is part of exit verification.
 | 6D | Schedule board, coverage queue, shift assignment | S6-TASK-031, S6-TASK-038 |
 | 6H | Caregiver roster, profile detail, create/certify/eligible-shifts flow | S6-TASK-039, S6-TASK-041..043 |
 | 6I | Client-caregiver assignment history and self-service views | S6-TASK-046..049, S6-TASK-051..053 |
+| 6J | Invoice generation, reconciliation, and full revenue-leakage protection | S6-TASK-055..059, S6-TASK-061..065 |
 | 6E | Transitions: review queue, activation, escalation queue (+ D-S6-5 endpoint) | S6-TASK-032..035 |
 | 6G | User management per D-S6-8: seeder, endpoints, contracts/client, Users page | S6-TASK-013, 023, 036..037 |
 | 6F | Accessibility pass + browser PHI safety review + exit verification | S6-TASK-040, S6-TASK-050..060 |
@@ -396,6 +454,9 @@ escalation->acknowledge) is part of exit verification.
 | Activation screen | Clinician | TransitionsClient ReviewInstruction/ActivatePlan | Activate disabled until no Pending instructions; e-sign confirm checkbox maps to `ConfirmESignature` |
 | Escalation queue | Coordinator | TransitionsClient GetEscalationQueueAsync (D-S6-5) + Acknowledge | EscalationBanner; resolution note + level per D-S5-7 |
 | Users (admin) | Admin | AdminUsersClient (D-S6-8) | Create staff accounts; change role; activate/deactivate; last-Admin and profile-role guardrails surfaced as disabled actions with explanations; "changes apply at next sign-in" notice |
+| Billing list/detail | Admin, Coordinator | `BillingClient` list/detail/payment reads and writes | Existing invoice management; Generate invoices routes to `page-billing-generate` |
+| Generate invoice | Admin, Coordinator | `ClientsClient` server-paged picker + `BillingClient` preview/create | D-S6-18 Select -> Preview -> Generate; safe exclusions and creation-time revalidation |
+| Billing reconciliation | Admin, Coordinator | `BillingClient` reconciliation search/detail/correction destinations | D-S6-18 server-paged leakage queue; caregiver/service attribution, safe reasons, aging, estimated value, and invoice links |
 | Margin snapshot (stretch) | Admin | BillingClient margin endpoints | Only if 6C-6E land early; Admin-only route guard |
 
 ## Caregiver/Schedule API Integration Matrix
@@ -484,9 +545,102 @@ Owners: **Claude** = PM/Contracts/Client/Client.UI + sprint docs. **Codex** = We
 | S6-TASK-051 | Wireframe: D-S6-17 client-self My caregivers current/previous view with minimum-necessary fields, filters, pagination, and responsive state | Codex | D-S6-17 | Done 2026-07-17 — Web visual reference added and approved through implementation request |
 | S6-TASK-052 | Contracts/Application/WebApi/Client: dedicated client-self DTO and `/api/clients/me/caregiver-assignments/search`; derive owner profile from authenticated user, PHI-safe proxy/no-profile response, aggregate audit, role/route/service/DTO tests | Codex | S6-TASK-051 | Done 2026-07-17 — owner-derived Client scope, proxy-safe not-found, exact five-field DTO, POST-body search, pair audit, and role/route/service/contract tests verified |
 | S6-TASK-053 | Web: responsive `/my-caregivers`, Client-only navigation, status filtering, server paging, empty/error/loading states, stale-PHI clearing, and bUnit authorization/minimum-necessary tests | Codex | S6-TASK-052 | Done 2026-07-17 — responsive paged view, Client-only nav, current/previous filter, minimum-necessary markup, stale-PHI regression, and reviewer gate complete |
+| S6-TASK-055 | Wireframe/spec: D-S6-18 separate `page-billing-generate` selection and `page-billing-preview` read-only review states with caregiver/role attribution and linked exclusions, plus `page-billing-reconciliation` leakage KPIs, filters, corrective actions, paging, and preservation notice | Codex | D-S6-18 | Done 2026-07-17 — expanded interactive visual reference and synchronized decision added; awaiting Tobi visual approval before production implementation |
+| S6-TASK-056 | Contracts: lock preview, exclusion, reconciliation search/detail, time-correction, non-billable resolution, and stale-preview request/response shapes; opaque preview token; caregiver display + service-date credential label; DTO allowlist/denylist tests and XML docs | Claude | S6-TASK-055 approval | Pending — Claude backend slice; contracts freeze before Codex starts Client/Web |
+| S6-TASK-064 | Domain/Infrastructure: append-only `BillingReconciliationResolution` entity/reason enum/configuration; unique non-null Shift line-item index that blocks historical rebilling; indexes for bounded reconciliation queries; fail-closed duplicate preflight migration and snapshot; SQL/migration/configuration tests | Claude | S6-TASK-056 | Pending |
+| S6-TASK-057 | Application/WebApi preview + create: one shared eligibility projection and precedence; qualification label; aggregates/rounding; opaque preview token; transactional revalidation; sanitized stale/unique conflicts; `Admin,Coordinator` endpoint, object authorization, ID-only audits, and exhaustive service/controller tests | Claude | S6-TASK-056, S6-TASK-064 | Pending |
+| S6-TASK-061 | Application/Infrastructure reconciliation: bounded SQL search/detail/KPIs, oldest-first stable paging, aged-risk rule, owning-invoice lookup, append-only non-billable resolve/reopen, dedicated audited time correction, existing guarded rate correction, record preservation, authorization/audit/query tests | Claude | S6-TASK-056, S6-TASK-064 | Pending |
+| S6-TASK-062 | WebApi backend completion: body-based reconciliation search, detail, resolution/reopen and time-correction routes; role/template pins, PHI-safe identical denial/error behavior, client route manifest, integration/concurrency/migration evidence, backend reviewer and HIPAA pass | Claude | S6-TASK-057, S6-TASK-061 | Pending — handoff gate: frozen contracts/routes delivered to Codex |
+| S6-TASK-058 | Client handoff: add typed preview/create/reconciliation/detail/resolve/reopen/time-correction methods to `BillingClient`; pin verb/body/template alignment in a dedicated test; publish frozen contract/route/error/client manifest | Claude | S6-TASK-062 | Pending — final Claude handoff gate before Codex Web starts |
+| S6-TASK-065 | Web Generate invoice: `/billing/generate` Select and explicit Preview states; server-paged client selector with defaults, caregiver/credential attribution, linked exclusions, read-only snapshot, Back/Edit, stale-preview recovery, confirmation, invoice-detail navigation and bUnit tests | Codex | S6-TASK-058 frozen handoff | Pending — Web/Web.Tests only; do not edit Claude-owned Contracts/Client/backend |
+| S6-TASK-063 | Web reconciliation: KPI cards, body-based filters/server paging, linked exclusion drill-through, shift/time/rate correction destinations, owning-invoice navigation, resolve/reopen confirmation, stale-PHI clearing, role gates, responsive/keyboard states and bUnit tests | Codex | S6-TASK-058 frozen handoff, S6-TASK-065 | Pending |
+| S6-TASK-059 | Integrated verification: route alignment, bUnit workflows and PHI assertions, SQL concurrency/migration evidence, browser responsive/keyboard walkthrough, full build/tests, dotnet reviewer, full HIPAA check, board evidence and PM sign-off | Codex + Claude + Tobi | S6-TASK-057..058, S6-TASK-061..065 | Pending |
 | S6-TASK-040 | bUnit test suite per D-S6-6 incl. PHI-exposure markup assertions. Must cover Overview quick action routing, Schedule coverage assignment, Caregiver roster/profile detail, Add caregiver Step 1, multi-certification Step 2, and eligible-shifts Step 3 in addition to Transitions pages | Codex (pages) + Claude (primitives) | S6-TASK-030..035, S6-TASK-037, S6-TASK-041..043 | Pending |
 | S6-TASK-050 | Browser PHI safety review per D-S6-3: grep Web for console/DTO serialization/storage writes; verify URLs are Guid-only; keyboard-only walkthrough of review->activate, escalation->acknowledge, caregiver create->certify->eligible-shifts, and schedule coverage->assign workflows | Codex + Claude | S6-TASK-040 | Pending |
 | S6-TASK-060 | Exit verification: build 0 warnings, all tests green, reviewer pass, exit-gate items checked; PROGRESS/lessons updated; PM closes after review | Codex + Claude + Tobi | all above | Pending |
+
+### D-S6-18 delivery workflow and ownership
+
+1. **Visual approval:** Tobi approves `page-billing-generate`, `page-billing-preview`, and
+   `page-billing-reconciliation`. No production UI precedes this gate.
+2. **Claude contract slice (S6-TASK-056):** create and test all client-safe Billing contracts.
+   Contract names, fields, enums, route bodies, error codes, paging and token semantics become frozen.
+3. **Claude platform slice (S6-TASK-064, 057, 061, 062, 058):** add reconciliation history,
+   migration, shared eligibility query, preview/create safety, reconciliation/correction endpoints,
+   audit, backend tests, and typed-client methods. Claude publishes a frozen contract/route/error/
+   client manifest and exact test evidence; Claude does not mark the board Done.
+4. **Codex UI slice (S6-TASK-065, 063):** only after the frozen handoff, implement the three
+   approved wireframe states. Codex does not change frozen Contracts, Client, or backend
+   contracts; any mismatch returns to Claude as a narrowly scoped follow-up.
+5. **Integration (S6-TASK-059):** run route alignment, bUnit, SQL migration/concurrency, browser,
+   full solution, reviewer and HIPAA gates. Tobi reviews the working flow and signs off.
+6. **Closeout:** task rows move to Done only with commands/results recorded. S6-TASK-050 and 060
+   absorb the billing workflow into Sprint 6's overall safety and exit checks.
+
+Delivery estimate (each work unit is kept within the repository's 1–4 hour task rule):
+
+| Task | Owner | Estimate | Primary deliverable |
+|---|---|---:|---|
+| S6-TASK-056 | Claude | 3h | Frozen client-safe contracts and contract tests |
+| S6-TASK-064 | Claude | 4h | Reconciliation history, EF configuration, protected index and migration |
+| S6-TASK-057 | Claude | 4h | Shared preview/create service, API, token and transaction safety |
+| S6-TASK-061 | Claude | 4h | Reconciliation SQL queries, correction/resolution services and tests |
+| S6-TASK-062 | Claude | 3h | Reconciliation controllers, route pins and backend verification manifest |
+| S6-TASK-058 | Claude | 2h | Typed BillingClient methods, route pins and frozen handoff manifest |
+| S6-TASK-065 | Codex | 4h | Select/Preview/Generate Web workflow and bUnit tests |
+| S6-TASK-063 | Codex | 4h | Reconciliation Web workflow, responsive states and bUnit tests |
+| S6-TASK-059 | Joint | 3h | SQL/browser/full-suite/reviewer/HIPAA evidence and sign-off package |
+
+Estimated engineering effort: **31 hours**, excluding review latency and environment provisioning.
+
+Exclusive file ownership until the contract-freeze handoff:
+
+- **Claude:** `CarePath.Contracts/Billing/**`, `CarePath.Client/Api/BillingClient.cs`, its dedicated
+  route-alignment test, `Domain/Entities/Billing/**`, billing enums,
+  `Application/Abstractions/Billing/**`, `Application/Billing/**`, `Infrastructure/Billing/**`,
+  billing EF configurations/migrations/snapshot, `WebApi/Controllers/InvoicesController.cs`, and
+  new uniquely named backend billing test files.
+- **Codex:** `CarePath.Web/Pages/Billing*.razor`, Web-only styles/layout glue,
+  `CarePath.Web.Tests/**`, wireframe, and Sprint documentation.
+- Shared files such as DI registration, DbContext, solution-level test utilities, or existing broad
+  contract tests are edited by Claude during backend work and frozen before Codex begins. Codex
+  requests a follow-up rather than editing them concurrently.
+
+### D-S6-18 Definition of Done
+
+Billing generation and reconciliation are Done only when all of the following evidence exists:
+
+- The implemented Select -> Preview -> Edit/Generate and reconciliation screens match all three
+  wireframe states at desktop and narrow widths; loading, empty, all-excluded, stale, error and
+  success states are present and keyboard operable.
+- Admin and Coordinator succeed; Caregiver, Client, Clinician, FacilityManager and anonymous users
+  are denied by both API and UI. Object access is checked before state disclosure and unauthorized
+  PHI resources use identical sanitized responses.
+- Preview/create share one eligibility implementation and locked precedence. Tests cover every
+  exclusion, 24-hour aged-risk boundary, start-inclusive/end-exclusive UTC boundaries, break/time
+  edges, missing/zero rate, service-line/client isolation, stable paging, and whole-result KPIs.
+- Currency tests prove per-line `AwayFromZero` rounding and subtotal-as-sum-of-lines. Preview token
+  tests prove expiry, tampering, cross-client reuse and changed shift/time/rate sets return sanitized
+  stale conflicts without creating an invoice.
+- Database evidence proves a shift cannot be billed twice across exact or overlapping periods,
+  concurrent requests, or historical soft-deleted invoice lines. Migration preflight fails closed
+  on existing duplicates; idempotent SQL and a real SQL Server concurrency test pass.
+- Reconciliation never loses source data: resolution/reopen is append-only, corrections are audited,
+  reason/aging filters and totals are correct, already-invoiced rows link to their invoice, and every
+  unresolved delivered service remains visible until eligible or explicitly resolved.
+- Contract denylist/reflection tests prevent caregiver IDs/contact/pay, cost/margin, GPS, clinical
+  notes, diagnoses and credential numbers from preview/reconciliation DTOs. Display name and valid
+  professional credential labels are the only approved caregiver attributes.
+- Every returned Shift/Client/Caregiver/Invoice row and every mutation has ID-only audit evidence.
+  No PHI appears in URLs/query strings, logs, console, browser storage, validation/errors or test
+  fixtures; the full `$hipaa-check` reports PASS.
+- Typed-client URLs exactly match controller verbs/templates. bUnit covers select -> preview -> edit,
+  generate, stale re-preview, empty/all-excluded, exclusion drill-through, resolution/reopen,
+  correction navigation, paging, stale-PHI clearing and role navigation.
+- `dotnet build CarePath.sln` completes with zero warnings; targeted and full `dotnet test
+  CarePath.sln` pass; migration validation passes; the dotnet-code-reviewer reports no critical or
+  high issues; exact commands/counts are written into S6-TASK-056..059 and S6-TASK-061..065 before
+  Tobi signs off.
 
 ### Success criteria (every task)
 
@@ -511,6 +665,7 @@ Owners: **Claude** = PM/Contracts/Client/Client.UI + sprint docs. **Codex** = We
 ### Sequencing notes
 
 - Critical path: 001 -> 010/011 -> 012 -> 030/038/039 -> 031/041 -> 042 -> 043 -> 040 -> 050 -> 060.
+- Billing branch: 055 approval -> Claude 056 -> 064 -> 057/061 -> 062 -> 058 frozen handoff -> Codex 065 -> 063 -> joint 059 -> 050 -> 060.
 - Transitions branch remains: 032 -> 033 and 034 -> 022 -> 035.
 - Claude's 020/021 start immediately after approval, parallel with Codex's 010/011 — 012
   needs 021's primitives, so Client.UI lands first.

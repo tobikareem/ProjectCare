@@ -69,6 +69,8 @@ This file captures recurring mistakes, corrections, and hard-won patterns discov
 
 ## UI / Design
 
+- **Billing previews need operational attribution and drill-through, not anonymous aggregates** - For authorized Admin/Coordinator reconciliation, show the performing caregiver's minimum-necessary display name and role/license label. Exclusion counts must link to paged review details and corrective actions; an aggregate-only exclusion notice can hide revenue leakage. Keep caregiver pay, contact, GPS, clinical notes, and margin out of the preview.
+
 - **Place Blazor error boundaries inside the persistent layout chrome** - A boundary around the root `Router` replaces navigation and sign-out controls when a page fails and can trap users on deterministic errors. Wrap only `MainLayout`'s `@Body`, retain an `@ref`, and recover during parameter changes so navigation self-heals. Test that exception messages/PHI never render.
 - **Navigation visibility must match page authorization link by link** - A section-level role gate is insufficient when destinations have different policies. Compare every link against its target page's `[Authorize]` roles, nest per-link `AuthorizeView` blocks where needed, and make the role-matrix test assert every destination—not one representative link per section.
 - **Paged UI summaries must not infer values for unloaded rows** - Hidden rows cannot be assumed staffed, assignable, or compliant. Suppress or clearly scope aggregates when only a page is loaded, and clamp the requested page after mutations can reduce `TotalPages`.

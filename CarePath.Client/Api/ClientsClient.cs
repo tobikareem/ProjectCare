@@ -70,17 +70,34 @@ public sealed class ClientsClient : ApiClientBase
         CancellationToken cancellationToken = default) =>
         PutAsync<UpdateClientRequest, ClientDetailDto>($"api/clients/{clientId}", request, cancellationToken);
 
-    /// <summary>Gets a page of a client's care plans.</summary>
+    /// <summary>
+    /// Gets a page of a client's care plans as minimum-necessary summary rows (D-S6-14) —
+    /// no clinical text. Load one plan's full clinical content via
+    /// <see cref="GetCarePlanAsync"/> when the user opens it.
+    /// </summary>
     /// <param name="clientId">Client identifier.</param>
     /// <param name="paging">Paging parameters.</param>
     /// <param name="cancellationToken">Token to cancel the operation.</param>
-    /// <returns>The paged care plan list.</returns>
-    public Task<ApiResponse<PagedResult<CarePlanDto>>> GetCarePlansAsync(
+    /// <returns>The paged care plan summary list (newest start date first).</returns>
+    public Task<ApiResponse<PagedResult<CarePlanSummaryDto>>> GetCarePlansAsync(
         Guid clientId,
         PagedRequest paging,
         CancellationToken cancellationToken = default) =>
-        GetAsync<PagedResult<CarePlanDto>>(
+        GetAsync<PagedResult<CarePlanSummaryDto>>(
             $"api/clients/{clientId}/care-plans?{paging.ToQueryString()}", cancellationToken);
+
+    /// <summary>
+    /// Gets one care plan's full clinical detail (server audits every read; object
+    /// authorization enforced server-side). Response contains clinical PHI — never logged
+    /// or stored client-side.
+    /// </summary>
+    /// <param name="carePlanId">Care plan identifier.</param>
+    /// <param name="cancellationToken">Token to cancel the operation.</param>
+    /// <returns>The full care plan.</returns>
+    public Task<ApiResponse<CarePlanDto>> GetCarePlanAsync(
+        Guid carePlanId,
+        CancellationToken cancellationToken = default) =>
+        GetAsync<CarePlanDto>($"api/care-plans/{carePlanId}", cancellationToken);
 
     /// <summary>Creates a care plan for a client (Admin/Coordinator/Clinician).</summary>
     /// <param name="clientId">Client identifier.</param>

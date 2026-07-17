@@ -80,7 +80,7 @@ public sealed class ClientsController : ControllerBase
 
     [HttpGet("{clientId:guid}/care-plans")]
     [Authorize(Roles = "Admin,Coordinator,Clinician,Client,Caregiver")]
-    public async Task<ActionResult<PagedResult<CarePlanDto>>> GetCarePlans(Guid clientId, [FromQuery] PagedRequest request, CancellationToken cancellationToken)
+    public async Task<ActionResult<PagedResult<CarePlanSummaryDto>>> GetCarePlans(Guid clientId, [FromQuery] PagedRequest request, CancellationToken cancellationToken)
     {
         await EnsureAuthorizedAsync(ProtectedResourceType.Client, clientId, ObjectAccessAction.Read, cancellationToken);
         return Ok(await clientService.GetCarePlansAsync(clientId, request, cancellationToken));

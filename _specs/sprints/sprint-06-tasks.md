@@ -252,7 +252,51 @@ visible week entirely; Shift is a high-volume table). Authorized addition:
 - Pinned by `Sprint4SchedulingServiceTests` range tests and the
   `Sprint6ClientRouteAlignmentTests` URL pin.
 
-### D-S6-15 - Client-caregiver assignment history (approved by Tobi 2026-07-17)
+### D-S6-14 - Care-plan summary list + detail read split (approved by Tobi 2026-07-17)
+
+PROBLEM: the client-detail page must list a client's care plans, but the only read —
+`GET /api/clients/{clientId}/care-plans` — returned `CarePlanDto` rows carrying full clinical
+text (`Description`, `Goals`, `Interventions`, `Notes`), shipping clinical PHI to the browser
+for a list view (minimum-necessary violation), and no per-plan detail GET existed for drill-in.
+
+DECISION (two coordinated changes, one slice):
+
+- **Summary list** — the existing nested route now returns `PagedResult<CarePlanSummaryDto>`
+  (`Id`, `ClientId`, `Title`, `StartDate`, `EndDate?`, `IsActive` — nothing else; a broad
+  reflection denylist test fails if clinical fields are ever added). Same five roles, same
+  client-level object authorization, per-row CarePlan read audit; filtered/paged/ordered at
+  the repository (`StartDate` descending, `Id` tiebreaker) via a new generic descending-order
+  paging overload. Breaking response-shape change accepted because no shipped Razor component
+  consumed the route (verified 2026-07-17).
+- **Detail read** — new `GET /api/care-plans/{id:guid}` returns the full `CarePlanDto`
+  (same five roles; `ProtectedResourceType.CarePlan` IDOR guard, which delegates to the
+  owning client's staff/clinician/self-grant/assignment rules; audited clinical read;
+  PHI-safe identical missing/denied semantics). Clinical text loads only on drill-in.
+- Client: `ClientsClient.GetCarePlansAsync` retyped to the summary shape;
+  new `ClientsClient.GetCarePlanAsync(planId)`. Route shapes pinned in
+  `Sprint6ClientRouteAlignmentTests`.
+- Out of scope: search/filters, plan history/versioning, patient-facing rendering
+  (Sprint 7), any create/update contract change. CarePath.Web consumption is a separate
+  Codex-owned task.
+
+### D-S6-15 - Coverage-queue candidate audit dedup (accepted by Tobi 2026-07-17)
+
+PROBLEM: `GetCoverageQueueAsync` caches caregiver candidate pages
+(`ActiveCaregiverCandidateSource`) and reuses them across every open-shift row in one
+response. Caregiver and certification `Read` audit events are emitted once per candidate
+when its page is first loaded — not once per shift row that discloses the candidate in
+`BestMatches`. A hipaa-check flagged this "one read, N disclosures" granularity as an
+undecided trade-off.
+
+DECISION: per-page-load audit dedup is accepted for this read-only, Admin/Coordinator-only
+matching flow. One audited `Read` per caregiver/certification per coverage request is the
+recorded semantics; row-level disclosure correlation is not required. The behavior is
+pinned by `GetCoverageQueueAsync_WhenMultipleOpenShiftsShareCandidates_AuditsEachCandidateReadOnce`
+(Sprint4SchedulingServiceTests) — a change back to per-row auditing (or a per-row source
+rebuild that double-audits) fails that test, forcing a revisit of this decision.
+Contrast: `GetEligibleCaregiversAsync` remains fresh-audit-per-call (no caching).
+
+### D-S6-16 - Client-caregiver assignment history (approved by Tobi 2026-07-17)
 
 Caregiver/client association is a scheduling relationship, not a new permanent relationship
 entity. A pair is associated when a non-deleted Shift has both its `ClientId` and
@@ -290,7 +334,7 @@ care and facility staffing without duplicating scheduling data or requiring a mi
 Tobi approved the scalable compact-preview plus full-table wireframe and requested exhaustive
 implementation on 2026-07-17.
 
-### D-S6-16 - Client-self My caregivers (approved by Tobi 2026-07-17)
+### D-S6-17 - Client-self My caregivers (approved by Tobi 2026-07-17)
 
 Authenticated clients may see their own current care team and limited previous-caregiver history
 through a dedicated client-self surface. This does not widen either staff assignment endpoint.
@@ -306,7 +350,7 @@ through a dedicated client-self surface. This does not widen either staff assign
 - UI: responsive `/my-caregivers`, status filter, server paging, empty/loading/error states, and
   stale-PHI clearing before every reload. Current relationships appear first.
 - Authorization/audit: Client role only, owner identity derived server-side; each returned pair
-  uses the approved D-S6-15 deterministic `AssignmentRelationship` audit plus parent/counterpart
+  uses the approved D-S6-16 deterministic `AssignmentRelationship` audit plus parent/counterpart
   ID-only read audits. Searches remain in the authenticated request body, never the URL.
 
 ### D-S6-7 - Accessibility baseline
@@ -432,11 +476,12 @@ Owners: **Claude** = PM/Contracts/Client/Client.UI + sprint docs. **Codex** = We
 | S6-TASK-043 | Web: Schedule eligible shifts Step 3 per wireframe. After caregiver create/certification or from profile detail, list eligible open shifts for the selected caregiver, explain match reasons, and assign/review shifts through the same Schedule assignment API path; blocked/expired-cert cases render as non-assignable | Codex | S6-TASK-031, S6-TASK-038, S6-TASK-042 | Done 2026-07-16 — server paging, match/block reasons, disabled ineligible actions, assignment through `ShiftsClient`, and post-assignment page clamping implemented; paging/blocking tests green |
 | S6-TASK-044 | Web: Create shift page per wireframe `page-shift-create` (D-S6-12). Route `/shifts/create`; form maps field-for-field to `CreateShiftRequest`; client/facility select via `ClientsClient.GetPageAsync`; actions `Create & assign shift` (navigates to Assign page with new shift id) and `Create open shift` (saves unassigned → Schedule/coverage queue); wire Overview `＋ Create shift` and Schedule `＋ New shift` buttons to this route; guard errors via ApiErrorAlert; bUnit tests | Codex | S6-TASK-012, S6-TASK-031, D-S6-12 backend (done) | Done 2026-07-09 — `ShiftCreate` route `/shifts/create`, Overview/Schedule entry points wired, open/create-then-assign flows use `ShiftsClient.CreateAsync` with `CaregiverId = null`; verified by `dotnet test CarePath.Web.Tests/CarePath.Web.Tests.csproj /nr:false` (12 passed) |
 | S6-TASK-045 | Contracts/Application/Client: D-S6-12 backend — nullable `CreateShiftRequest.CaregiverId`, conditional eligibility guards in `ShiftOperationsService.CreateShiftAsync`, validator `NotEqual(Guid.Empty)` for supplied values, `ShiftsClient.CreateAsync` open-shift docs, contract-shape pin test + open-shift service tests | Claude | S6-TASK-001 | Done 2026-07-09 — all Application tests green (332); wireframe `page-shift-create`/`page-shift-assign` reworked and browser-verified |
-| S6-TASK-046 | Wireframe: D-S6-15 client detail caregiver history, caregiver profile client history, and caregiver-self My clients current/history states using synthetic data and minimum-necessary fields | Codex | D-S6-15 | Done 2026-07-17 — visual reference added; awaiting Tobi visual approval before implementation |
-| S6-TASK-047 | Contracts/Application/WebApi: paged D-S6-15 relationship summaries derived from Shift, staff client/caregiver history reads, authenticated caregiver My clients read, object authorization, ID-only PHI audit, deterministic SQL aggregation, and contract/service/controller tests | Codex | S6-TASK-046 approval | Done 2026-07-17 — body-based PHI-safe search, SQL aggregation/paging, current-user caregiver scope, aggregate relationship audit, DTO denylist, role/route/service/provider tests |
+| S6-TASK-046 | Contracts/Application/Client: D-S6-14 backend — `CarePlanSummaryDto` + explicit mapper; list route converted to repository-paged summaries (StartDate desc, Id tiebreak, per-row read audit); new audited `GET /api/care-plans/{id:guid}` detail read behind the CarePlan IDOR guard PLUS an in-service `EnsureCanReadClientAsync` second layer; `ClientsClient` retype + `GetCarePlanAsync`; allowlist/denylist/mapper/service/controller/client/repo tests | Claude | S6-TASK-001, D-S6-14 | Done 2026-07-17 — build 0 warnings; Domain 268 + Application 381 + Infrastructure 86 + Web 39 green (381 includes 3 hipaa-check hardening tests: audit-dedup pin per D-S6-15 + admin search length limit); reviewer clean (defense-in-depth improvement applied); full hipaa-check PASS. Follow-ups: pre-existing Clinician denial in `EnsureCanWriteClientClinicalRecordAsync` (ticketed separately); systemic duplicate read-audit rows (guard + service) noted for a dedicated cleanup decision |
+| S6-TASK-054 | Wireframe: D-S6-16 client detail caregiver history, caregiver profile client history, and caregiver-self My clients current/history states using synthetic data and minimum-necessary fields | Codex | D-S6-16 | Done 2026-07-17 — visual reference added; awaiting Tobi visual approval before implementation |
+| S6-TASK-047 | Contracts/Application/WebApi: paged D-S6-16 relationship summaries derived from Shift, staff client/caregiver history reads, authenticated caregiver My clients read, object authorization, ID-only PHI audit, deterministic SQL aggregation, and contract/service/controller tests | Codex | S6-TASK-054 approval | Done 2026-07-17 — body-based PHI-safe search, SQL aggregation/paging, current-user caregiver scope, aggregate relationship audit, DTO denylist, role/route/service/provider tests |
 | S6-TASK-048 | Client/Web: typed-client methods plus Admin/Coordinator caregiver history on Client detail and client history on Caregiver detail; paged/error/empty states and bUnit authorization/PHI-markup tests | Codex | S6-TASK-047 | Done 2026-07-17 — recent previews, full filtered/paged tables, stale-PHI clearing, typed clients, and bUnit coverage implemented |
 | S6-TASK-049 | Caregiver UI: My clients current and previous assignment history, scoped exclusively to authenticated caregiver; minimum-necessary rendering, paging/empty/error states, and authorization tests | Codex | S6-TASK-047 | Done 2026-07-17 — responsive Web `/my-clients` delivered (no MAUI project exists yet), self-derived scope, abbreviated DTO, navigation and PHI-markup tests |
-| S6-TASK-051 | Wireframe: D-S6-16 client-self My caregivers current/previous view with minimum-necessary fields, filters, pagination, and responsive state | Codex | D-S6-16 | Done 2026-07-17 — Web visual reference added and approved through implementation request |
+| S6-TASK-051 | Wireframe: D-S6-17 client-self My caregivers current/previous view with minimum-necessary fields, filters, pagination, and responsive state | Codex | D-S6-17 | Done 2026-07-17 — Web visual reference added and approved through implementation request |
 | S6-TASK-052 | Contracts/Application/WebApi/Client: dedicated client-self DTO and `/api/clients/me/caregiver-assignments/search`; derive owner profile from authenticated user, PHI-safe proxy/no-profile response, aggregate audit, role/route/service/DTO tests | Codex | S6-TASK-051 | Done 2026-07-17 — owner-derived Client scope, proxy-safe not-found, exact five-field DTO, POST-body search, pair audit, and role/route/service/contract tests verified |
 | S6-TASK-053 | Web: responsive `/my-caregivers`, Client-only navigation, status filtering, server paging, empty/error/loading states, stale-PHI clearing, and bUnit authorization/minimum-necessary tests | Codex | S6-TASK-052 | Done 2026-07-17 — responsive paged view, Client-only nav, current/previous filter, minimum-necessary markup, stale-PHI regression, and reviewer gate complete |
 | S6-TASK-040 | bUnit test suite per D-S6-6 incl. PHI-exposure markup assertions. Must cover Overview quick action routing, Schedule coverage assignment, Caregiver roster/profile detail, Add caregiver Step 1, multi-certification Step 2, and eligible-shifts Step 3 in addition to Transitions pages | Codex (pages) + Claude (primitives) | S6-TASK-030..035, S6-TASK-037, S6-TASK-041..043 | Pending |

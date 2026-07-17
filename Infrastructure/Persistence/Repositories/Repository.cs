@@ -142,6 +142,28 @@ public class Repository<T> : IRepository<T> where T : BaseEntity
         return (items, totalCount);
     }
 
+    /// <inheritdoc />
+    public async Task<(IReadOnlyList<T> Items, int TotalCount)> GetPagedDescendingAsync<TKey>(
+        Expression<Func<T, bool>> predicate,
+        Expression<Func<T, TKey>> orderByDescending,
+        int pageNumber,
+        int pageSize,
+        CancellationToken cancellationToken = default)
+    {
+        ValidatePaging(pageNumber, pageSize);
+
+        var query = _dbSet.Where(predicate);
+        var totalCount = await query.CountAsync(cancellationToken);
+        var items = await query
+            .OrderByDescending(orderByDescending)
+            .ThenBy(entity => entity.Id)
+            .Skip((pageNumber - 1) * pageSize)
+            .Take(pageSize)
+            .ToListAsync(cancellationToken);
+
+        return (items, totalCount);
+    }
+
     private static void ValidatePaging(int pageNumber, int pageSize)
     {
         if (pageNumber < 1)

@@ -88,6 +88,39 @@ public sealed class Sprint6ClientRouteAlignmentTests
     }
 
     [Fact]
+    public async Task GetCarePlansAsync_WhenCalled_TargetsClientScopedSummaryRouteWithPaging()
+    {
+        // Arrange — D-S6-14: the nested route serves summary rows only
+        var handler = new RecordingHandler();
+        var client = new ClientsClient(CreateHttpClient(handler));
+
+        // Act
+        await client.GetCarePlansAsync(FixedId, new PagedRequest());
+
+        // Assert
+        handler.LastRequest.Should().NotBeNull();
+        handler.LastRequest!.Method.Should().Be(HttpMethod.Get);
+        handler.LastRequest.RequestUri!.PathAndQuery.Should().Be(
+            $"/api/clients/{FixedId}/care-plans?pageNumber=1&pageSize=20");
+    }
+
+    [Fact]
+    public async Task GetCarePlanAsync_WhenCalled_TargetsPlanDetailRouteWithGuidOnly()
+    {
+        // Arrange — D-S6-14: full clinical detail is a separate audited read
+        var handler = new RecordingHandler();
+        var client = new ClientsClient(CreateHttpClient(handler));
+
+        // Act
+        await client.GetCarePlanAsync(FixedId);
+
+        // Assert
+        handler.LastRequest.Should().NotBeNull();
+        handler.LastRequest!.Method.Should().Be(HttpMethod.Get);
+        handler.LastRequest.RequestUri!.PathAndQuery.Should().Be($"/api/care-plans/{FixedId}");
+    }
+
+    [Fact]
     public async Task GetAsync_WhenLoadingCaregiverProfileDetail_TargetsCaregiverDetailRoute()
     {
         // Arrange

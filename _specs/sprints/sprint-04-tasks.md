@@ -157,7 +157,8 @@ only if they preserve these authorization and PHI rules.
 | Clients | `GET /api/clients/{id}` | Admin, Coordinator, Clinician, Client, Caregiver | `IIdorGuard` plus grant/self/assignment rules | `ClientDetailDto` |
 | Clients | `POST /api/clients` | Admin, Coordinator | None | `CreateClientRequest` -> `ClientDetailDto` |
 | Clients | `PUT /api/clients/{id}` | Admin, Coordinator | `IIdorGuard` | `UpdateClientRequest` -> `ClientDetailDto` |
-| CarePlans | `GET /api/clients/{clientId}/care-plans` | Admin, Coordinator, Clinician, Client, Caregiver | `IIdorGuard` | `PagedResult<CarePlanDto>` |
+| CarePlans | `GET /api/clients/{clientId}/care-plans` | Admin, Coordinator, Clinician, Client, Caregiver | `IIdorGuard` | `PagedResult<CarePlanSummaryDto>` (superseded by D-S6-14, 2026-07-17: list rows are minimum-necessary summaries; full clinical text moved to the audited detail read below) |
+| CarePlans | `GET /api/care-plans/{id}` (added by D-S6-14) | Admin, Coordinator, Clinician, Client, Caregiver | `IIdorGuard` | `CarePlanDto` |
 | CarePlans | `POST /api/clients/{clientId}/care-plans` | Admin, Coordinator, Clinician | `IIdorGuard` | `CreateCarePlanRequest` -> `CarePlanDto` |
 | CarePlans | `PUT /api/care-plans/{id}` | Admin, Coordinator, Clinician | `IIdorGuard` | `UpdateCarePlanRequest` -> `CarePlanDto` |
 | Shifts | `GET /api/shifts` | Admin, Coordinator, Caregiver, Client, FacilityManager, Clinician | Filtered query | `PagedResult<ShiftSummaryDto>` |

@@ -566,6 +566,273 @@ public class Sprint4OperationsServiceTests
             It.IsAny<CancellationToken>()), Times.Once);
     }
 
+    [Fact]
+    public async Task GetCarePlansAsync_WhenAuthorized_ReturnsRepositoryPagedSummariesOrderedByStartDateDescending()
+    {
+        // Arrange — D-S6-14: list rows are minimum-necessary summaries paged in the database
+        var client = new DomainClient
+        {
+            Id = Guid.NewGuid(),
+            UserId = Guid.NewGuid(),
+            DateOfBirth = new DateTime(1950, 1, 1, 0, 0, 0, DateTimeKind.Utc),
+        };
+        var carePlan = new CarePlan
+        {
+            Id = Guid.NewGuid(),
+            ClientId = client.Id,
+            Title = "Post-surgical support",
+            Description = "synthetic clinical description",
+            Goals = "synthetic goals",
+            Interventions = "synthetic interventions",
+            Notes = "synthetic notes",
+            StartDate = new DateTime(2026, 6, 1, 0, 0, 0, DateTimeKind.Utc),
+            IsActive = true,
+        };
+        var unitOfWork = CreateUnitOfWork();
+        unitOfWork.Clients.Setup(repository => repository.GetByIdAsync(client.Id, It.IsAny<CancellationToken>())).ReturnsAsync(client);
+        Expression<Func<CarePlan, bool>>? capturedPredicate = null;
+        Expression<Func<CarePlan, DateTime>>? capturedOrderKey = null;
+        unitOfWork.CarePlans.Setup(repository => repository.GetPagedDescendingAsync(
+                It.IsAny<Expression<Func<CarePlan, bool>>>(),
+                It.IsAny<Expression<Func<CarePlan, DateTime>>>(),
+                2,
+                1,
+                It.IsAny<CancellationToken>()))
+            .Callback<Expression<Func<CarePlan, bool>>, Expression<Func<CarePlan, DateTime>>, int, int, CancellationToken>(
+                (predicate, orderKey, _, _, _) =>
+                {
+                    capturedPredicate = predicate;
+                    capturedOrderKey = orderKey;
+                })
+            .ReturnsAsync((new[] { carePlan }, 5));
+        var auditLogger = new Mock<IPhiAuditLogger>();
+        auditLogger.Setup(logger => logger.LogAsync(It.IsAny<PhiAuditEntry>(), It.IsAny<CancellationToken>())).Returns(Task.CompletedTask);
+        var service = new ClientOperationsService(
+            unitOfWork,
+            new TestCurrentUserContext(Guid.NewGuid(), new HashSet<string>(StringComparer.Ordinal) { ApplicationRoles.Admin }),
+            Mock.Of<IIdentityProvisioningService>(),
+            Mock.Of<IClientAccessEvaluator>(),
+            auditLogger.Object);
+
+        // Act
+        var result = await service.GetCarePlansAsync(client.Id, new PagedRequest { PageNumber = 2, PageSize = 1 });
+
+        // Assert
+        result.TotalCount.Should().Be(5);
+        result.PageNumber.Should().Be(2);
+        var summary = result.Items.Should().ContainSingle().Subject;
+        summary.Id.Should().Be(carePlan.Id);
+        summary.Title.Should().Be("Post-surgical support");
+        var predicate = capturedPredicate!.Compile();
+        predicate(carePlan).Should().BeTrue();
+        predicate(new CarePlan { ClientId = Guid.NewGuid() }).Should().BeFalse("the query filters by the owning client");
+        capturedOrderKey!.Compile()(carePlan).Should().Be(carePlan.StartDate, "the list orders by StartDate descending");
+        auditLogger.Verify(logger => logger.LogAsync(
+            It.Is<PhiAuditEntry>(entry => entry.EntityType == ProtectedResourceType.CarePlan && entry.EntityId == carePlan.Id && entry.Action == AuditAction.Read),
+            It.IsAny<CancellationToken>()), Times.Once);
+        unitOfWork.CarePlans.Verify(repository => repository.FindAsync(
+            It.IsAny<Expression<Func<CarePlan, bool>>>(),
+            It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task GetCarePlansAsync_WhenPageIsEmpty_ReturnsEmptyResultWithoutCarePlanAudits()
+    {
+        // Arrange
+        var client = new DomainClient
+        {
+            Id = Guid.NewGuid(),
+            UserId = Guid.NewGuid(),
+            DateOfBirth = new DateTime(1950, 1, 1, 0, 0, 0, DateTimeKind.Utc),
+        };
+        var unitOfWork = CreateUnitOfWork();
+        unitOfWork.Clients.Setup(repository => repository.GetByIdAsync(client.Id, It.IsAny<CancellationToken>())).ReturnsAsync(client);
+        unitOfWork.CarePlans.Setup(repository => repository.GetPagedDescendingAsync(
+                It.IsAny<Expression<Func<CarePlan, bool>>>(),
+                It.IsAny<Expression<Func<CarePlan, DateTime>>>(),
+                1,
+                20,
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync((Array.Empty<CarePlan>(), 0));
+        var auditLogger = new Mock<IPhiAuditLogger>();
+        auditLogger.Setup(logger => logger.LogAsync(It.IsAny<PhiAuditEntry>(), It.IsAny<CancellationToken>())).Returns(Task.CompletedTask);
+        var service = new ClientOperationsService(
+            unitOfWork,
+            new TestCurrentUserContext(Guid.NewGuid(), new HashSet<string>(StringComparer.Ordinal) { ApplicationRoles.Admin }),
+            Mock.Of<IIdentityProvisioningService>(),
+            Mock.Of<IClientAccessEvaluator>(),
+            auditLogger.Object);
+
+        // Act
+        var result = await service.GetCarePlansAsync(client.Id, new PagedRequest { PageNumber = 1, PageSize = 20 });
+
+        // Assert
+        result.Items.Should().BeEmpty();
+        result.TotalCount.Should().Be(0);
+        auditLogger.Verify(logger => logger.LogAsync(
+            It.Is<PhiAuditEntry>(entry => entry.EntityType == ProtectedResourceType.CarePlan),
+            It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task GetCarePlansAsync_WhenClientCallerHasNoGrant_DeniesBeforeCarePlansAreQueried()
+    {
+        // Arrange
+        var client = new DomainClient
+        {
+            Id = Guid.NewGuid(),
+            UserId = Guid.NewGuid(),
+            DateOfBirth = new DateTime(1950, 1, 1, 0, 0, 0, DateTimeKind.Utc),
+        };
+        var unitOfWork = CreateUnitOfWork();
+        unitOfWork.Clients.Setup(repository => repository.GetByIdAsync(client.Id, It.IsAny<CancellationToken>())).ReturnsAsync(client);
+        var accessEvaluator = new Mock<IClientAccessEvaluator>();
+        accessEvaluator.Setup(evaluator => evaluator.EvaluateAsync(
+                It.IsAny<Guid>(), client.Id, It.IsAny<AccessScope>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(ClientAccessEvaluationResult.Denied("NoGrant"));
+        var auditLogger = new Mock<IPhiAuditLogger>();
+        auditLogger.Setup(logger => logger.LogAsync(It.IsAny<PhiAuditEntry>(), It.IsAny<CancellationToken>())).Returns(Task.CompletedTask);
+        var service = new ClientOperationsService(
+            unitOfWork,
+            new TestCurrentUserContext(Guid.NewGuid(), new HashSet<string>(StringComparer.Ordinal) { ApplicationRoles.Client }),
+            Mock.Of<IIdentityProvisioningService>(),
+            accessEvaluator.Object,
+            auditLogger.Object);
+
+        // Act
+        var act = async () => await service.GetCarePlansAsync(client.Id, new PagedRequest());
+
+        // Assert
+        await act.Should().ThrowAsync<ResourceAccessDeniedException>()
+            .Where(exception => exception.IsPhiResource);
+        unitOfWork.CarePlans.Verify(repository => repository.GetPagedDescendingAsync(
+            It.IsAny<Expression<Func<CarePlan, bool>>>(),
+            It.IsAny<Expression<Func<CarePlan, DateTime>>>(),
+            It.IsAny<int>(),
+            It.IsAny<int>(),
+            It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task GetCarePlanAsync_WhenClinicianHasRelationship_ReturnsFullClinicalDetailAndAuditsRead()
+    {
+        // Arrange — D-S6-14: the detail read is the only route carrying clinical text, and the
+        // service re-checks object access itself (second layer behind the controller IDOR guard)
+        var client = new DomainClient
+        {
+            Id = Guid.NewGuid(),
+            UserId = Guid.NewGuid(),
+            DateOfBirth = new DateTime(1950, 1, 1, 0, 0, 0, DateTimeKind.Utc),
+        };
+        var carePlan = new CarePlan
+        {
+            Id = Guid.NewGuid(),
+            ClientId = client.Id,
+            Title = "Post-surgical support",
+            Description = "synthetic clinical description",
+            Goals = "synthetic goals",
+            Interventions = "synthetic interventions",
+            Notes = "synthetic notes",
+            StartDate = new DateTime(2026, 6, 1, 0, 0, 0, DateTimeKind.Utc),
+            IsActive = true,
+        };
+        var unitOfWork = CreateUnitOfWork();
+        unitOfWork.CarePlans.Setup(repository => repository.GetByIdAsync(carePlan.Id, It.IsAny<CancellationToken>())).ReturnsAsync(carePlan);
+        unitOfWork.Clients.Setup(repository => repository.GetByIdAsync(client.Id, It.IsAny<CancellationToken>())).ReturnsAsync(client);
+        unitOfWork.TransitionPlans.Setup(repository => repository.ExistsAsync(
+                It.IsAny<Expression<Func<TransitionPlan, bool>>>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(true);
+        var auditLogger = new Mock<IPhiAuditLogger>();
+        auditLogger.Setup(logger => logger.LogAsync(It.IsAny<PhiAuditEntry>(), It.IsAny<CancellationToken>())).Returns(Task.CompletedTask);
+        var service = new ClientOperationsService(
+            unitOfWork,
+            new TestCurrentUserContext(Guid.NewGuid(), new HashSet<string>(StringComparer.Ordinal) { ApplicationRoles.Clinician }),
+            Mock.Of<IIdentityProvisioningService>(),
+            Mock.Of<IClientAccessEvaluator>(),
+            auditLogger.Object);
+
+        // Act
+        var dto = await service.GetCarePlanAsync(carePlan.Id);
+
+        // Assert
+        dto.Description.Should().Be("synthetic clinical description");
+        dto.Goals.Should().Be("synthetic goals");
+        dto.Interventions.Should().Be("synthetic interventions");
+        dto.Notes.Should().Be("synthetic notes");
+        auditLogger.Verify(logger => logger.LogAsync(
+            It.Is<PhiAuditEntry>(entry => entry.EntityType == ProtectedResourceType.CarePlan && entry.EntityId == carePlan.Id && entry.Action == AuditAction.Read),
+            It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task GetCarePlanAsync_WhenCaregiverIsNotCurrentlyAssigned_DeniesBeforeReturningClinicalText()
+    {
+        // Arrange — the in-service second layer must hold even if a caller bypasses the controller guard
+        var client = new DomainClient
+        {
+            Id = Guid.NewGuid(),
+            UserId = Guid.NewGuid(),
+            DateOfBirth = new DateTime(1950, 1, 1, 0, 0, 0, DateTimeKind.Utc),
+        };
+        var carePlan = new CarePlan
+        {
+            Id = Guid.NewGuid(),
+            ClientId = client.Id,
+            Title = "Post-surgical support",
+            Description = "synthetic clinical description",
+        };
+        var caregiverUserId = Guid.NewGuid();
+        var unitOfWork = CreateUnitOfWork();
+        unitOfWork.CarePlans.Setup(repository => repository.GetByIdAsync(carePlan.Id, It.IsAny<CancellationToken>())).ReturnsAsync(carePlan);
+        unitOfWork.Clients.Setup(repository => repository.GetByIdAsync(client.Id, It.IsAny<CancellationToken>())).ReturnsAsync(client);
+        unitOfWork.Caregivers.Setup(repository => repository.FindAsync(
+                It.IsAny<Expression<Func<Caregiver, bool>>>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new[] { new Caregiver { Id = Guid.NewGuid(), UserId = caregiverUserId } });
+        unitOfWork.Shifts.Setup(repository => repository.ExistsAsync(
+                It.IsAny<Expression<Func<Shift, bool>>>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(false);
+        var auditLogger = new Mock<IPhiAuditLogger>();
+        auditLogger.Setup(logger => logger.LogAsync(It.IsAny<PhiAuditEntry>(), It.IsAny<CancellationToken>())).Returns(Task.CompletedTask);
+        var service = new ClientOperationsService(
+            unitOfWork,
+            new TestCurrentUserContext(caregiverUserId, new HashSet<string>(StringComparer.Ordinal) { ApplicationRoles.Caregiver }),
+            Mock.Of<IIdentityProvisioningService>(),
+            Mock.Of<IClientAccessEvaluator>(),
+            auditLogger.Object);
+
+        // Act
+        var act = async () => await service.GetCarePlanAsync(carePlan.Id);
+
+        // Assert
+        await act.Should().ThrowAsync<ResourceAccessDeniedException>()
+            .Where(exception => exception.IsPhiResource);
+        auditLogger.Verify(logger => logger.LogAsync(
+            It.Is<PhiAuditEntry>(entry => entry.EntityType == ProtectedResourceType.CarePlan && entry.Action == AuditAction.Read),
+            It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task GetCarePlanAsync_WhenPlanIsMissing_ThrowsPhiSafeNotFound()
+    {
+        // Arrange
+        var unitOfWork = CreateUnitOfWork();
+        unitOfWork.CarePlans.Setup(repository => repository.GetByIdAsync(It.IsAny<Guid>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync((CarePlan?)null);
+        var service = new ClientOperationsService(
+            unitOfWork,
+            new TestCurrentUserContext(Guid.NewGuid(), new HashSet<string>(StringComparer.Ordinal) { ApplicationRoles.Admin }),
+            Mock.Of<IIdentityProvisioningService>(),
+            Mock.Of<IClientAccessEvaluator>(),
+            Mock.Of<IPhiAuditLogger>());
+
+        // Act
+        var act = async () => await service.GetCarePlanAsync(Guid.NewGuid());
+
+        // Assert
+        await act.Should().ThrowAsync<ResourceNotFoundException>()
+            .Where(exception => exception.IsPhiResource);
+    }
+
     [Theory]
     [InlineData(ApplicationRoles.Caregiver, true)]
     [InlineData(ApplicationRoles.Caregiver, false)]

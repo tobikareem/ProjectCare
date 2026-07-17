@@ -2,6 +2,7 @@ using System.Net;
 using System.Text;
 using CarePath.Client.Api;
 using CarePath.Contracts.Common;
+using CarePath.Contracts.Scheduling;
 using FluentAssertions;
 
 namespace CarePath.Application.Tests.WebApi;
@@ -133,6 +134,56 @@ public sealed class Sprint6ClientRouteAlignmentTests
         handler.LastRequest.Should().NotBeNull();
         handler.LastRequest!.Method.Should().Be(HttpMethod.Get);
         handler.LastRequest.RequestUri!.PathAndQuery.Should().Be($"/api/caregivers/{FixedId}");
+    }
+
+    [Fact]
+    public async Task SearchCaregiverAssignmentsAsync_PhiFilters_AreSentInPostBodyNotUrl()
+    {
+        var handler = new RecordingHandler();
+        var client = new ClientsClient(CreateHttpClient(handler));
+
+        await client.SearchCaregiverAssignmentsAsync(FixedId, new AssignmentHistorySearchRequest { SearchTerm = "Sensitive Name", PageNumber = 2, PageSize = 25 });
+
+        handler.LastRequest!.Method.Should().Be(HttpMethod.Post);
+        handler.LastRequest.RequestUri!.PathAndQuery.Should().Be($"/api/clients/{FixedId}/caregiver-assignments/search");
+        handler.LastRequest.RequestUri.PathAndQuery.Should().NotContain("Sensitive");
+    }
+
+    [Fact]
+    public async Task SearchClientAssignmentsAsync_WhenCalled_TargetsCaregiverStaffSearchRoute()
+    {
+        var handler = new RecordingHandler();
+        var client = new CaregiversClient(CreateHttpClient(handler));
+
+        await client.SearchClientAssignmentsAsync(FixedId, new AssignmentHistorySearchRequest());
+
+        handler.LastRequest!.Method.Should().Be(HttpMethod.Post);
+        handler.LastRequest.RequestUri!.PathAndQuery.Should().Be($"/api/caregivers/{FixedId}/client-assignments/search");
+    }
+
+    [Fact]
+    public async Task SearchMyClientsAsync_WhenCalled_DoesNotAcceptCaregiverId()
+    {
+        var handler = new RecordingHandler();
+        var client = new CaregiversClient(CreateHttpClient(handler));
+
+        await client.SearchMyClientsAsync(new AssignmentHistorySearchRequest());
+
+        handler.LastRequest!.Method.Should().Be(HttpMethod.Post);
+        handler.LastRequest.RequestUri!.PathAndQuery.Should().Be("/api/caregivers/me/client-assignments/search");
+    }
+
+    [Fact]
+    public async Task SearchMyCaregiversAsync_WhenCalled_DoesNotAcceptClientIdOrPutFiltersInUrl()
+    {
+        var handler = new RecordingHandler();
+        var client = new ClientsClient(CreateHttpClient(handler));
+
+        await client.SearchMyCaregiversAsync(new AssignmentHistorySearchRequest { SearchTerm = "Sensitive Name" });
+
+        handler.LastRequest!.Method.Should().Be(HttpMethod.Post);
+        handler.LastRequest.RequestUri!.PathAndQuery.Should().Be("/api/clients/me/caregiver-assignments/search");
+        handler.LastRequest.RequestUri.PathAndQuery.Should().NotContain("Sensitive");
     }
 
     private static HttpClient CreateHttpClient(RecordingHandler handler) =>

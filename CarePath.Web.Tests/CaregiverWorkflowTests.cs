@@ -161,6 +161,109 @@ public sealed class CaregiverWorkflowTests
     }
 
     [Fact]
+    public void ClientCaregiverAssignments_WhenRendered_UsesPostBodyAndRendersPagedRows()
+    {
+        var handler = new FakeApiHandler().Post($"api/clients/{ClientId}/caregiver-assignments/search", new PagedResult<CaregiverAssignmentSummaryDto>
+        {
+            Items = [new(CaregiverId, "Amara Williams", DateTime.UtcNow.AddMonths(-2), DateTime.UtcNow.AddDays(1), DateTime.UtcNow.AddDays(-1), DateTime.UtcNow.AddDays(1), 18, AssignmentRelationshipStatus.Current)],
+            PageNumber = 1, PageSize = 25, TotalCount = 78,
+        });
+        using var context = new BunitContext();
+        AddClients(context, handler);
+
+        var component = context.Render<ClientCaregiverAssignments>(parameters => parameters.Add(page => page.ClientId, ClientId));
+
+        component.WaitForAssertion(() =>
+        {
+            component.Markup.Should().Contain("Amara Williams");
+            component.Markup.Should().Contain("18");
+            component.Markup.Should().NotContain("Pay rate");
+            handler.PostRequests.Should().ContainSingle(request => request.Path == $"api/clients/{ClientId}/caregiver-assignments/search");
+            handler.PostRequests[0].Body.Should().Contain("\"pageSize\":25");
+        });
+    }
+
+    [Fact]
+    public void CaregiverClientAssignments_WhenNextClicked_RequestsSecondServerPage()
+    {
+        var handler = new FakeApiHandler().Post($"api/caregivers/{CaregiverId}/client-assignments/search", new PagedResult<ClientAssignmentSummaryDto>
+        {
+            Items = [new(ClientId, "Jordan Mitchell", ServiceType.InHomeCare, DateTime.UtcNow.AddMonths(-2), DateTime.UtcNow, DateTime.UtcNow, null, 12, AssignmentRelationshipStatus.Previous)],
+            PageNumber = 1, PageSize = 25, TotalCount = 37,
+        });
+        using var context = new BunitContext();
+        AddClients(context, handler);
+        var component = context.Render<CaregiverClientAssignments>(parameters => parameters.Add(page => page.CaregiverId, CaregiverId));
+
+        component.WaitForElement("button.button-sm:not([disabled])").Click();
+
+        component.WaitForAssertion(() => handler.PostRequests.Should().Contain(request => request.Body.Contains("\"pageNumber\":2", StringComparison.Ordinal)));
+    }
+
+    [Fact]
+    public void MyClients_WhenRendered_ShowsOnlyMinimumNecessaryAssignmentFields()
+    {
+        var handler = new FakeApiHandler().Post("api/caregivers/me/client-assignments/search", new PagedResult<MyClientAssignmentSummaryDto>
+        {
+            Items = [new("Jordan M.", ServiceType.InHomeCare, DateTime.UtcNow.AddMonths(-2), DateTime.UtcNow.AddDays(1), DateTime.UtcNow.AddDays(1), 8, AssignmentRelationshipStatus.Current)],
+            PageNumber = 1, PageSize = 10, TotalCount = 1,
+        });
+        using var context = new BunitContext();
+        AddClients(context, handler);
+
+        var component = context.Render<MyClients>();
+
+        component.WaitForAssertion(() =>
+        {
+            component.Markup.Should().Contain("Jordan M.");
+            component.Markup.Should().NotContain("Jordan Mitchell");
+            component.Markup.Should().NotContain("Date of birth");
+            component.Markup.Should().NotContain("Address");
+            component.Markup.Should().NotContain("Care plan");
+        });
+
+        handler.Post("api/caregivers/me/client-assignments/search", new ApiProblemDetails { Title = "Resource unavailable", Status = 404 });
+        component.Find("button.button-primary").Click();
+        component.WaitForAssertion(() =>
+        {
+            component.Markup.Should().Contain("Resource unavailable");
+            component.Markup.Should().NotContain("Jordan M.");
+        });
+    }
+
+    [Fact]
+    public void MyCaregivers_WhenRendered_IsMinimumNecessaryAndClearsStalePhiAfterFailure()
+    {
+        var handler = new FakeApiHandler().Post("api/clients/me/caregiver-assignments/search", new PagedResult<MyCaregiverAssignmentSummaryDto>
+        {
+            Items = [new("Amara W.", DateTime.UtcNow.AddMonths(-2), DateTime.UtcNow.AddDays(1), DateTime.UtcNow.AddDays(1), AssignmentRelationshipStatus.Current)],
+            PageNumber = 1, PageSize = 10, TotalCount = 1,
+        });
+        using var context = new BunitContext();
+        AddClients(context, handler);
+
+        var component = context.Render<MyCaregivers>();
+
+        component.WaitForAssertion(() =>
+        {
+            component.Markup.Should().Contain("Amara W.");
+            component.Markup.Should().NotContain("Amara Williams");
+            component.Markup.Should().NotContain("Pay rate");
+            component.Markup.Should().NotContain("Phone");
+            component.Markup.Should().NotContain("Completed");
+            handler.PostRequests.Should().ContainSingle(request => request.Path == "api/clients/me/caregiver-assignments/search");
+        });
+
+        handler.Post("api/clients/me/caregiver-assignments/search", new ApiProblemDetails { Title = "Resource unavailable", Status = 404 });
+        component.Find("button.button-primary").Click();
+        component.WaitForAssertion(() =>
+        {
+            component.Markup.Should().Contain("Resource unavailable");
+            component.Markup.Should().NotContain("Amara W.");
+        });
+    }
+
+    [Fact]
     public void ClientCreate_WhenCreateClicked_CallsClientsCreateAndNavigatesToClients()
     {
         // Arrange

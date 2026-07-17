@@ -4,6 +4,7 @@
 @using CarePath.Contracts.Common
 @using CarePath.Contracts.Enumerations
 @using CarePath.Contracts.Identity
+@using CarePath.Contracts.Scheduling
 @using Microsoft.AspNetCore.Authorization
 @attribute [Authorize(Roles = "Admin,Coordinator")]
 @inject CaregiversClient CaregiversClient
@@ -190,6 +191,37 @@
                 <div class="profile-row"><span class="subtle">No-shows</span><span>@selectedCaregiver.NoShowCount</span></div>
             </section>
 
+            <section aria-labelledby="profile-client-history-heading">
+                <div class="section-header compact-header">
+                    <div><h3 id="profile-client-history-heading">Recent client assignments</h3><span class="subtle">Latest @clientPreview?.Items.Count of @clientPreview?.TotalCount relationships</span></div>
+                    <button class="text-link" type="button" @onclick="NavigateToClientHistory">View all</button>
+                </div>
+                @if (assignmentPreviewError is not null)
+                {
+                    <ApiErrorAlert Response="assignmentPreviewError" />
+                }
+                else if (clientPreview is null)
+                {
+                    <p class="empty-state compact">Loading client assignments...</p>
+                }
+                else if (clientPreview.Items.Count == 0)
+                {
+                    <p class="empty-state compact">No client assignments found.</p>
+                }
+                else
+                {
+                    <div class="stacked-list">
+                        @foreach (var assignment in clientPreview.Items)
+                        {
+                            <div class="credential-row">
+                                <div><strong>@assignment.ClientDisplayName</strong><span class="meta">@assignment.FirstAssignedAtUtc.ToLocalTime().ToString("MMM d, yyyy") – @(assignment.Status == AssignmentRelationshipStatus.Current ? "Present" : assignment.LastAssignedAtUtc.ToLocalTime().ToString("MMM d, yyyy")) · @assignment.CompletedShiftCount completed</span></div>
+                                <StatusBadge Text="@assignment.Status.ToString()" Tone="@(assignment.Status == AssignmentRelationshipStatus.Current ? BadgeTone.Success : BadgeTone.Info)" />
+                            </div>
+                        }
+                    </div>
+                }
+            </section>
+
             <div class="access-action-row">
                 <button class="button button-primary" type="button" @onclick="NavigateToEligibleShifts">Schedule eligible shifts</button>
                 <button class="button button-secondary" type="button" @onclick="NavigateToSchedule">Open schedule</button>
@@ -204,7 +236,9 @@
     private PagedResult<CaregiverSummaryDto>? caregiverPage;
     private ApiResponse? caregiverError;
     private ApiResponse? caregiverDetailError;
+    private ApiResponse? assignmentPreviewError;
     private CaregiverDetailDto? selectedCaregiver;
+    private PagedResult<ClientAssignmentSummaryDto>? clientPreview;
     private Guid? selectedCaregiverId;
     private bool isLoading;
     private bool isDetailLoading;
@@ -265,13 +299,24 @@
     {
         selectedCaregiverId = caregiverId;
         selectedCaregiver = null;
+        clientPreview = null;
         caregiverDetailError = null;
+        assignmentPreviewError = null;
         isDetailLoading = true;
 
         var response = await CaregiversClient.GetAsync(caregiverId);
         if (response.Success && response.Data is not null)
         {
             selectedCaregiver = response.Data;
+            var previewResponse = await CaregiversClient.SearchClientAssignmentsAsync(caregiverId, new AssignmentHistorySearchRequest { PageNumber = 1, PageSize = 2 });
+            if (previewResponse.Success && previewResponse.Data is not null)
+            {
+                clientPreview = previewResponse.Data;
+            }
+            else
+            {
+                assignmentPreviewError = previewResponse;
+            }
         }
         else
         {
@@ -333,6 +378,8 @@
         selectedCaregiverId = null;
         selectedCaregiver = null;
         caregiverDetailError = null;
+        assignmentPreviewError = null;
+        clientPreview = null;
     }
 
     private void NavigateToCreate() => Navigation.NavigateTo("/caregivers/create");
@@ -354,6 +401,14 @@
     }
 
     private void NavigateToSchedule() => Navigation.NavigateTo("/schedule");
+
+    private void NavigateToClientHistory()
+    {
+        if (selectedCaregiverId.HasValue)
+        {
+            Navigation.NavigateTo($"/caregivers/{selectedCaregiverId.Value}/client-assignments");
+        }
+    }
 
     private static string PagingText<T>(PagedResult<T>? page) =>
         page is null ? "Page 1" : $"Page {page.PageNumber} of {Math.Max(page.TotalPages, 1)}";

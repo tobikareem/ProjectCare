@@ -1,0 +1,116 @@
+@page "/my-caregivers"
+@using CarePath.Client.Api
+@using CarePath.Client.UI.Components
+@using CarePath.Contracts.Common
+@using CarePath.Contracts.Scheduling
+@using Microsoft.AspNetCore.Authorization
+@attribute [Authorize(Roles = "Client")]
+@inject ClientsClient ClientsClient
+
+<PageTitle>My caregivers</PageTitle>
+
+<div class="page-heading">
+    <div>
+        <p class="eyebrow">My care team</p>
+        <h1>My caregivers</h1>
+        <p class="subtle">Your current care team and limited previous-caregiver history.</p>
+    </div>
+</div>
+
+<div class="filter-bar">
+    <select @bind="status" aria-label="Filter my caregivers">
+        <option value="">All caregivers</option>
+        <option value="Current">Current</option>
+        <option value="Previous">Previous</option>
+    </select>
+    <button class="button button-primary" type="button" @onclick="ApplyFilterAsync">Apply filter</button>
+</div>
+
+@if (error is not null)
+{
+    <ApiErrorAlert Response="error" />
+}
+
+<section class="card assignment-table" aria-labelledby="my-caregivers-heading">
+    <div class="section-header">
+        <div>
+            <h2 id="my-caregivers-heading">Caregiver relationships</h2>
+            <span class="subtle">Only caregivers connected to your own shifts are shown.</span>
+        </div>
+        <span class="meta">@PageText</span>
+    </div>
+    <PagedTable TItem="MyCaregiverAssignmentSummaryDto"
+                Result="page"
+                IsLoading="isLoading"
+                LoadingText="Loading your caregivers..."
+                EmptyText="No caregiver relationships found."
+                TableClass="data-table"
+                PagerButtonClass="button button-secondary button-sm"
+                PagerLabel="My caregiver pages"
+                PageSize="PageSize"
+                MinPageSize="PageSize"
+                ShowPagerWhenSinglePage="true"
+                OnPageChanged="LoadPageAsync">
+        <HeaderTemplate>
+            <tr><th>Caregiver</th><th>Relationship dates</th><th>Next scheduled visit</th><th>Status</th></tr>
+        </HeaderTemplate>
+        <RowTemplate Context="item">
+            <tr>
+                <td><strong>@item.CaregiverDisplayName</strong></td>
+                <td>@DateRange(item)</td>
+                <td>@NextVisit(item.NextShiftAtUtc)</td>
+                <td><StatusBadge Text="@item.Status.ToString()" Tone="@(item.Status == AssignmentRelationshipStatus.Current ? BadgeTone.Success : BadgeTone.Info)" /></td>
+            </tr>
+        </RowTemplate>
+    </PagedTable>
+</section>
+
+<p class="meta">Contact details, employment information, credentials, ratings, rates, and other clients are not included.</p>
+
+@code {
+    private const int PageSize = 10;
+    private PagedResult<MyCaregiverAssignmentSummaryDto>? page;
+    private ApiResponse? error;
+    private bool isLoading;
+    private string status = string.Empty;
+
+    private string PageText => page is null
+        ? "Page 1"
+        : $"Page {page.PageNumber} of {Math.Max(page.TotalPages, 1)} · {page.TotalCount} caregivers";
+
+    protected override Task OnInitializedAsync() => LoadPageAsync(1);
+
+    private Task ApplyFilterAsync() => LoadPageAsync(1);
+
+    private async Task LoadPageAsync(int pageNumber)
+    {
+        isLoading = true;
+        error = null;
+        page = null;
+
+        var response = await ClientsClient.SearchMyCaregiversAsync(new AssignmentHistorySearchRequest
+        {
+            PageNumber = pageNumber,
+            PageSize = PageSize,
+            Status = Enum.TryParse<AssignmentRelationshipStatus>(status, out var parsed) ? parsed : null,
+        });
+
+        if (response.Success && response.Data is not null)
+        {
+            page = response.Data;
+        }
+        else
+        {
+            page = null;
+            error = response;
+        }
+
+        isLoading = false;
+    }
+
+    private static string DateRange(MyCaregiverAssignmentSummaryDto item) =>
+        $"{item.FirstAssignedAtUtc.ToLocalTime():MMM d, yyyy} – {(item.Status == AssignmentRelationshipStatus.Current ? "Present" : item.LastAssignedAtUtc.ToLocalTime().ToString("MMM d, yyyy"))}";
+
+    private static string NextVisit(DateTime? value) =>
+        value?.ToLocalTime().ToString("MMM d, yyyy · h:mm tt") ?? "—";
+}

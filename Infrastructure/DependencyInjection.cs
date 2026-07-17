@@ -12,6 +12,8 @@ using CarePath.Infrastructure.Persistence;
 using CarePath.Infrastructure.Persistence.Interceptors;
 using CarePath.Infrastructure.Persistence.Repositories;
 using CarePath.Infrastructure.Storage;
+using CarePath.Infrastructure.Scheduling;
+using CarePath.Application.Scheduling.Queries;
 using CarePath.Infrastructure.Transitions.Services;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
@@ -107,6 +109,7 @@ public static class DependencyInjection
         services.AddScoped<IPhiAuditLogger, LoggingPhiAuditLogger>();
         services.AddScoped<IFileStorageService, DisabledFileStorageService>();
         services.AddScoped<IShiftBillingQuery, ShiftBillingQuery>();
+        services.AddScoped<IAssignmentHistoryQuery, AssignmentHistoryQuery>();
         services.AddScoped<IPersistenceConflictDetector, SqlServerPersistenceConflictDetector>();
         services.AddScoped<IDischargeExtractionService, RuleBasedDischargeExtractionService>();
 

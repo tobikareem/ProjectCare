@@ -1,6 +1,7 @@
 using CarePath.Application.Abstractions.Auth;
 using CarePath.Application.Common.Exceptions;
 using CarePath.Application.Identity.Services;
+using CarePath.Application.Scheduling.Services;
 using CarePath.Contracts.Common;
 using CarePath.Contracts.Identity;
 using CarePath.Contracts.Scheduling;
@@ -15,11 +16,13 @@ public sealed class CaregiversController : ControllerBase
 {
     private readonly ICaregiverOperationsService service;
     private readonly IIdorGuard idorGuard;
+    private readonly IAssignmentHistoryService assignmentHistoryService;
 
-    public CaregiversController(ICaregiverOperationsService service, IIdorGuard idorGuard)
+    public CaregiversController(ICaregiverOperationsService service, IIdorGuard idorGuard, IAssignmentHistoryService assignmentHistoryService)
     {
         this.service = service;
         this.idorGuard = idorGuard;
+        this.assignmentHistoryService = assignmentHistoryService;
     }
 
     [HttpGet]
@@ -34,6 +37,24 @@ public sealed class CaregiversController : ControllerBase
         await EnsureAuthorizedAsync(ProtectedResourceType.Caregiver, id, ObjectAccessAction.Read, cancellationToken);
         return Ok(await service.GetCaregiverAsync(id, cancellationToken));
     }
+
+    [HttpPost("{id:guid}/client-assignments/search")]
+    [Authorize(Roles = "Admin,Coordinator")]
+    public async Task<ActionResult<PagedResult<ClientAssignmentSummaryDto>>> SearchClientAssignments(
+        Guid id,
+        [FromBody] AssignmentHistorySearchRequest request,
+        CancellationToken cancellationToken)
+    {
+        await EnsureAuthorizedAsync(ProtectedResourceType.Caregiver, id, ObjectAccessAction.Read, cancellationToken);
+        return Ok(await assignmentHistoryService.GetClientsForCaregiverAsync(id, request, cancellationToken));
+    }
+
+    [HttpPost("me/client-assignments/search")]
+    [Authorize(Roles = "Caregiver")]
+    public async Task<ActionResult<PagedResult<MyClientAssignmentSummaryDto>>> SearchMyClients(
+        [FromBody] AssignmentHistorySearchRequest request,
+        CancellationToken cancellationToken) =>
+        Ok(await assignmentHistoryService.GetMyClientsAsync(request, cancellationToken));
 
     [HttpPost]
     [Authorize(Roles = "Admin,Coordinator")]

@@ -428,7 +428,7 @@ public sealed class DomainToContractMapperTests
     public void ShiftMatchingDtos_WhenInspected_DoNotExposeCompensationFields()
     {
         // Arrange
-        var matchingDtoTypes = new[] { typeof(OpenShiftCoverageDto), typeof(EligibleCaregiverDto) };
+        var matchingDtoTypes = new[] { typeof(OpenShiftCoverageDto), typeof(EligibleCaregiverDto), typeof(EligibleOpenShiftDto) };
 
         // Act
         var rateOrMarginMembers = matchingDtoTypes

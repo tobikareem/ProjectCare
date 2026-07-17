@@ -12,6 +12,7 @@ using CarePath.Application.Identity.Validators;
 using CarePath.Application.Transitions.Interfaces;
 using CarePath.Application.Transitions.Services;
 using CarePath.Contracts.Clients;
+using CarePath.Contracts.Common;
 using CarePath.Contracts.Identity;
 using CarePath.Domain.Entities.Billing;
 using CarePath.Domain.Entities.Clinical;
@@ -562,6 +563,147 @@ public class Sprint4OperationsServiceTests
             .Where(exception => exception.IsPhiResource && exception.ReasonCode == "RoleInsufficient");
         auditLogger.Verify(logger => logger.LogAsync(
             It.Is<PhiAuditEntry>(entry => entry.Action == AuditAction.AccessDenied && entry.EntityType == ProtectedResourceType.Caregiver && entry.EntityId == caregiver.Id),
+            It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    [Theory]
+    [InlineData(ApplicationRoles.Caregiver, true)]
+    [InlineData(ApplicationRoles.Caregiver, false)]
+    [InlineData(ApplicationRoles.Client, false)]
+    [InlineData(ApplicationRoles.Clinician, false)]
+    [InlineData(ApplicationRoles.FacilityManager, false)]
+    public async Task GetCaregiverAsync_WhenCallerIsNotAdminOrCoordinator_DeniesIncludingCaregiverSelf(
+        string role,
+        bool callerIsProfileOwner)
+    {
+        // Arrange — S6-TASK-039: the enriched detail (pay rate + MTD) is Admin/Coordinator-only
+        var caregiver = new Caregiver
+        {
+            Id = Guid.NewGuid(),
+            UserId = Guid.NewGuid(),
+        };
+        var callerUserId = callerIsProfileOwner ? caregiver.UserId : Guid.NewGuid();
+        var unitOfWork = CreateUnitOfWork();
+        unitOfWork.Caregivers.Setup(repository => repository.GetByIdAsync(caregiver.Id, It.IsAny<CancellationToken>())).ReturnsAsync(caregiver);
+        var auditLogger = new Mock<IPhiAuditLogger>();
+        var service = new CaregiverOperationsService(
+            unitOfWork,
+            new TestCurrentUserContext(callerUserId, new HashSet<string>(StringComparer.Ordinal) { role }),
+            Mock.Of<IIdentityProvisioningService>(),
+            auditLogger.Object);
+
+        // Act
+        var act = async () => await service.GetCaregiverAsync(caregiver.Id);
+
+        // Assert
+        var exception = await act.Should().ThrowAsync<ResourceAccessDeniedException>();
+        exception.Which.ReasonCode.Should().Be("RoleInsufficient");
+        exception.Which.Message.Should().NotContain("28.50", "rate values must never appear in error responses");
+        auditLogger.Verify(logger => logger.LogAsync(
+            It.Is<PhiAuditEntry>(entry => entry.Action == AuditAction.AccessDenied && entry.EntityType == ProtectedResourceType.Caregiver && entry.EntityId == caregiver.Id),
+            It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task GetCaregiverAsync_WhenCoordinatorReadsDetail_SucceedsAndAuditsCaregiverRead()
+    {
+        // Arrange
+        var user = CreateUser(UserRole.Caregiver);
+        var caregiver = new Caregiver
+        {
+            Id = Guid.NewGuid(),
+            UserId = user.Id,
+            User = user,
+            HourlyPayRate = 28.50m,
+        };
+        var unitOfWork = CreateUnitOfWork();
+        unitOfWork.Caregivers.Setup(repository => repository.GetByIdAsync(caregiver.Id, It.IsAny<CancellationToken>())).ReturnsAsync(caregiver);
+        unitOfWork.Users.Setup(repository => repository.GetByIdAsync(user.Id, It.IsAny<CancellationToken>())).ReturnsAsync(user);
+        unitOfWork.CaregiverCertifications.Setup(repository => repository.FindAsync(It.IsAny<Expression<Func<CaregiverCertification, bool>>>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(Array.Empty<CaregiverCertification>());
+        unitOfWork.Shifts.Setup(repository => repository.FindAsync(It.IsAny<Expression<Func<Shift, bool>>>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(Array.Empty<Shift>());
+        var auditLogger = new Mock<IPhiAuditLogger>();
+        auditLogger.Setup(logger => logger.LogAsync(It.IsAny<PhiAuditEntry>(), It.IsAny<CancellationToken>())).Returns(Task.CompletedTask);
+        var service = new CaregiverOperationsService(
+            unitOfWork,
+            new TestCurrentUserContext(Guid.NewGuid(), new HashSet<string>(StringComparer.Ordinal) { ApplicationRoles.Coordinator }),
+            Mock.Of<IIdentityProvisioningService>(),
+            auditLogger.Object);
+
+        // Act
+        var dto = await service.GetCaregiverAsync(caregiver.Id);
+
+        // Assert
+        dto.HourlyPayRate.Should().Be(28.50m);
+        auditLogger.Verify(logger => logger.LogAsync(
+            It.Is<PhiAuditEntry>(entry => entry.Action == AuditAction.Read && entry.EntityType == ProtectedResourceType.Caregiver && entry.EntityId == caregiver.Id),
+            It.IsAny<CancellationToken>()), Times.AtLeastOnce);
+    }
+
+    [Fact]
+    public async Task GetEligibleOpenShiftsAsync_AuditsSubjectCaregiverCertificationAndOpenShiftReads()
+    {
+        // Arrange — S6-TASK-038: every protected record surfaced by matching is an audited read
+        var caregiverUser = CreateUser(UserRole.Caregiver);
+        var caregiver = new Caregiver { Id = Guid.NewGuid(), UserId = caregiverUser.Id, User = caregiverUser };
+        var certification = new CaregiverCertification
+        {
+            Id = Guid.NewGuid(),
+            CaregiverId = caregiver.Id,
+            Type = CertificationType.CNA,
+            IssueDate = DateTime.UtcNow.AddYears(-1),
+            ExpirationDate = DateTime.UtcNow.AddYears(1),
+        };
+        var clientUser = CreateUser(UserRole.Client);
+        var client = new DomainClient
+        {
+            Id = Guid.NewGuid(),
+            UserId = clientUser.Id,
+            User = clientUser,
+            DateOfBirth = new DateTime(1950, 1, 1, 0, 0, 0, DateTimeKind.Utc),
+        };
+        var openShift = new Shift
+        {
+            Id = Guid.NewGuid(),
+            ClientId = client.Id,
+            CaregiverId = null,
+            ScheduledStartTime = DateTime.UtcNow.AddDays(1),
+            ScheduledEndTime = DateTime.UtcNow.AddDays(1).AddHours(4),
+            Status = ShiftStatus.Scheduled,
+        };
+        var unitOfWork = CreateUnitOfWork();
+        unitOfWork.Caregivers.Setup(repository => repository.GetByIdAsync(caregiver.Id, It.IsAny<CancellationToken>())).ReturnsAsync(caregiver);
+        unitOfWork.Users.Setup(repository => repository.GetByIdAsync(caregiverUser.Id, It.IsAny<CancellationToken>())).ReturnsAsync(caregiverUser);
+        unitOfWork.Users.Setup(repository => repository.GetByIdAsync(clientUser.Id, It.IsAny<CancellationToken>())).ReturnsAsync(clientUser);
+        unitOfWork.Clients.Setup(repository => repository.GetByIdAsync(client.Id, It.IsAny<CancellationToken>())).ReturnsAsync(client);
+        unitOfWork.CaregiverCertifications.Setup(repository => repository.FindAsync(It.IsAny<Expression<Func<CaregiverCertification, bool>>>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new[] { certification });
+        unitOfWork.Shifts.Setup(repository => repository.FindAsync(It.IsAny<Expression<Func<Shift, bool>>>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(Array.Empty<Shift>());
+        unitOfWork.Shifts.Setup(repository => repository.GetPagedAsync(It.IsAny<Expression<Func<Shift, bool>>>(), 1, 20, It.IsAny<CancellationToken>()))
+            .ReturnsAsync((new[] { openShift }, 1));
+        var auditLogger = new Mock<IPhiAuditLogger>();
+        auditLogger.Setup(logger => logger.LogAsync(It.IsAny<PhiAuditEntry>(), It.IsAny<CancellationToken>())).Returns(Task.CompletedTask);
+        var service = new CaregiverOperationsService(
+            unitOfWork,
+            new TestCurrentUserContext(Guid.NewGuid(), new HashSet<string>(StringComparer.Ordinal) { ApplicationRoles.Coordinator }),
+            Mock.Of<IIdentityProvisioningService>(),
+            auditLogger.Object);
+
+        // Act
+        var result = await service.GetEligibleOpenShiftsAsync(caregiver.Id, new PagedRequest { PageNumber = 1, PageSize = 20 });
+
+        // Assert
+        result.Items.Should().ContainSingle(item => item.ShiftId == openShift.Id);
+        auditLogger.Verify(logger => logger.LogAsync(
+            It.Is<PhiAuditEntry>(entry => entry.Action == AuditAction.Read && entry.EntityType == ProtectedResourceType.Caregiver && entry.EntityId == caregiver.Id),
+            It.IsAny<CancellationToken>()), Times.Once);
+        auditLogger.Verify(logger => logger.LogAsync(
+            It.Is<PhiAuditEntry>(entry => entry.Action == AuditAction.Read && entry.EntityType == ProtectedResourceType.CaregiverCertification && entry.EntityId == certification.Id),
+            It.IsAny<CancellationToken>()), Times.Once);
+        auditLogger.Verify(logger => logger.LogAsync(
+            It.Is<PhiAuditEntry>(entry => entry.Action == AuditAction.Read && entry.EntityType == ProtectedResourceType.Shift && entry.EntityId == openShift.Id),
             It.IsAny<CancellationToken>()), Times.Once);
     }
 

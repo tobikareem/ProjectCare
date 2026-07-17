@@ -216,19 +216,329 @@ public sealed class AdminUserManagementServiceTests
     }
 
     [Fact]
-    public async Task GetUsersAsync_WhenSearchIsProvided_FiltersByDisplayNameAndEmail()
+    public async Task GetUsersAsync_WhenFiltersProvided_PagesAtRepositoryWithEmailAndDisplayNameSearchOnly()
     {
         var actorId = Guid.NewGuid();
-        var matchingByName = User(DomainUserRole.Admin, firstName: "Nina", lastName: "Patel", email: "nina@example.test");
-        var matchingByEmail = User(DomainUserRole.Coordinator, firstName: "Alex", lastName: "Rivera", email: "coordinator@example.test");
-        var nonMatching = User(DomainUserRole.Clinician, firstName: "Rae", lastName: "Kim", email: "clinician@example.test");
+        var matching = User(DomainUserRole.Coordinator, firstName: "Nina", lastName: "Patel", email: "np@example.test");
         var unitOfWork = CreateUnitOfWork();
         unitOfWork.Users.Setup(repository => repository.GetByIdAsync(actorId, It.IsAny<CancellationToken>()))
             .ReturnsAsync(User(DomainUserRole.Admin, actorId));
-        unitOfWork.Users.Setup(repository => repository.FindAsync(
+        Expression<Func<User, bool>>? capturedPredicate = null;
+        Expression<Func<User, string>>? capturedOrderBy = null;
+        Expression<Func<User, string>>? capturedThenBy = null;
+        unitOfWork.Users.Setup(repository => repository.GetPagedAsync(
+                It.IsAny<Expression<Func<User, bool>>>(),
+                It.IsAny<Expression<Func<User, string>>>(),
+                It.IsAny<Expression<Func<User, string>>>(),
+                2,
+                10,
+                It.IsAny<CancellationToken>()))
+            .Callback<Expression<Func<User, bool>>, Expression<Func<User, string>>, Expression<Func<User, string>>?, int, int, CancellationToken>(
+                (predicate, orderBy, thenBy, _, _, _) =>
+                {
+                    capturedPredicate = predicate;
+                    capturedOrderBy = orderBy;
+                    capturedThenBy = thenBy;
+                })
+            .ReturnsAsync((new[] { matching }, 11));
+        SetupBatchedProfileLookups(unitOfWork, activeAdminCount: 2);
+        var service = CreateService(unitOfWork, actorId);
+
+        var result = await service.GetUsersAsync(
+            new PagedRequest { PageNumber = 2, PageSize = 10 },
+            role: ContractUserRole.Coordinator,
+            isActive: true,
+            search: "nina");
+
+        result.TotalCount.Should().Be(11);
+        result.PageNumber.Should().Be(2);
+        result.Items.Should().ContainSingle(item => item.Id == matching.Id);
+        var predicate = capturedPredicate!.Compile();
+        predicate(matching).Should().BeTrue("display-name search must match");
+        predicate(User(DomainUserRole.Coordinator, email: "nina@example.test")).Should().BeTrue("email search must match");
+        predicate(User(DomainUserRole.Coordinator, firstName: "Rae", lastName: "Kim", email: "rk@example.test")).Should().BeFalse("non-matching text is excluded");
+        predicate(User(DomainUserRole.Clinician, firstName: "Nina", lastName: "Patel", email: "np2@example.test")).Should().BeFalse("the role filter composes with search");
+        var inactiveMatch = User(DomainUserRole.Coordinator, firstName: "Nina", lastName: "Patel", email: "np3@example.test");
+        inactiveMatch.IsActive = false;
+        predicate(inactiveMatch).Should().BeFalse("the isActive filter composes with search");
+        var phoneOnlyMatch = User(DomainUserRole.Coordinator, firstName: "Rae", lastName: "Kim", email: "rk2@example.test");
+        phoneOnlyMatch.PhoneNumber = "555-nina";
+        predicate(phoneOnlyMatch).Should().BeFalse("search must never match phone or any non-approved field");
+        capturedOrderBy!.Compile()(matching).Should().Be("Patel", "the list orders by last name first");
+        capturedThenBy!.Compile()(matching).Should().Be("Nina", "the list orders by first name second");
+        unitOfWork.Users.Verify(repository => repository.FindAsync(
+            It.IsAny<Expression<Func<User, bool>>>(),
+            It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task GetUsersAsync_ComputesGuardrailActionFieldsForEachRow()
+    {
+        var actorId = Guid.NewGuid();
+        var lastAdmin = User(DomainUserRole.Admin, firstName: "Ada", lastName: "Admin", email: "aa@example.test");
+        var caregiverCoupled = User(DomainUserRole.Caregiver, firstName: "Cara", lastName: "Giver", email: "cg@example.test");
+        var plainStaff = User(DomainUserRole.Coordinator, firstName: "Cody", lastName: "Coord", email: "cc@example.test");
+        var unitOfWork = CreateUnitOfWork();
+        unitOfWork.Users.Setup(repository => repository.GetByIdAsync(actorId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(User(DomainUserRole.Admin, actorId));
+        unitOfWork.Users.Setup(repository => repository.GetPagedAsync(
+                It.IsAny<Expression<Func<User, bool>>>(),
+                It.IsAny<Expression<Func<User, string>>>(),
+                It.IsAny<Expression<Func<User, string>>>(),
+                1,
+                20,
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync((new[] { lastAdmin, caregiverCoupled, plainStaff }, 3));
+        unitOfWork.Caregivers.Setup(repository => repository.FindAsync(
+                It.IsAny<Expression<Func<Caregiver, bool>>>(),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new[] { new Caregiver { Id = Guid.NewGuid(), UserId = caregiverCoupled.Id } });
+        unitOfWork.Clients.Setup(repository => repository.FindAsync(
+                It.IsAny<Expression<Func<DomainClient, bool>>>(),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(Array.Empty<DomainClient>());
+        unitOfWork.Users.Setup(repository => repository.CountAsync(
                 It.IsAny<Expression<Func<User, bool>>>(),
                 It.IsAny<CancellationToken>()))
-            .ReturnsAsync([matchingByName, matchingByEmail, nonMatching]);
+            .ReturnsAsync(1);
+        var service = CreateService(unitOfWork, actorId);
+
+        var result = await service.GetUsersAsync(new PagedRequest { PageNumber = 1, PageSize = 20 });
+
+        var lastAdminRow = result.Items.Single(item => item.Id == lastAdmin.Id);
+        lastAdminRow.CanChangeRole.Should().BeFalse();
+        lastAdminRow.CanDeactivate.Should().BeFalse();
+        lastAdminRow.DisabledReason.Should().Be("Last active admin");
+        var caregiverRow = result.Items.Single(item => item.Id == caregiverCoupled.Id);
+        caregiverRow.HasCaregiverProfile.Should().BeTrue();
+        caregiverRow.CanChangeRole.Should().BeFalse();
+        caregiverRow.CanDeactivate.Should().BeTrue();
+        caregiverRow.DisabledReason.Should().Be("Profile role coupled");
+        var staffRow = result.Items.Single(item => item.Id == plainStaff.Id);
+        staffRow.CanChangeRole.Should().BeTrue();
+        staffRow.CanDeactivate.Should().BeTrue();
+        staffRow.DisabledReason.Should().BeNull();
+    }
+
+    [Fact]
+    public async Task GetUsersAsync_WhenActorIsDeactivatedAdmin_DeniesBeforeQuery()
+    {
+        var actorId = Guid.NewGuid();
+        var deactivatedAdmin = User(DomainUserRole.Admin, actorId);
+        deactivatedAdmin.IsActive = false;
+        var unitOfWork = CreateUnitOfWork();
+        unitOfWork.Users.Setup(repository => repository.GetByIdAsync(actorId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(deactivatedAdmin);
+        var service = CreateService(unitOfWork, actorId);
+
+        var act = async () => await service.GetUsersAsync(new PagedRequest());
+
+        await act.Should().ThrowAsync<ResourceAccessDeniedException>()
+            .Where(exception => exception.ReasonCode == "RoleInsufficient");
+        unitOfWork.Users.Verify(repository => repository.GetPagedAsync(
+            It.IsAny<Expression<Func<User, bool>>>(),
+            It.IsAny<Expression<Func<User, string>>>(),
+            It.IsAny<Expression<Func<User, string>>>(),
+            It.IsAny<int>(),
+            It.IsAny<int>(),
+            It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task CreateStaffUserAsync_WhenActorIsDeactivatedAdmin_DeniesBeforeProvisioning()
+    {
+        var actorId = Guid.NewGuid();
+        var deactivatedAdmin = User(DomainUserRole.Admin, actorId);
+        deactivatedAdmin.IsActive = false;
+        var unitOfWork = CreateUnitOfWork();
+        unitOfWork.Users.Setup(repository => repository.GetByIdAsync(actorId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(deactivatedAdmin);
+        var identityProvisioning = new Mock<IIdentityProvisioningService>();
+        var service = new AdminUserManagementService(
+            unitOfWork,
+            new TestCurrentUserContext(actorId, new HashSet<string>(StringComparer.Ordinal) { ApplicationRoles.Admin }),
+            identityProvisioning.Object,
+            Mock.Of<IIdentityRoleManagementService>(),
+            Mock.Of<IPhiAuditLogger>());
+
+        var act = async () => await service.CreateStaffUserAsync(ValidStaffRequest());
+
+        await act.Should().ThrowAsync<ResourceAccessDeniedException>();
+        identityProvisioning.Verify(
+            provisioning => provisioning.ProvisionUserAsync(It.IsAny<IdentityProvisioningRequest>(), It.IsAny<CancellationToken>()),
+            Times.Never);
+    }
+
+    [Fact]
+    public async Task UpdateStatusAsync_WhenActorIsNoLongerAdmin_DeniesBeforeTargetLookup()
+    {
+        var actorId = Guid.NewGuid();
+        var targetId = Guid.NewGuid();
+        var unitOfWork = CreateUnitOfWork();
+        unitOfWork.Users.Setup(repository => repository.GetByIdAsync(actorId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(User(DomainUserRole.Clinician, actorId));
+        var service = CreateService(unitOfWork, actorId);
+
+        var act = async () => await service.UpdateStatusAsync(targetId, new UpdateUserStatusRequest { IsActive = false });
+
+        await act.Should().ThrowAsync<ResourceAccessDeniedException>();
+        unitOfWork.Users.Verify(repository => repository.GetByIdAsync(targetId, It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task UpdateRoleAsync_WhenTargetIsLastActiveAdmin_DemotionIsRejected()
+    {
+        var actorId = Guid.NewGuid();
+        var lastAdmin = User(DomainUserRole.Admin);
+        var unitOfWork = CreateUnitOfWork();
+        unitOfWork.Users.Setup(repository => repository.GetByIdAsync(actorId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(User(DomainUserRole.Admin, actorId));
+        unitOfWork.Users.Setup(repository => repository.GetByIdAsync(lastAdmin.Id, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(lastAdmin);
+        unitOfWork.Users.Setup(repository => repository.CountAsync(
+                It.IsAny<Expression<Func<User, bool>>>(),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(1);
+        var roleManagement = new Mock<IIdentityRoleManagementService>();
+        var service = CreateService(unitOfWork, actorId, roleManagement: roleManagement);
+
+        var act = async () => await service.UpdateRoleAsync(
+            lastAdmin.Id,
+            new UpdateUserRoleRequest { Role = ContractUserRole.Coordinator });
+
+        await act.Should().ThrowAsync<ResourceConflictException>()
+            .Where(exception => exception.Code == "admin.last_active_admin");
+        roleManagement.Verify(
+            management => management.ReplaceUserRoleAsync(It.IsAny<Guid>(), It.IsAny<string>(), It.IsAny<CancellationToken>()),
+            Times.Never);
+    }
+
+    [Fact]
+    public async Task UpdateRoleAsync_WhenTargetHasCaregiverProfileAndNewRoleIsNotCaregiver_IsRejected()
+    {
+        var actorId = Guid.NewGuid();
+        var target = User(DomainUserRole.Caregiver);
+        var unitOfWork = CreateUnitOfWork();
+        unitOfWork.Users.Setup(repository => repository.GetByIdAsync(actorId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(User(DomainUserRole.Admin, actorId));
+        unitOfWork.Users.Setup(repository => repository.GetByIdAsync(target.Id, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(target);
+        unitOfWork.Caregivers.Setup(repository => repository.ExistsAsync(
+                It.IsAny<Expression<Func<Caregiver, bool>>>(),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(true);
+        var service = CreateService(unitOfWork, actorId);
+
+        var act = async () => await service.UpdateRoleAsync(
+            target.Id,
+            new UpdateUserRoleRequest { Role = ContractUserRole.Coordinator });
+
+        await act.Should().ThrowAsync<ResourceConflictException>()
+            .Where(exception => exception.Code == "admin.profile_role_coupled");
+    }
+
+    [Fact]
+    public async Task UpdateRoleAsync_WhenIdentityRoleSyncFails_ThrowsConflictSoTransactionRollsBack()
+    {
+        var actorId = Guid.NewGuid();
+        var target = User(DomainUserRole.Coordinator);
+        var unitOfWork = CreateUnitOfWork();
+        unitOfWork.Users.Setup(repository => repository.GetByIdAsync(actorId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(User(DomainUserRole.Admin, actorId));
+        unitOfWork.Users.Setup(repository => repository.GetByIdAsync(target.Id, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(target);
+        unitOfWork.Users.Setup(repository => repository.UpdateAsync(target, It.IsAny<CancellationToken>()))
+            .Returns(Task.CompletedTask);
+        unitOfWork.Caregivers.Setup(repository => repository.ExistsAsync(
+                It.IsAny<Expression<Func<Caregiver, bool>>>(),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(false);
+        unitOfWork.Clients.Setup(repository => repository.ExistsAsync(
+                It.IsAny<Expression<Func<DomainClient, bool>>>(),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(false);
+        var roleManagement = new Mock<IIdentityRoleManagementService>();
+        roleManagement.Setup(management => management.ReplaceUserRoleAsync(target.Id, It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(false);
+        var auditLogger = new Mock<IPhiAuditLogger>();
+        var service = CreateService(unitOfWork, actorId, roleManagement, auditLogger);
+
+        var act = async () => await service.UpdateRoleAsync(
+            target.Id,
+            new UpdateUserRoleRequest { Role = ContractUserRole.Clinician });
+
+        await act.Should().ThrowAsync<ResourceConflictException>()
+            .Where(exception => exception.Code == "identity.role_sync_failed");
+        auditLogger.Verify(logger => logger.LogAsync(
+            It.Is<PhiAuditEntry>(entry => entry.Action == AuditAction.RoleChanged),
+            It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task CreateStaffUserAsync_WhenProvisioningFails_ThrowsGenericValidationWithoutProvisionedAudit()
+    {
+        var actorId = Guid.NewGuid();
+        var unitOfWork = CreateUnitOfWork();
+        unitOfWork.Users.Setup(repository => repository.GetByIdAsync(actorId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(User(DomainUserRole.Admin, actorId));
+        unitOfWork.Users.Setup(repository => repository.ExistsAsync(
+                It.IsAny<Expression<Func<User, bool>>>(),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(false);
+        unitOfWork.Users.Setup(repository => repository.AddAsync(It.IsAny<User>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync((User user, CancellationToken _) => user);
+        var identityProvisioning = new Mock<IIdentityProvisioningService>();
+        identityProvisioning.Setup(provisioning => provisioning.ProvisionUserAsync(It.IsAny<IdentityProvisioningRequest>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(IdentityProvisioningResult.Failed("identity.duplicate"));
+        var auditLogger = new Mock<IPhiAuditLogger>();
+        var service = new AdminUserManagementService(
+            unitOfWork,
+            new TestCurrentUserContext(actorId, new HashSet<string>(StringComparer.Ordinal) { ApplicationRoles.Admin }),
+            identityProvisioning.Object,
+            Mock.Of<IIdentityRoleManagementService>(),
+            auditLogger.Object);
+
+        var act = async () => await service.CreateStaffUserAsync(ValidStaffRequest());
+
+        (await act.Should().ThrowAsync<ValidationException>())
+            .Which.Message.Should().NotContainAny("staff@example.test", "ValidPass1");
+        auditLogger.Verify(logger => logger.LogAsync(
+            It.Is<PhiAuditEntry>(entry => entry.Action == AuditAction.StaffProvisioned),
+            It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task CreateStaffUserAsync_WhenEmailAlreadyExists_ThrowsGenericValidationWithoutEchoingEmail()
+    {
+        var actorId = Guid.NewGuid();
+        var unitOfWork = CreateUnitOfWork();
+        unitOfWork.Users.Setup(repository => repository.GetByIdAsync(actorId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(User(DomainUserRole.Admin, actorId));
+        unitOfWork.Users.Setup(repository => repository.ExistsAsync(
+                It.IsAny<Expression<Func<User, bool>>>(),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(true);
+        var service = CreateService(unitOfWork, actorId);
+
+        var act = async () => await service.CreateStaffUserAsync(ValidStaffRequest());
+
+        (await act.Should().ThrowAsync<ValidationException>())
+            .Which.Message.Should().NotContain("staff@example.test");
+    }
+
+    [Fact]
+    public async Task CreateStaffUserAsync_WhenValid_AuditsStaffProvisionedWithRoleEnumOnly()
+    {
+        var actorId = Guid.NewGuid();
+        var unitOfWork = CreateUnitOfWork();
+        unitOfWork.Users.Setup(repository => repository.GetByIdAsync(actorId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(User(DomainUserRole.Admin, actorId));
+        unitOfWork.Users.Setup(repository => repository.ExistsAsync(
+                It.IsAny<Expression<Func<User, bool>>>(),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(false);
+        unitOfWork.Users.Setup(repository => repository.AddAsync(It.IsAny<User>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync((User user, CancellationToken _) => user);
         unitOfWork.Users.Setup(repository => repository.CountAsync(
                 It.IsAny<Expression<Func<User, bool>>>(),
                 It.IsAny<CancellationToken>()))
@@ -241,13 +551,99 @@ public sealed class AdminUserManagementServiceTests
                 It.IsAny<Expression<Func<DomainClient, bool>>>(),
                 It.IsAny<CancellationToken>()))
             .ReturnsAsync(false);
-        var service = CreateService(unitOfWork, actorId);
+        var identityProvisioning = new Mock<IIdentityProvisioningService>();
+        identityProvisioning.Setup(provisioning => provisioning.ProvisionUserAsync(It.IsAny<IdentityProvisioningRequest>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(IdentityProvisioningResult.Success());
+        var auditLogger = new Mock<IPhiAuditLogger>();
+        auditLogger.Setup(logger => logger.LogAsync(It.IsAny<PhiAuditEntry>(), It.IsAny<CancellationToken>()))
+            .Returns(Task.CompletedTask);
+        var service = new AdminUserManagementService(
+            unitOfWork,
+            new TestCurrentUserContext(actorId, new HashSet<string>(StringComparer.Ordinal) { ApplicationRoles.Admin }),
+            identityProvisioning.Object,
+            Mock.Of<IIdentityRoleManagementService>(),
+            auditLogger.Object);
 
-        var result = await service.GetUsersAsync(new PagedRequest { PageNumber = 1, PageSize = 10 }, search: "nina");
+        var result = await service.CreateStaffUserAsync(ValidStaffRequest());
 
-        result.Items.Should().ContainSingle(item => item.Id == matchingByName.Id);
-        result.Items.Should().NotContain(item => item.Id == matchingByEmail.Id || item.Id == nonMatching.Id);
+        result.Role.Should().Be(ContractUserRole.Coordinator);
+        auditLogger.Verify(logger => logger.LogAsync(
+            It.Is<PhiAuditEntry>(entry =>
+                entry.Action == AuditAction.StaffProvisioned &&
+                entry.EntityType == ProtectedResourceType.UserAccount &&
+                entry.Attributes != null &&
+                entry.Attributes.Count == 1 &&
+                entry.Attributes["Role"] == DomainUserRole.Coordinator.ToString()),
+            It.IsAny<CancellationToken>()), Times.Once);
     }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task UpdateStatusAsync_WhenStatusChanges_UpdatesUserAndAuditsWithoutIdentifyingValues(bool activate)
+    {
+        var actorId = Guid.NewGuid();
+        var target = User(DomainUserRole.Coordinator);
+        target.IsActive = !activate;
+        var unitOfWork = CreateUnitOfWork();
+        unitOfWork.Users.Setup(repository => repository.GetByIdAsync(actorId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(User(DomainUserRole.Admin, actorId));
+        unitOfWork.Users.Setup(repository => repository.GetByIdAsync(target.Id, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(target);
+        unitOfWork.Users.Setup(repository => repository.UpdateAsync(target, It.IsAny<CancellationToken>()))
+            .Returns(Task.CompletedTask);
+        unitOfWork.Caregivers.Setup(repository => repository.ExistsAsync(
+                It.IsAny<Expression<Func<Caregiver, bool>>>(),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(false);
+        unitOfWork.Clients.Setup(repository => repository.ExistsAsync(
+                It.IsAny<Expression<Func<DomainClient, bool>>>(),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(false);
+        var auditLogger = new Mock<IPhiAuditLogger>();
+        auditLogger.Setup(logger => logger.LogAsync(It.IsAny<PhiAuditEntry>(), It.IsAny<CancellationToken>()))
+            .Returns(Task.CompletedTask);
+        var service = CreateService(unitOfWork, actorId, auditLogger: auditLogger);
+
+        var result = await service.UpdateStatusAsync(target.Id, new UpdateUserStatusRequest { IsActive = activate });
+
+        result.IsActive.Should().Be(activate);
+        target.IsActive.Should().Be(activate);
+        var expectedAction = activate ? AuditAction.AccountActivated : AuditAction.AccountDeactivated;
+        auditLogger.Verify(logger => logger.LogAsync(
+            It.Is<PhiAuditEntry>(entry =>
+                entry.Action == expectedAction &&
+                entry.EntityType == ProtectedResourceType.UserAccount &&
+                entry.EntityId == target.Id &&
+                entry.Attributes == null),
+            It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    private static void SetupBatchedProfileLookups(MockUnitOfWork unitOfWork, int activeAdminCount)
+    {
+        unitOfWork.Caregivers.Setup(repository => repository.FindAsync(
+                It.IsAny<Expression<Func<Caregiver, bool>>>(),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(Array.Empty<Caregiver>());
+        unitOfWork.Clients.Setup(repository => repository.FindAsync(
+                It.IsAny<Expression<Func<DomainClient, bool>>>(),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(Array.Empty<DomainClient>());
+        unitOfWork.Users.Setup(repository => repository.CountAsync(
+                It.IsAny<Expression<Func<User, bool>>>(),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(activeAdminCount);
+    }
+
+    private static CreateStaffUserRequest ValidStaffRequest() => new()
+    {
+        FirstName = "Test",
+        LastName = "Staff",
+        Email = "staff@example.test",
+        PhoneNumber = "555-0100",
+        TemporaryPassword = "ValidPass1",
+        Role = ContractUserRole.Coordinator,
+    };
 
     private static AdminUserManagementService CreateService(
         MockUnitOfWork unitOfWork,

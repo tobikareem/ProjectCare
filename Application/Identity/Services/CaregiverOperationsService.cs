@@ -175,7 +175,7 @@ public sealed class CaregiverOperationsService : ICaregiverOperationsService
         CancellationToken cancellationToken = default)
     {
         var caregiver = await GetCaregiverEntityAsync(caregiverId, cancellationToken);
-        if (!CanReadCaregiver(caregiver))
+        if (!CanReadCaregiverDetail())
         {
             await AuditAsync(ProtectedResourceType.Caregiver, caregiver.Id, AuditAction.AccessDenied, cancellationToken);
             throw new ResourceAccessDeniedException("RoleInsufficient", isPhiResource: true);
@@ -285,6 +285,7 @@ public sealed class CaregiverOperationsService : ICaregiverOperationsService
 
         var caregiver = await GetCaregiverEntityAsync(caregiverId, cancellationToken);
         caregiver.User = await GetUserAsync(caregiver.UserId, cancellationToken);
+        await AuditAsync(ProtectedResourceType.Caregiver, caregiver.Id, AuditAction.Read, cancellationToken);
 
         var certifications = await unitOfWork.CaregiverCertifications.FindAsync(
             certification => certification.CaregiverId == caregiver.Id,
@@ -395,11 +396,11 @@ public sealed class CaregiverOperationsService : ICaregiverOperationsService
         }
     }
 
-    private bool CanReadCaregiver(Caregiver caregiver)
-    {
-        return HasAnyRole(ApplicationRoles.Admin, ApplicationRoles.Coordinator)
-            || (HasRole(ApplicationRoles.Caregiver) && currentUser.UserId == caregiver.UserId);
-    }
+    // The enriched detail DTO carries HourlyPayRate and MTD metrics, which the locked Sprint 6
+    // contract scopes to Admin/Coordinator only; caregiver self-profile access needs its own
+    // PHI-minimal DTO and a recorded decision before it can return (Sprint 7 mobile).
+    private bool CanReadCaregiverDetail() =>
+        HasAnyRole(ApplicationRoles.Admin, ApplicationRoles.Coordinator);
 
     private void EnsureAdminOrCoordinator()
     {

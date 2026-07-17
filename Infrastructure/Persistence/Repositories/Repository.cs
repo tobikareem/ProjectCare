@@ -86,15 +86,7 @@ public class Repository<T> : IRepository<T> where T : BaseEntity
         int pageSize,
         CancellationToken cancellationToken = default)
     {
-        if (pageNumber < 1)
-        {
-            throw new ArgumentOutOfRangeException(nameof(pageNumber), "Page number must be greater than zero.");
-        }
-
-        if (pageSize < 1)
-        {
-            throw new ArgumentOutOfRangeException(nameof(pageSize), "Page size must be greater than zero.");
-        }
+        ValidatePaging(pageNumber, pageSize);
 
         var totalCount = await _dbSet.CountAsync(cancellationToken);
         var items = await _dbSet
@@ -112,15 +104,7 @@ public class Repository<T> : IRepository<T> where T : BaseEntity
         int pageSize,
         CancellationToken cancellationToken = default)
     {
-        if (pageNumber < 1)
-        {
-            throw new ArgumentOutOfRangeException(nameof(pageNumber), "Page number must be greater than zero.");
-        }
-
-        if (pageSize < 1)
-        {
-            throw new ArgumentOutOfRangeException(nameof(pageSize), "Page size must be greater than zero.");
-        }
+        ValidatePaging(pageNumber, pageSize);
 
         var query = _dbSet.Where(predicate);
         var totalCount = await query.CountAsync(cancellationToken);
@@ -131,5 +115,43 @@ public class Repository<T> : IRepository<T> where T : BaseEntity
             .ToListAsync(cancellationToken);
 
         return (items, totalCount);
+    }
+
+    /// <inheritdoc />
+    public async Task<(IReadOnlyList<T> Items, int TotalCount)> GetPagedAsync(
+        Expression<Func<T, bool>> predicate,
+        Expression<Func<T, string>> orderBy,
+        Expression<Func<T, string>>? thenBy,
+        int pageNumber,
+        int pageSize,
+        CancellationToken cancellationToken = default)
+    {
+        ValidatePaging(pageNumber, pageSize);
+
+        var query = _dbSet.Where(predicate);
+        var totalCount = await query.CountAsync(cancellationToken);
+        var ordered = thenBy is null
+            ? query.OrderBy(orderBy)
+            : query.OrderBy(orderBy).ThenBy(thenBy);
+        var items = await ordered
+            .ThenBy(entity => entity.Id)
+            .Skip((pageNumber - 1) * pageSize)
+            .Take(pageSize)
+            .ToListAsync(cancellationToken);
+
+        return (items, totalCount);
+    }
+
+    private static void ValidatePaging(int pageNumber, int pageSize)
+    {
+        if (pageNumber < 1)
+        {
+            throw new ArgumentOutOfRangeException(nameof(pageNumber), "Page number must be greater than zero.");
+        }
+
+        if (pageSize < 1)
+        {
+            throw new ArgumentOutOfRangeException(nameof(pageSize), "Page size must be greater than zero.");
+        }
     }
 }

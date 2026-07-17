@@ -277,6 +277,251 @@ public sealed class Sprint4SchedulingServiceTests
     }
 
     [Fact]
+    public async Task GetCoverageQueueAsync_WhenBestMatchLiesBeyondFirstCandidatePage_ScansFullPopulation()
+    {
+        // Arrange — S6-TASK-038: the only eligible caregiver sits on candidate page 2
+        var context = CreateContext();
+        var openShift = ExistingShift(WindowStart, WindowEnd, ShiftStatus.Scheduled);
+        openShift.ClientId = context.Client.Id;
+        openShift.CaregiverId = null;
+        context.UnitOfWork.Shifts.Setup(repository => repository.GetPagedAsync(
+                It.IsAny<Expression<Func<Shift, bool>>>(), 1, 10, It.IsAny<CancellationToken>()))
+            .ReturnsAsync((new[] { openShift }, 1));
+        var fillerCandidates = Enumerable.Range(0, 50)
+            .Select(_ => new Caregiver { Id = Guid.NewGuid(), UserId = Guid.NewGuid() })
+            .ToArray();
+        context.UnitOfWork.Caregivers.Setup(repository => repository.GetPagedAsync(
+                It.IsAny<Expression<Func<Caregiver, bool>>>(), 1, 50, It.IsAny<CancellationToken>()))
+            .ReturnsAsync((fillerCandidates, 51));
+        context.UnitOfWork.Caregivers.Setup(repository => repository.GetPagedAsync(
+                It.IsAny<Expression<Func<Caregiver, bool>>>(), 2, 50, It.IsAny<CancellationToken>()))
+            .ReturnsAsync((new[] { context.Caregiver }, 51));
+        var knownUsers = new[] { context.Caregiver.User! };
+        context.UnitOfWork.Users.Setup(repository => repository.FindAsync(
+                It.IsAny<Expression<Func<User, bool>>>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync((Expression<Func<User, bool>> predicate, CancellationToken _) => knownUsers.Where(predicate.Compile()).ToArray());
+
+        // Act
+        var result = await context.Service.GetCoverageQueueAsync(new CarePath.Contracts.Common.PagedRequest { PageNumber = 1, PageSize = 10 });
+
+        // Assert
+        var row = result.Items.Should().ContainSingle().Subject;
+        row.BestMatches.Should().ContainSingle().Which.Should().Be(context.Caregiver.User!.FullName);
+        context.UnitOfWork.Caregivers.Verify(repository => repository.GetPagedAsync(
+            It.IsAny<Expression<Func<Caregiver, bool>>>(), 2, 50, It.IsAny<CancellationToken>()), Times.Once);
+        context.UnitOfWork.Caregivers.Verify(repository => repository.GetPagedAsync(
+            It.IsAny<int>(), It.IsAny<int>(), It.IsAny<CancellationToken>()), Times.Never);
+        context.AuditLogger.Verify(logger => logger.LogAsync(
+            It.Is<PhiAuditEntry>(entry =>
+                entry.EntityType == ProtectedResourceType.Caregiver &&
+                entry.EntityId == context.Caregiver.Id &&
+                entry.Action == AuditAction.Read),
+            It.IsAny<CancellationToken>()), Times.Once);
+        context.AuditLogger.Verify(logger => logger.LogAsync(
+            It.Is<PhiAuditEntry>(entry =>
+                entry.EntityType == ProtectedResourceType.Shift &&
+                entry.EntityId == openShift.Id &&
+                entry.Action == AuditAction.Read),
+            It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task GetCoverageQueueAsync_WhenMultipleOpenShifts_ReusesCandidatePagesAndReturnsDeterministicTopThree()
+    {
+        // Arrange — four eligible candidates in repository order; every row takes the first three
+        var context = CreateContext();
+        var openShiftA = ExistingShift(WindowStart, WindowEnd, ShiftStatus.Scheduled);
+        var openShiftB = ExistingShift(WindowStart.AddDays(3), WindowEnd.AddDays(3), ShiftStatus.Scheduled);
+        openShiftA.ClientId = context.Client.Id;
+        openShiftA.CaregiverId = null;
+        openShiftB.ClientId = context.Client.Id;
+        openShiftB.CaregiverId = null;
+        context.UnitOfWork.Shifts.Setup(repository => repository.GetPagedAsync(
+                It.IsAny<Expression<Func<Shift, bool>>>(), 1, 10, It.IsAny<CancellationToken>()))
+            .ReturnsAsync((new[] { openShiftA, openShiftB }, 2));
+        var candidates = new[] { "Amara", "Bola", "Chidi", "Dayo" }
+            .Select(firstName =>
+            {
+                var user = new User
+                {
+                    Id = Guid.NewGuid(),
+                    FirstName = firstName,
+                    LastName = "Candidate",
+                    Email = $"{Guid.NewGuid():N}@example.test",
+                    PhoneNumber = "555-0100",
+                    Role = UserRole.Caregiver,
+                };
+                return new Caregiver { Id = Guid.NewGuid(), UserId = user.Id, User = user };
+            })
+            .ToArray();
+        context.UnitOfWork.Caregivers.Setup(repository => repository.GetPagedAsync(
+                It.IsAny<Expression<Func<Caregiver, bool>>>(), 1, 50, It.IsAny<CancellationToken>()))
+            .ReturnsAsync((candidates, 4));
+        var candidateUsers = candidates.Select(candidate => candidate.User).ToArray();
+        context.UnitOfWork.Users.Setup(repository => repository.FindAsync(
+                It.IsAny<Expression<Func<User, bool>>>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync((Expression<Func<User, bool>> predicate, CancellationToken _) => candidateUsers.Where(predicate.Compile()).ToArray());
+        var candidateCertifications = candidates
+            .Select(candidate =>
+            {
+                var certification = Certification(WindowEnd.Date.AddDays(30));
+                certification.CaregiverId = candidate.Id;
+                return certification;
+            })
+            .ToArray();
+        context.UnitOfWork.CaregiverCertifications.Setup(repository => repository.FindAsync(
+                It.IsAny<Expression<Func<CaregiverCertification, bool>>>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(candidateCertifications);
+
+        // Act
+        var result = await context.Service.GetCoverageQueueAsync(new CarePath.Contracts.Common.PagedRequest { PageNumber = 1, PageSize = 10 });
+
+        // Assert
+        result.TotalCount.Should().Be(2);
+        result.PageNumber.Should().Be(1);
+        result.Items.Should().HaveCount(2);
+        foreach (var row in result.Items)
+        {
+            row.BestMatches.Should().Equal("Amara Candidate", "Bola Candidate", "Chidi Candidate");
+        }
+
+        context.UnitOfWork.Caregivers.Verify(repository => repository.GetPagedAsync(
+            It.IsAny<Expression<Func<Caregiver, bool>>>(), 1, 50, It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task GetCoverageQueueAsync_WhenNoCandidateMatches_StopsScanningAtTheOperationalPageCap()
+    {
+        // Arrange — an unfillable shift on a huge roster must not walk the whole table
+        var context = CreateContext();
+        var openShift = ExistingShift(WindowStart, WindowEnd, ShiftStatus.Scheduled);
+        openShift.ClientId = context.Client.Id;
+        openShift.CaregiverId = null;
+        context.UnitOfWork.Shifts.Setup(repository => repository.GetPagedAsync(
+                It.IsAny<Expression<Func<Shift, bool>>>(), 1, 10, It.IsAny<CancellationToken>()))
+            .ReturnsAsync((new[] { openShift }, 1));
+        var ineligiblePage = Enumerable.Range(0, 50)
+            .Select(_ => new Caregiver { Id = Guid.NewGuid(), UserId = Guid.NewGuid() })
+            .ToArray();
+        context.UnitOfWork.Caregivers.Setup(repository => repository.GetPagedAsync(
+                It.IsAny<Expression<Func<Caregiver, bool>>>(), It.IsAny<int>(), 50, It.IsAny<CancellationToken>()))
+            .ReturnsAsync((ineligiblePage, 100_000));
+        context.UnitOfWork.Users.Setup(repository => repository.FindAsync(
+                It.IsAny<Expression<Func<User, bool>>>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(Array.Empty<User>());
+
+        // Act
+        var result = await context.Service.GetCoverageQueueAsync(new CarePath.Contracts.Common.PagedRequest { PageNumber = 1, PageSize = 10 });
+
+        // Assert
+        result.Items.Should().ContainSingle().Which.BestMatches.Should().BeEmpty();
+        context.UnitOfWork.Caregivers.Verify(repository => repository.GetPagedAsync(
+            It.IsAny<Expression<Func<Caregiver, bool>>>(), It.IsAny<int>(), 50, It.IsAny<CancellationToken>()), Times.Exactly(10));
+    }
+
+    [Fact]
+    public async Task GetEligibleCaregiversAsync_WhenCaregiverInactive_ReturnsBlockedCandidate()
+    {
+        // Arrange
+        var context = CreateContext();
+        context.Caregiver.User!.IsActive = false;
+        var shift = ExistingShift(WindowStart, WindowEnd, ShiftStatus.Scheduled);
+        shift.ClientId = context.Client.Id;
+        shift.CaregiverId = null;
+        context.UnitOfWork.Shifts.Setup(repository => repository.GetByIdAsync(shift.Id, It.IsAny<CancellationToken>())).ReturnsAsync(shift);
+        context.UnitOfWork.Caregivers.Setup(repository => repository.GetPagedAsync(1, 10, It.IsAny<CancellationToken>()))
+            .ReturnsAsync((new[] { context.Caregiver }, 1));
+
+        // Act
+        var result = await context.Service.GetEligibleCaregiversAsync(shift.Id, new CarePath.Contracts.Common.PagedRequest { PageNumber = 1, PageSize = 10 });
+
+        // Assert
+        var candidate = result.Items.Should().ContainSingle().Subject;
+        candidate.IsAssignable.Should().BeFalse();
+        candidate.BlockingReasons.Should().Contain("Inactive caregiver");
+    }
+
+    [Fact]
+    public async Task GetEligibleCaregiversAsync_WhenCandidateIsDoubleBooked_ReturnsBlockedCandidate()
+    {
+        // Arrange
+        var context = CreateContext(existingShifts: [ExistingShift(WindowStart.AddHours(1), WindowEnd.AddHours(1), ShiftStatus.Scheduled)]);
+        var shift = ExistingShift(WindowStart, WindowEnd, ShiftStatus.Scheduled);
+        shift.ClientId = context.Client.Id;
+        shift.CaregiverId = null;
+        context.UnitOfWork.Shifts.Setup(repository => repository.GetByIdAsync(shift.Id, It.IsAny<CancellationToken>())).ReturnsAsync(shift);
+        context.UnitOfWork.Caregivers.Setup(repository => repository.GetPagedAsync(1, 10, It.IsAny<CancellationToken>()))
+            .ReturnsAsync((new[] { context.Caregiver }, 1));
+
+        // Act
+        var result = await context.Service.GetEligibleCaregiversAsync(shift.Id, new CarePath.Contracts.Common.PagedRequest { PageNumber = 1, PageSize = 10 });
+
+        // Assert
+        var candidate = result.Items.Should().ContainSingle().Subject;
+        candidate.IsAssignable.Should().BeFalse();
+        candidate.BlockingReasons.Should().Contain("Double-booked");
+    }
+
+    [Fact]
+    public async Task GetEligibleCaregiversAsync_WhenWeeklyCapacityExceeded_ReturnsBlockedCandidate()
+    {
+        // Arrange
+        var context = CreateContext();
+        context.Caregiver.MaxWeeklyHours = 2;
+        var shift = ExistingShift(WindowStart, WindowEnd, ShiftStatus.Scheduled);
+        shift.ClientId = context.Client.Id;
+        shift.CaregiverId = null;
+        context.UnitOfWork.Shifts.Setup(repository => repository.GetByIdAsync(shift.Id, It.IsAny<CancellationToken>())).ReturnsAsync(shift);
+        context.UnitOfWork.Caregivers.Setup(repository => repository.GetPagedAsync(1, 10, It.IsAny<CancellationToken>()))
+            .ReturnsAsync((new[] { context.Caregiver }, 1));
+
+        // Act
+        var result = await context.Service.GetEligibleCaregiversAsync(shift.Id, new CarePath.Contracts.Common.PagedRequest { PageNumber = 1, PageSize = 10 });
+
+        // Assert
+        var candidate = result.Items.Should().ContainSingle().Subject;
+        candidate.IsAssignable.Should().BeFalse();
+        candidate.BlockingReasons.Should().Contain("Weekly capacity exceeded");
+    }
+
+    [Fact]
+    public async Task GetEligibleCaregiversAsync_AuditsShiftCaregiverAndCertificationReads()
+    {
+        // Arrange
+        var certification = Certification(WindowEnd.Date.AddDays(30));
+        var context = CreateContext(certifications: [certification]);
+        var shift = ExistingShift(WindowStart, WindowEnd, ShiftStatus.Scheduled);
+        shift.ClientId = context.Client.Id;
+        shift.CaregiverId = null;
+        context.UnitOfWork.Shifts.Setup(repository => repository.GetByIdAsync(shift.Id, It.IsAny<CancellationToken>())).ReturnsAsync(shift);
+        context.UnitOfWork.Caregivers.Setup(repository => repository.GetPagedAsync(1, 10, It.IsAny<CancellationToken>()))
+            .ReturnsAsync((new[] { context.Caregiver }, 1));
+
+        // Act
+        _ = await context.Service.GetEligibleCaregiversAsync(shift.Id, new CarePath.Contracts.Common.PagedRequest { PageNumber = 1, PageSize = 10 });
+
+        // Assert
+        context.AuditLogger.Verify(logger => logger.LogAsync(
+            It.Is<PhiAuditEntry>(entry =>
+                entry.EntityType == ProtectedResourceType.Shift &&
+                entry.EntityId == shift.Id &&
+                entry.Action == AuditAction.Read),
+            It.IsAny<CancellationToken>()), Times.Once);
+        context.AuditLogger.Verify(logger => logger.LogAsync(
+            It.Is<PhiAuditEntry>(entry =>
+                entry.EntityType == ProtectedResourceType.Caregiver &&
+                entry.EntityId == context.Caregiver.Id &&
+                entry.Action == AuditAction.Read),
+            It.IsAny<CancellationToken>()), Times.Once);
+        context.AuditLogger.Verify(logger => logger.LogAsync(
+            It.Is<PhiAuditEntry>(entry =>
+                entry.EntityType == ProtectedResourceType.CaregiverCertification &&
+                entry.EntityId == certification.Id &&
+                entry.Action == AuditAction.Read),
+            It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    [Fact]
     public async Task GetShiftsAsync_WhenCaregiverScoped_UsesFilteredPagedRepository()
     {
         // Arrange

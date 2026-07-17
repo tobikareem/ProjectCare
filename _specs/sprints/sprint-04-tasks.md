@@ -148,7 +148,7 @@ only if they preserve these authorization and PHI rules.
 | Area | Method/Route | Roles | Object Auth | Request/Response |
 |---|---|---|---|---|
 | Caregivers | `GET /api/caregivers` | Admin, Coordinator | Filtered query | `PagedRequest` -> `PagedResult<CaregiverSummaryDto>` |
-| Caregivers | `GET /api/caregivers/{id}` | Admin, Coordinator, Caregiver | Self or staff policy | `CaregiverDetailDto` |
+| Caregivers | `GET /api/caregivers/{id}` | Admin, Coordinator | Staff policy; enriched compensation/MTD detail is not caregiver-self-safe | `CaregiverDetailDto` (amended by D-S6-10/S6-TASK-039) |
 | Caregivers | `POST /api/caregivers` | Admin, Coordinator | None | `CreateCaregiverRequest` -> `CaregiverDetailDto` |
 | Caregivers | `PUT /api/caregivers/{id}` | Admin, Coordinator | Staff policy | `UpdateCaregiverRequest` -> `CaregiverDetailDto` |
 | Certifications | `POST /api/caregivers/{id}/certifications` | Admin, Coordinator | Staff policy | `AddCertificationRequest` -> `CertificationDto` |
@@ -254,12 +254,12 @@ Owners: **Claude** = PM/Contracts lead (Contracts, Client, Client.UI, sprint doc
 
 ### D-S4-8 — Exit-verification contract amendments (accepted by PM, 2026-07-05)
 
-1. **Compensation fully out of ordinary DTOs**: `CaregiverDetailDto.HourlyPayRate`,
-   `ClientDetailDto.HourlyBillRate`, and `InvoiceLineItemDto.RatePerHour` were removed during
-   S4-TASK-060 hardening. Compensation/rate data is now reachable ONLY via Admin margin
-   endpoints (extends D-S4-2 beyond shift DTOs) or as write-only request inputs on
-   Admin/Coordinator create/update commands. Supersedes the S3-TASK-013 note that detail DTOs
-   carry rates.
+1. **Compensation out of general-purpose DTOs**: `ClientDetailDto.HourlyBillRate` and
+   `InvoiceLineItemDto.RatePerHour` were removed during S4-TASK-060 hardening. Sprint 6 later
+   approved `CaregiverDetailDto.HourlyPayRate` for the Admin/Coordinator-only caregiver profile
+   workflow (D-S6-10/S6-TASK-039); it remains excluded from roster summaries, caregiver self
+   access, logs, URLs, and other general-purpose responses. Other compensation/rate data remains
+   limited to Admin margin endpoints or write inputs on authorized create/update commands.
 2. **PHI 404 bodies carry no TraceId**: byte-identical missing/denied bodies now exclude the
    per-request `TraceId` (a unique value per response would otherwise differentiate them).
    Support correlation for PHI denials is server-side via audit logs; non-PHI error responses

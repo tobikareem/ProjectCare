@@ -1,0 +1,16 @@
+@page "/my-clients"
+@using CarePath.Client.Api
+@using CarePath.Client.UI.Components
+@using CarePath.Contracts.Common
+@using CarePath.Contracts.Scheduling
+@using Microsoft.AspNetCore.Authorization
+@attribute [Authorize(Roles = "Caregiver")]
+@inject CaregiversClient CaregiversClient
+
+<PageTitle>My clients</PageTitle>
+<div class="page-heading"><div><p class="eyebrow">Caregiver workspace</p><h1>My clients</h1><p class="subtle">Only clients connected to your own current or historical shifts are shown.</p></div></div>
+<div class="filter-bar"><select @bind="status" aria-label="Filter my client assignments"><option value="">All assignments</option><option value="Current">Current</option><option value="Previous">Previous</option></select><button class="button button-primary" type="button" @onclick="ApplyFiltersAsync">Apply filter</button></div>
+@if (error is not null) { <ApiErrorAlert Response="error" /> }
+<section class="card assignment-table" aria-labelledby="my-clients-heading"><div class="section-header"><div><h2 id="my-clients-heading">Assignment history</h2><span class="subtle">Minimum-necessary client information</span></div><span class="meta">@(page is null ? "Page 1" : $"Page {page.PageNumber} of {Math.Max(page.TotalPages, 1)}")</span></div>
+<PagedTable TItem="MyClientAssignmentSummaryDto" Result="page" IsLoading="isLoading" LoadingText="Loading your clients..." EmptyText="No client assignments found." TableClass="data-table" PagerButtonClass="button button-secondary button-sm" PagerLabel="My client assignment pages" PageSize="PageSize" MinPageSize="PageSize" ShowPagerWhenSinglePage="true" OnPageChanged="LoadPageAsync"><HeaderTemplate><tr><th>Client</th><th>Service</th><th>Assignment dates</th><th>Next shift</th><th>Completed</th><th>Status</th></tr></HeaderTemplate><RowTemplate Context="item"><tr><td><strong>@item.ClientDisplayName</strong></td><td>@item.ServiceType</td><td>@item.FirstAssignedAtUtc.ToLocalTime().ToString("MMM d, yyyy") – @(item.Status == AssignmentRelationshipStatus.Current ? "Present" : item.LastAssignedAtUtc.ToLocalTime().ToString("MMM d, yyyy"))</td><td>@(item.NextShiftAtUtc?.ToLocalTime().ToString("MMM d, yyyy h:mm tt") ?? "—")</td><td>@item.CompletedShiftCount</td><td><StatusBadge Text="@item.Status.ToString()" Tone="@(item.Status == AssignmentRelationshipStatus.Current ? BadgeTone.Success : BadgeTone.Info)" /></td></tr></RowTemplate></PagedTable></section>
+@code { private const int PageSize = 10; private PagedResult<MyClientAssignmentSummaryDto>? page; private ApiResponse? error; private bool isLoading; private string status = string.Empty; protected override Task OnInitializedAsync() => LoadPageAsync(1); private Task ApplyFiltersAsync() => LoadPageAsync(1); private async Task LoadPageAsync(int pageNumber) { isLoading = true; error = null; page = null; var response = await CaregiversClient.SearchMyClientsAsync(new AssignmentHistorySearchRequest { PageNumber = pageNumber, PageSize = PageSize, Status = Enum.TryParse<AssignmentRelationshipStatus>(status, out var parsed) ? parsed : null }); if (response.Success && response.Data is not null) page = response.Data; else { page = null; error = response; } isLoading = false; } }

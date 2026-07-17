@@ -48,6 +48,24 @@
     </Authorized>
 </AuthorizeView>
 
+<AuthorizeView Roles="Caregiver">
+    <Authorized>
+        <p class="nav-label">Caregiver workspace</p>
+        <nav class="side-nav" aria-label="Caregiver navigation">
+            <NavLink href="my-clients"><span aria-hidden="true">&#x2661;</span><span>My clients</span></NavLink>
+        </nav>
+    </Authorized>
+</AuthorizeView>
+
+<AuthorizeView Roles="Client">
+    <Authorized>
+        <p class="nav-label">My care</p>
+        <nav class="side-nav" aria-label="Client navigation">
+            <NavLink href="my-caregivers"><span aria-hidden="true">&#x2661;</span><span>My caregivers</span></NavLink>
+        </nav>
+    </Authorized>
+</AuthorizeView>
+
 <AuthorizeView Roles="Admin">
     <Authorized>
         <p class="nav-label">Admin</p>

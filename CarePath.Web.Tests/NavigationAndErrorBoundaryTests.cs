@@ -16,18 +16,20 @@ namespace CarePath.Web.Tests;
 public sealed class NavigationAndErrorBoundaryTests
 {
     [Theory]
-    [InlineData("Admin", true, true, true, true, true)]
-    [InlineData("Coordinator", true, true, true, false, false)]
-    [InlineData("Clinician", false, true, false, false, false)]
-    [InlineData("Caregiver", false, false, false, false, false)]
-    [InlineData("Client", false, false, false, false, false)]
+    [InlineData("Admin", true, true, true, true, true, false, false)]
+    [InlineData("Coordinator", true, true, true, false, false, false, false)]
+    [InlineData("Clinician", false, true, false, false, false, false, false)]
+    [InlineData("Caregiver", false, false, false, false, false, true, false)]
+    [InlineData("Client", false, false, false, false, false, false, true)]
     public void NavMenu_ForRole_RendersOnlyAuthorizedDestinations(
         string role,
         bool showsOperations,
         bool showsClinicalWorkspace,
         bool showsBusiness,
         bool showsAnalytics,
-        bool showsAdmin)
+        bool showsAdmin,
+        bool showsMyClients,
+        bool showsMyCaregivers)
     {
         // Arrange
         using var context = new BunitContext();
@@ -50,6 +52,8 @@ public sealed class NavigationAndErrorBoundaryTests
             component.Markup.Contains("href=\"compliance\"").Should().Be(showsBusiness);
             component.Markup.Contains("href=\"analytics\"").Should().Be(showsAnalytics);
             component.Markup.Contains("href=\"admin/users\"").Should().Be(showsAdmin);
+            component.Markup.Contains("href=\"my-clients\"").Should().Be(showsMyClients);
+            component.Markup.Contains("href=\"my-caregivers\"").Should().Be(showsMyCaregivers);
         });
     }
 

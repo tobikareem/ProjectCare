@@ -34,14 +34,89 @@ public sealed class BillingClient : ApiClientBase
         CancellationToken cancellationToken = default) =>
         GetAsync<InvoiceDetailDto>($"api/invoices/{invoiceId}", cancellationToken);
 
-    /// <summary>Creates a period invoice (Admin/Coordinator; idempotent per D-S4-6 — duplicates return a conflict).</summary>
-    /// <param name="request">The create request.</param>
+    /// <summary>
+    /// Previews an invoice for a client/service line/period (Admin/Coordinator, D-S6-18).
+    /// Returns paged eligible rows, full-set aggregates, exclusion counts, and the opaque
+    /// expiring preview token required by <see cref="CreateInvoiceAsync"/>. The token must
+    /// never be logged or stored beyond the generate flow.
+    /// </summary>
+    /// <param name="request">The preview selection + paging.</param>
+    /// <param name="cancellationToken">Token to cancel the operation.</param>
+    /// <returns>The preview result.</returns>
+    public Task<ApiResponse<InvoicePreviewResponseDto>> PreviewInvoiceAsync(
+        InvoicePreviewRequest request,
+        CancellationToken cancellationToken = default) =>
+        PostAsync<InvoicePreviewRequest, InvoicePreviewResponseDto>(
+            "api/invoices/preview", request, cancellationToken);
+
+    /// <summary>
+    /// Creates a period invoice (Admin/Coordinator; preview-gated per D-S6-18 — the request
+    /// must echo a current preview token; drift returns <c>409 invoice.preview_stale</c>,
+    /// duplicates return <c>409 invoice.duplicate</c>).
+    /// </summary>
+    /// <param name="request">The create request including the preview token.</param>
     /// <param name="cancellationToken">Token to cancel the operation.</param>
     /// <returns>The created invoice detail.</returns>
     public Task<ApiResponse<InvoiceDetailDto>> CreateInvoiceAsync(
         CreateInvoiceRequest request,
         CancellationToken cancellationToken = default) =>
         PostAsync<CreateInvoiceRequest, InvoiceDetailDto>("api/invoices", request, cancellationToken);
+
+    /// <summary>Body-based reconciliation search (Admin/Coordinator, D-S6-18; max 92-day window).</summary>
+    /// <param name="request">The search filters + paging.</param>
+    /// <param name="cancellationToken">Token to cancel the operation.</param>
+    /// <returns>One page of rows plus full-filter KPI totals.</returns>
+    public Task<ApiResponse<BillingReconciliationSearchResponseDto>> SearchReconciliationAsync(
+        BillingReconciliationSearchRequest request,
+        CancellationToken cancellationToken = default) =>
+        PostAsync<BillingReconciliationSearchRequest, BillingReconciliationSearchResponseDto>(
+            "api/invoices/reconciliation/search", request, cancellationToken);
+
+    /// <summary>Guarded reconciliation drill-in for one shift (Admin/Coordinator).</summary>
+    /// <param name="shiftId">Shift identifier.</param>
+    /// <param name="cancellationToken">Token to cancel the operation.</param>
+    /// <returns>The row classification plus append-only resolution history.</returns>
+    public Task<ApiResponse<BillingReconciliationDetailDto>> GetReconciliationDetailAsync(
+        Guid shiftId,
+        CancellationToken cancellationToken = default) =>
+        GetAsync<BillingReconciliationDetailDto>(
+            $"api/invoices/reconciliation/shifts/{shiftId}", cancellationToken);
+
+    /// <summary>Records an audited non-billable resolution (Admin/Coordinator; append-only).</summary>
+    /// <param name="shiftId">Shift identifier.</param>
+    /// <param name="request">The resolution. The note must be PHI-free.</param>
+    /// <param name="cancellationToken">Token to cancel the operation.</param>
+    /// <returns>The updated reconciliation detail.</returns>
+    public Task<ApiResponse<BillingReconciliationDetailDto>> ResolveNonBillableAsync(
+        Guid shiftId,
+        ResolveNonBillableRequest request,
+        CancellationToken cancellationToken = default) =>
+        PostAsync<ResolveNonBillableRequest, BillingReconciliationDetailDto>(
+            $"api/invoices/reconciliation/shifts/{shiftId}/resolve", request, cancellationToken);
+
+    /// <summary>Reopens a resolved service by appending a superseding record (Admin/Coordinator).</summary>
+    /// <param name="shiftId">Shift identifier.</param>
+    /// <param name="request">The reopen request.</param>
+    /// <param name="cancellationToken">Token to cancel the operation.</param>
+    /// <returns>The updated reconciliation detail.</returns>
+    public Task<ApiResponse<BillingReconciliationDetailDto>> ReopenResolutionAsync(
+        Guid shiftId,
+        ReopenResolutionRequest request,
+        CancellationToken cancellationToken = default) =>
+        PostAsync<ReopenResolutionRequest, BillingReconciliationDetailDto>(
+            $"api/invoices/reconciliation/shifts/{shiftId}/reopen", request, cancellationToken);
+
+    /// <summary>Dedicated audited missing-time correction (Admin/Coordinator, D-S6-18).</summary>
+    /// <param name="shiftId">Shift identifier.</param>
+    /// <param name="request">The corrected window, break, and safe reason code.</param>
+    /// <param name="cancellationToken">Token to cancel the operation.</param>
+    /// <returns>The updated reconciliation detail.</returns>
+    public Task<ApiResponse<BillingReconciliationDetailDto>> CorrectShiftTimeAsync(
+        Guid shiftId,
+        CorrectShiftTimeRequest request,
+        CancellationToken cancellationToken = default) =>
+        PostAsync<CorrectShiftTimeRequest, BillingReconciliationDetailDto>(
+            $"api/invoices/reconciliation/shifts/{shiftId}/correct-time", request, cancellationToken);
 
     /// <summary>Records a payment against an invoice (Admin/Coordinator).</summary>
     /// <param name="invoiceId">Invoice identifier.</param>

@@ -386,6 +386,9 @@ public sealed class DomainToContractMapperTests
             // D-S6-10: pay rate is an approved Admin/Coordinator profile-detail field;
             // roster summaries stay rate-free (see the summary DTO test below).
             $"{typeof(CaregiverDetailDto).FullName}.HourlyPayRate",
+            // D-S6-18: the invoice preview row carries the client-facing BILL rate on the
+            // Admin/Coordinator-gated preview; pay/cost/margin stay forbidden.
+            $"{typeof(InvoicePreviewRowDto).FullName}.BillRate",
         };
 
         // Act

@@ -42,6 +42,7 @@ public static class DependencyInjection
         services.AddScoped<IAssignmentHistoryService, AssignmentHistoryService>();
         services.AddScoped<IVisitDocumentationService, VisitDocumentationService>();
         services.AddScoped<IBillingOperationsService, BillingOperationsService>();
+        services.AddScoped<IBillingReconciliationService, BillingReconciliationService>();
         services.AddScoped<ITransitionsService, TransitionsService>();
         services.AddScoped<IAdminUserManagementService, AdminUserManagementService>();
 
@@ -62,6 +63,11 @@ public static class DependencyInjection
         services.AddScoped<IValidator<CheckOutRequest>, CheckOutRequestValidator>();
         services.AddScoped<IValidator<CreateVisitNoteRequest>, CreateVisitNoteRequestValidator>();
         services.AddScoped<IValidator<CreateInvoiceRequest>, CreateInvoiceRequestValidator>();
+        services.AddScoped<IValidator<InvoicePreviewRequest>, InvoicePreviewRequestValidator>();
+        services.AddScoped<IValidator<BillingReconciliationSearchRequest>, BillingReconciliationSearchRequestValidator>();
+        services.AddScoped<IValidator<ResolveNonBillableRequest>, ResolveNonBillableRequestValidator>();
+        services.AddScoped<IValidator<ReopenResolutionRequest>, ReopenResolutionRequestValidator>();
+        services.AddScoped<IValidator<CorrectShiftTimeRequest>, CorrectShiftTimeRequestValidator>();
         services.AddScoped<IValidator<RecordPaymentRequest>, RecordPaymentRequestValidator>();
         services.AddScoped<IValidator<CreateDischargeDocumentRequest>, CreateDischargeDocumentRequestValidator>();
         services.AddScoped<IValidator<ReviewInstructionRequest>, ReviewInstructionRequestValidator>();

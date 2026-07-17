@@ -89,6 +89,9 @@ public class CarePathDbContext : IdentityDbContext<ApplicationUser, IdentityRole
     /// <summary>Transition escalations.</summary>
     public DbSet<TransitionEscalation> TransitionEscalations => Set<TransitionEscalation>();
 
+    /// <summary>Append-only billing reconciliation resolutions (D-S6-18).</summary>
+    public DbSet<BillingReconciliationResolution> BillingReconciliationResolutions => Set<BillingReconciliationResolution>();
+
     /// <inheritdoc />
     protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
     {

@@ -1,11 +1,13 @@
-using FluentValidation;
 using CarePath.Contracts.Billing;
+using FluentValidation;
 
 namespace CarePath.Application.Billing.Validators;
 
-public sealed class CreateInvoiceRequestValidator : AbstractValidator<CreateInvoiceRequest>
+/// <summary>Validates <see cref="InvoicePreviewRequest"/> (D-S6-18). Messages never echo values.</summary>
+public sealed class InvoicePreviewRequestValidator : AbstractValidator<InvoicePreviewRequest>
 {
-    public CreateInvoiceRequestValidator()
+    /// <summary>Creates the validator.</summary>
+    public InvoicePreviewRequestValidator()
     {
         RuleFor(request => request.ClientId).NotEmpty();
         RuleFor(request => request.ServiceType).IsInEnum();
@@ -14,13 +16,6 @@ public sealed class CreateInvoiceRequestValidator : AbstractValidator<CreateInvo
         RuleFor(request => request.PeriodEndUtc)
             .GreaterThan(request => request.PeriodStartUtc)
             .WithMessage("Period end must be after period start.");
-        RuleFor(request => request.DueDate).Must(BeUtc).WithMessage("Due date must be UTC.");
-        RuleFor(request => request.TaxAmount).GreaterThanOrEqualTo(0m);
-        RuleFor(request => request.Notes).MaximumLength(1000);
-        RuleFor(request => request.PreviewToken)
-            .NotEmpty()
-            .WithMessage("A current invoice preview is required before generating.")
-            .WithErrorCode("invoice.preview_required");
     }
 
     private static bool BeUtc(DateTime value) => value.Kind == DateTimeKind.Utc;

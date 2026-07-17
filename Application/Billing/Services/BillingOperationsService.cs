@@ -21,15 +21,20 @@ public sealed class BillingOperationsService : IBillingOperationsService
 {
     private const string DuplicateInvoiceCode = "invoice.duplicate";
     private const string EmptyInvoiceCode = "invoice.no_billable_shifts";
+    private const string PreviewStaleCode = "invoice.preview_stale";
     private const string InvoicePeriodIndexName = "IX_Invoices_Client_Service_Period";
+    private const string ShiftLineUniqueIndexName = "UX_InvoiceLineItems_ShiftId_NotNull";
 
     private readonly IUnitOfWork unitOfWork;
     private readonly ICurrentUserContext currentUser;
     private readonly IClientAccessEvaluator clientAccessEvaluator;
     private readonly IPhiAuditLogger auditLogger;
     private readonly IShiftBillingQuery shiftBillingQuery;
+    private readonly IBillingEligibilityQuery eligibilityQuery;
+    private readonly IInvoicePreviewTokenService previewTokens;
     private readonly IPersistenceConflictDetector persistenceConflictDetector;
     private readonly IValidator<CreateInvoiceRequest> createInvoiceValidator;
+    private readonly IValidator<InvoicePreviewRequest> previewValidator;
     private readonly IValidator<RecordPaymentRequest> recordPaymentValidator;
 
     public BillingOperationsService(
@@ -37,19 +42,93 @@ public sealed class BillingOperationsService : IBillingOperationsService
         ICurrentUserContext currentUser,
         IClientAccessEvaluator clientAccessEvaluator,
         IPhiAuditLogger auditLogger,
+        IBillingEligibilityQuery eligibilityQuery,
+        IInvoicePreviewTokenService previewTokens,
         IShiftBillingQuery? shiftBillingQuery = null,
         IPersistenceConflictDetector? persistenceConflictDetector = null,
         IValidator<CreateInvoiceRequest>? createInvoiceValidator = null,
+        IValidator<InvoicePreviewRequest>? previewValidator = null,
         IValidator<RecordPaymentRequest>? recordPaymentValidator = null)
     {
         this.unitOfWork = unitOfWork;
         this.currentUser = currentUser;
         this.clientAccessEvaluator = clientAccessEvaluator;
         this.auditLogger = auditLogger;
+        this.eligibilityQuery = eligibilityQuery;
+        this.previewTokens = previewTokens;
         this.shiftBillingQuery = shiftBillingQuery ?? new NoOpShiftBillingQuery();
         this.persistenceConflictDetector = persistenceConflictDetector ?? new NoOpPersistenceConflictDetector();
         this.createInvoiceValidator = createInvoiceValidator ?? new CreateInvoiceRequestValidator();
+        this.previewValidator = previewValidator ?? new InvoicePreviewRequestValidator();
         this.recordPaymentValidator = recordPaymentValidator ?? new RecordPaymentRequestValidator();
+    }
+
+    public async Task<InvoicePreviewResponseDto> PreviewInvoiceAsync(
+        InvoicePreviewRequest request,
+        CancellationToken cancellationToken = default)
+    {
+        EnsureAdminOrCoordinator();
+        await previewValidator.ValidateAndThrowAsync(request, cancellationToken);
+        _ = await GetClientAsync(request.ClientId, cancellationToken);
+
+        var serviceType = (ServiceType)(int)request.ServiceType;
+        var rows = await eligibilityQuery.GetPeriodRowsAsync(
+            request.ClientId,
+            serviceType,
+            request.PeriodStartUtc,
+            request.PeriodEndUtc,
+            cancellationToken);
+
+        var eligible = rows.Where(row => row.Reason == BillingExclusionReason.Eligible).ToArray();
+        var exclusionCounts = rows
+            .Where(row => row.Reason != BillingExclusionReason.Eligible)
+            .GroupBy(row => row.Reason)
+            .OrderBy(group => group.Key)
+            .Select(group => new InvoiceExclusionCountDto
+            {
+                Reason = (CarePath.Contracts.Enumerations.BillingExclusionReason)(int)group.Key,
+                Count = group.Count(),
+            })
+            .ToArray();
+
+        var subtotal = eligible.Sum(row => BillingMath.LineTotal(row) ?? 0m);
+        var totalHours = eligible.Sum(row => BillingMath.BillableHours(row) ?? 0m);
+        var pagedEligible = eligible
+            .Skip((request.PageNumber - 1) * request.PageSize)
+            .Take(request.PageSize)
+            .ToArray();
+
+        // Audit the shifts whose data is returned on this page (codebase-standard bound);
+        // the full-set scan feeds only aggregate counts and the fingerprint.
+        foreach (var row in pagedEligible)
+        {
+            await AuditAsync(ProtectedResourceType.Shift, row.ShiftId, AuditAction.Read, cancellationToken);
+        }
+
+        var pageRows = pagedEligible
+            .Select(row => row.ToPreviewRowDto())
+            .ToArray();
+
+        var previewToken = string.Empty;
+        var expiresAtUtc = default(DateTime);
+        if (eligible.Length > 0)
+        {
+            var fingerprint = BuildFingerprint(request.ClientId, (int)serviceType, request.PeriodStartUtc, request.PeriodEndUtc, eligible, subtotal, totalHours);
+            previewToken = previewTokens.Protect(fingerprint, out expiresAtUtc);
+        }
+
+        return new InvoicePreviewResponseDto
+        {
+            Rows = pageRows,
+            PageNumber = request.PageNumber,
+            PageSize = request.PageSize,
+            EligibleShiftCount = eligible.Length,
+            TotalBillableHours = totalHours,
+            Subtotal = subtotal,
+            ExclusionCounts = exclusionCounts,
+            PreviewToken = previewToken,
+            PreviewTokenExpiresAtUtc = expiresAtUtc,
+        };
     }
 
     public async Task<InvoiceDetailDto> CreateInvoiceAsync(CreateInvoiceRequest request, CancellationToken cancellationToken = default)
@@ -57,7 +136,17 @@ public sealed class BillingOperationsService : IBillingOperationsService
         EnsureAdminOrCoordinator();
         await createInvoiceValidator.ValidateAndThrowAsync(request, cancellationToken);
 
+        var fingerprint = previewTokens.Unprotect(request.PreviewToken)
+            ?? throw PreviewStaleConflict();
         var serviceType = (ServiceType)(int)request.ServiceType;
+        if (fingerprint.ClientId != request.ClientId
+            || fingerprint.ServiceType != (int)serviceType
+            || fingerprint.PeriodStartUtc != request.PeriodStartUtc
+            || fingerprint.PeriodEndUtc != request.PeriodEndUtc)
+        {
+            throw PreviewStaleConflict();
+        }
+
         var client = await GetClientAsync(request.ClientId, cancellationToken);
         var duplicateExists = await unitOfWork.Invoices.ExistsAsync(
             invoice => invoice.ClientId == client.Id
@@ -65,24 +154,10 @@ public sealed class BillingOperationsService : IBillingOperationsService
                 && invoice.PeriodStartUtc == request.PeriodStartUtc
                 && invoice.PeriodEndUtc == request.PeriodEndUtc,
             cancellationToken);
-
         if (duplicateExists)
         {
             throw DuplicateInvoiceConflict();
         }
-
-        var billableShifts = await shiftBillingQuery.GetCompletedBillableShiftsAsync(
-            client.Id,
-            serviceType,
-            request.PeriodStartUtc,
-            request.PeriodEndUtc,
-            cancellationToken);
-        if (billableShifts.Count == 0)
-        {
-            throw ValidationFailure("Period", "No completed billable shifts exist for the requested billing period.", EmptyInvoiceCode);
-        }
-
-        await AuditShiftReadsAsync(billableShifts, cancellationToken);
 
         var invoice = new Invoice
         {
@@ -99,27 +174,57 @@ public sealed class BillingOperationsService : IBillingOperationsService
         };
         invoice.InvoiceNumber = CreateInvoiceNumber(invoice);
 
-        foreach (var shift in billableShifts)
-        {
-            invoice.LineItems.Add(new InvoiceLineItem
-            {
-                InvoiceId = invoice.Id,
-                Invoice = invoice,
-                ShiftId = shift.Id,
-                Shift = shift,
-                Description = CreateLineDescription(serviceType),
-                ServiceDate = shift.ScheduledStartTime.Date,
-                BillableHours = shift.BillableHours,
-                RatePerHour = shift.BillRate,
-                CostPerHour = shift.PayRate,
-            });
-        }
-
         try
         {
             await unitOfWork.ExecuteInTransactionAsync(
                 async token =>
                 {
+                    // D-S6-18: creation re-evaluates eligibility INSIDE the transaction through
+                    // the same shared query the preview used; any drift stales the preview.
+                    var rows = await eligibilityQuery.GetPeriodRowsAsync(
+                        client.Id,
+                        serviceType,
+                        request.PeriodStartUtc,
+                        request.PeriodEndUtc,
+                        token);
+                    var eligible = rows
+                        .Where(row => row.Reason == BillingExclusionReason.Eligible)
+                        .ToArray();
+                    if (eligible.Length == 0)
+                    {
+                        throw ValidationFailure("Period", "No completed billable shifts exist for the requested billing period.", EmptyInvoiceCode);
+                    }
+
+                    // Fail-closed duplicate preflight inside the new invoice itself.
+                    if (eligible.Select(row => row.ShiftId).Distinct().Count() != eligible.Length)
+                    {
+                        throw PreviewStaleConflict();
+                    }
+
+                    var subtotal = eligible.Sum(row => BillingMath.LineTotal(row) ?? 0m);
+                    var totalHours = eligible.Sum(row => BillingMath.BillableHours(row) ?? 0m);
+                    var current = BuildFingerprint(client.Id, (int)serviceType, request.PeriodStartUtc, request.PeriodEndUtc, eligible, subtotal, totalHours);
+                    if (!FingerprintMatches(fingerprint, current))
+                    {
+                        throw PreviewStaleConflict();
+                    }
+
+                    foreach (var row in eligible)
+                    {
+                        await AuditAsync(ProtectedResourceType.Shift, row.ShiftId, AuditAction.Read, token);
+                        invoice.LineItems.Add(new InvoiceLineItem
+                        {
+                            InvoiceId = invoice.Id,
+                            Invoice = invoice,
+                            ShiftId = row.ShiftId,
+                            Description = CreateLineDescription(serviceType),
+                            ServiceDate = row.ScheduledStartUtc.Date,
+                            BillableHours = BillingMath.BillableHours(row) ?? 0m,
+                            RatePerHour = row.BillRate,
+                            CostPerHour = row.PayRate,
+                        });
+                    }
+
                     await unitOfWork.Invoices.AddAsync(invoice, token);
                     foreach (var lineItem in invoice.LineItems)
                     {
@@ -135,9 +240,51 @@ public sealed class BillingOperationsService : IBillingOperationsService
         {
             throw DuplicateInvoiceConflict();
         }
+        catch (Exception exception) when (persistenceConflictDetector.IsUniqueConstraintConflict(exception, ShiftLineUniqueIndexName))
+        {
+            // A concurrent create billed one of these shifts first — refresh and re-preview.
+            throw PreviewStaleConflict();
+        }
 
         await AttachClientUserAsync(invoice, cancellationToken);
         return invoice.ToDetailDto();
+    }
+
+    private static InvoicePreviewFingerprint BuildFingerprint(
+        Guid clientId,
+        int serviceType,
+        DateTime periodStartUtc,
+        DateTime periodEndUtc,
+        IReadOnlyList<BillingEligibilityRow> eligibleRows,
+        decimal subtotal,
+        decimal totalHours)
+    {
+        return new InvoicePreviewFingerprint(
+            clientId,
+            serviceType,
+            periodStartUtc,
+            periodEndUtc,
+            eligibleRows.Select(row => row.ShiftId).OrderBy(id => id).ToArray(),
+            BillingMath.ComputeInputsHash(eligibleRows),
+            subtotal,
+            totalHours);
+    }
+
+    private static bool FingerprintMatches(InvoicePreviewFingerprint issued, InvoicePreviewFingerprint current)
+    {
+        return issued.ClientId == current.ClientId
+            && issued.ServiceType == current.ServiceType
+            && issued.PeriodStartUtc == current.PeriodStartUtc
+            && issued.PeriodEndUtc == current.PeriodEndUtc
+            && issued.EligibleShiftIds.SequenceEqual(current.EligibleShiftIds)
+            && string.Equals(issued.InputsHash, current.InputsHash, StringComparison.Ordinal)
+            && issued.Subtotal == current.Subtotal
+            && issued.TotalBillableHours == current.TotalBillableHours;
+    }
+
+    private static ResourceConflictException PreviewStaleConflict()
+    {
+        return new ResourceConflictException(PreviewStaleCode, "The preview is no longer current. Refresh the preview and try again.");
     }
 
     public async Task<InvoiceDetailDto> RecordPaymentAsync(Guid invoiceId, RecordPaymentRequest request, CancellationToken cancellationToken = default)

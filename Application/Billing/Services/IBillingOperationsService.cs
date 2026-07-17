@@ -5,6 +5,8 @@ namespace CarePath.Application.Billing.Services;
 
 public interface IBillingOperationsService
 {
+    Task<InvoicePreviewResponseDto> PreviewInvoiceAsync(InvoicePreviewRequest request, CancellationToken cancellationToken = default);
+
     Task<InvoiceDetailDto> CreateInvoiceAsync(CreateInvoiceRequest request, CancellationToken cancellationToken = default);
 
     Task<InvoiceDetailDto> RecordPaymentAsync(Guid invoiceId, RecordPaymentRequest request, CancellationToken cancellationToken = default);

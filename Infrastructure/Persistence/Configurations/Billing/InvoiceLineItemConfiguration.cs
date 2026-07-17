@@ -41,7 +41,14 @@ public sealed class InvoiceLineItemConfiguration : IEntityTypeConfiguration<Invo
             .OnDelete(DeleteBehavior.Restrict);
 
         builder.HasIndex(lineItem => lineItem.InvoiceId).HasDatabaseName("IX_InvoiceLineItems_InvoiceId");
-        builder.HasIndex(lineItem => lineItem.ShiftId).HasDatabaseName("IX_InvoiceLineItems_ShiftId");
+
+        // D-S6-18 double-billing guard: at most ONE line item may ever link a shift — including
+        // soft-deleted lines, so historical links keep blocking rebilling. The filter is only
+        // "ShiftId IS NOT NULL" ON PURPOSE; do not add an IsDeleted condition.
+        builder.HasIndex(lineItem => lineItem.ShiftId)
+            .IsUnique()
+            .HasFilter("[ShiftId] IS NOT NULL")
+            .HasDatabaseName("UX_InvoiceLineItems_ShiftId_NotNull");
         builder.HasIndex(lineItem => lineItem.ServiceDate).HasDatabaseName("IX_InvoiceLineItems_ServiceDate");
         builder.HasIndex(lineItem => lineItem.IsDeleted).HasDatabaseName("IX_InvoiceLineItems_IsDeleted");
     }

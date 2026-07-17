@@ -54,6 +54,7 @@ This file captures recurring mistakes, corrections, and hard-won patterns discov
 
 ## Spec Workflow
 
+- **Do not infer credential validity from historical configuration notes** - A missing legacy config file or an old migration note does not prove that a current environment credential is exposed, invalid, or needs rotation. Report only verified credential findings; when the user confirms the active Context7 key is good, treat that as authoritative and remove speculative rotation concerns.
 - **User corrections from code review must update task status immediately** - If review shows a task was over-marked complete or scope was wrong, correct the board/spec in the same turn before continuing implementation.
 - **Spec numbering baseline**: CP-02 is Infrastructure / EF Core. CP-03 is CarePath Transitions. Transitions Domain work already exists; backend work waits for Infrastructure and Application foundations.
 - **Task numbers are historical identifiers, not CP identifiers** — completed Transitions Domain tasks remain TASK-020 through TASK-024; CP-02 Infrastructure tasks remain TASK-040+. Do not renumber completed tasks just to match CP numbers.

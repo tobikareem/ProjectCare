@@ -21,12 +21,9 @@ The software is meant to replace spreadsheet, phone, text-message, and paper wor
 
 ## Current Maturity
 
-As of June 22, 2026:
+As of July 16, 2026, the solution includes Domain, Application, Infrastructure, WebApi, contracts, typed clients, shared UI, Blazor web, and four test projects. EF Core persistence and migrations, Identity foundations, application use cases, API surfaces, and Transitions backend components are present. Use the approved specs and sprint board for task-level completion status.
 
-- Domain foundation: implemented with entities, enumerations, repository abstractions, business calculations, XML documentation, and a substantial unit-test suite.
-- WebApi: scaffold only; the WeatherForecast sample remains.
-- Application, Infrastructure, EF Core, SQL Server, authentication, authorization, PHI audit logging, SignalR, MAUI, and Blazor: not implemented.
-- The project is not yet operationally HIPAA-compliant. Domain fields and soft-delete flags are foundations, not enforcement.
+The project must not be described as operationally HIPAA-compliant without verifying the deployed administrative, physical, and technical controls.
 
 ## Source-of-Truth Order
 
@@ -53,7 +50,7 @@ If design and tasks disagree, update the task spec before implementation. If req
 | `.claude/commands/hipaa-check.md` | `.agents/skills/hipaa-check/SKILL.md` |
 | `.claude/commands/migration.md` | `.agents/skills/migration/SKILL.md` |
 | `.claude/commands/new-spec.md` | `.agents/skills/new-spec/SKILL.md` |
-| `.claude/mcp.json` | `.codex/config.toml` |
+| Claude Code's active Context7 MCP configuration | `.codex/config.toml` |
 | `.claude/settings.local.json` | `.codex/rules/carepath.rules` for the safe shared subset; remaining permissions stay user-local |
 | `.claude/agent-memory/.../MEMORY.md` | Curated project state is in `.codex/PROJECT_CONTEXT.md`; stable rules belong in `AGENTS.md`; corrections belong in `_specs/lessons.md`; generated Codex memory remains user-local |
 
@@ -61,17 +58,10 @@ GitHub and browser capabilities are supplied by the installed Codex GitHub and B
 
 ## Security Notes
 
-- The Context7 key found in `.claude/mcp.json` was not copied. Rotate that key and set `CONTEXT7_API_KEY` locally.
+- Keep Context7 and other provider credentials in the active environment or user-local secret storage; never commit their values.
 - Do not commit API keys, connection strings, JWT signing keys, patient data, or production database details.
-- PHI access requires authorization, ownership checks, minimal DTOs, append-only read/write/delete auditing, private media storage, encryption, and retention controls. Those controls do not exist yet.
+- PHI access requires authorization, ownership checks, minimal DTOs, append-only read/write/delete auditing, private media storage, encryption, and retention controls. Verify each control in the deployed environment before making compliance claims.
 
-## Known Documentation Drift
+## Documentation Maintenance
 
-Before the next implementation phase, reconcile these items in the approved specs:
-
-- Several documents use planned `src/CarePath.*`, `CarePath.Api`, `Enums/`, and test paths that do not match the current root-level `Domain`, `Domain.Tests`, `WebApi`, and `Enumerations` layout.
-- The CP-01 task status contains the typo `Approvedm`.
-- The CP-01 requirements describe the pre-implementation state ("No domain model exists").
-- Authentication design text references `PasswordHash` and `RefreshToken`, but the current `User` entity does not contain them.
-- The design's shift margin and signature-storage examples differ from the implemented model.
-- The infrastructure threat model must distinguish SQL Server TDE, application/column encryption, private blob storage, and access auditing.
+Treat approved specs as feature-level sources of truth, but verify paths and implementation status against the current solution before acting. Record confirmed corrections in `_specs/lessons.md` and update stale task documents when design and task specifications diverge.

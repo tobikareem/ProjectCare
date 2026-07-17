@@ -124,7 +124,9 @@ Then run the API or relevant integration tests and smoke-test the affected behav
 
 ## Rollback
 
-Before application, identify the previous migration and document rollback:
+Clinical and PHI-bearing migrations are forward-only after real use unless an approved retention-safe rollback plan proves that no protected records or audit history can be destroyed. Prefer a corrective forward migration.
+
+For an undeployed migration against an empty local database, identify the previous migration and document the local-only revert:
 
 ```powershell
 dotnet ef database update <PreviousMigration> --project Infrastructure --startup-project WebApi
@@ -132,7 +134,7 @@ dotnet ef database update <PreviousMigration> --project Infrastructure --startup
 
 Use `dotnet ef migrations remove` only for the latest migration and only when it has not been deployed elsewhere.
 
-For a deployed migration, generate and review a targeted rollback script. Do not assume rollback is lossless when columns or tables were removed.
+For a deployed migration, create and review a forward corrective migration. Any exceptional rollback requires explicit approval, a verified backup, a retention/legal-hold assessment, and proof that populated PHI tables, links, and audit records are preserved. Never assume `Down` is lossless.
 
 ## Report
 

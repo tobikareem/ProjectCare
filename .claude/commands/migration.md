@@ -36,7 +36,7 @@ EF Core migrations in CarePath Health need extra care because the database conta
    ```bash
    dotnet ef migrations list --project Infrastructure --startup-project WebApi
    ```
-   If there are pending migrations, apply them first (or determine if they should be removed).
+   If there are pending migrations, report them and determine why. Do not apply or remove them unless the user explicitly authorizes that database or repository mutation.
 
 ---
 
@@ -184,20 +184,22 @@ Read the generated SQL to verify it matches expectations.
 
 ## Step 5: Apply the Migration
 
+Applying a migration mutates a database. Perform this step only when the user explicitly asks for a database update and the exact target environment has been identified. Generating or reviewing a migration does not authorize applying it.
+
 ### Development/Local
 ```bash
 dotnet ef database update --project Infrastructure --startup-project WebApi
 ```
 
 ### Verify Application
-After applying:
+After an explicitly authorized application:
 ```bash
 dotnet ef migrations list --project Infrastructure --startup-project WebApi
 ```
 The new migration should show as applied (no `(Pending)` marker).
 
 ### Smoke Test
-Run the API and verify the affected endpoints work:
+If the user also authorizes starting the API, verify the affected endpoints work:
 ```bash
 dotnet run --project WebApi
 ```
@@ -222,9 +224,11 @@ Add a brief note about the migration to the relevant spec or create a summary:
 
 ## Rollback Procedure
 
-If the migration needs to be reverted:
+Clinical and PHI-bearing migrations are forward-only after real use unless an approved retention-safe rollback plan proves that no protected records or audit history can be destroyed. Prefer a corrective forward migration.
 
-### Revert to Previous Migration
+If an undeployed local migration needs to be reverted:
+
+### Revert an Empty Local Database to the Previous Migration
 ```bash
 dotnet ef database update <PreviousMigrationName> --project Infrastructure --startup-project WebApi
 ```
@@ -235,14 +239,8 @@ dotnet ef migrations remove --project Infrastructure --startup-project WebApi
 ```
 This removes the last migration file. Only use if the migration hasn't been applied to other environments.
 
-### Emergency Rollback (Production)
-If already deployed to production:
-1. Use the idempotent script's Down method
-2. Or generate a targeted rollback script:
-   ```bash
-   dotnet ef migrations script <NewMigration> <PreviousMigration> --project Infrastructure --startup-project WebApi -o rollback-script.sql
-   ```
-3. Review and apply the rollback script manually
+### Production Recovery
+If already deployed to production, do not assume `Down` is safe. Create and review a forward corrective migration. Any exceptional rollback requires explicit approval, a verified backup, a retention/legal-hold assessment, and proof that populated PHI tables, links, and audit records are preserved.
 
 ---
 
@@ -256,10 +254,10 @@ These are mistakes that have been made before (or are easy to make) in healthcar
 
 3. **Multiple migrations in one PR** — Keep one migration per logical change. Multiple migrations in one PR make rollbacks harder.
 
-4. **Not testing Down method** — Always verify the rollback works by applying and then reverting the migration locally.
+4. **Assuming Down is safe** — Test reversible, non-destructive migrations locally, but make PHI-bearing changes fail closed when rollback could destroy retained records. Prefer a forward corrective migration after deployment.
 
 5. **Forgetting seed data** — If the migration adds a lookup table (e.g., new enum values), include seed data in the migration or the configuration.
 
-6. **Breaking the model snapshot** — If you have merge conflicts in `CarePathDbContextModelSnapshot.cs`, don't manually resolve them. Instead, remove both conflicting migrations and regenerate from the merged code.
+6. **Breaking the model snapshot** — Resolve migration conflicts only after establishing which migrations are undeployed. Never remove a migration that may already exist in another environment; use a forward reconciliation migration when deployment history is uncertain.
 
 7. **Migrations that depend on runtime data** — Migrations should be deterministic. Don't reference services, configs, or runtime values in migration code.

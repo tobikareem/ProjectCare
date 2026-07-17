@@ -23,6 +23,7 @@ In scope:
 - Twilio BAA/consent/opt-out/message-minimization requirements.
 - AI/OCR extraction implementation behind existing interface.
 - Secure file/photo storage hardening.
+- Temporary-password hardening: force password change on first login for provisioned accounts.
 - Compliance hardening and end-to-end tests.
 
 Out of scope:
@@ -137,6 +138,26 @@ Feature: Secure attachment storage
     And no public blob URL is stored or returned
 ```
 
+### Story 10 - Temporary passwords must be temporary
+
+```gherkin
+Feature: Forced password change on first login
+  Scenario: Provisioned user signs in with a temporary password
+    Given an Admin or Coordinator provisioned an account with a temporary password
+    (staff via User Management, or the caregiver/client create flows)
+    When the user authenticates for the first time
+    Then the API refuses normal operation until the password is changed
+    And the change-password flow enforces the standard password policy
+    And the temporary password is never logged, echoed, or reusable after the change
+    And accounts provisioned before this feature are migrated to require a change on next login
+```
+
+Gap recorded 2026-07-17: all three provisioning flows (`CreateStaffUserRequest`,
+`CreateCaregiverRequest`, `CreateClientRequest`) accept an admin-chosen `TemporaryPassword`,
+but no `MustChangePassword` mechanism exists — users can keep the coordinator-chosen
+password indefinitely. Needs an Identity-level flag checked at login/refresh, a
+change-password endpoint + client method, and mobile/web first-login UX.
+
 ## Tasks
 
 - [ ] Create `CarePath.Mobile`.
@@ -153,6 +174,11 @@ Feature: Secure attachment storage
 - [ ] Implement reminder background worker.
 - [ ] Implement AI/OCR provider adapter.
 - [ ] Implement secure file/photo storage pattern with private blobs and short-lived URLs.
+- [ ] Add forced password change on first login: `MustChangePassword` flag set by all three
+      provisioning flows (staff, caregiver, client) and by a seed/migration for existing
+      accounts; login/refresh returns a stable `auth.password_change_required` code; new
+      change-password endpoint + `AuthClient` method; web + mobile first-login screens;
+      tests prove a temporary password cannot be used for normal API operation.
 - [ ] Add PHI-safe logging tests.
 - [ ] Add end-to-end workflow tests or scripted demo.
 
@@ -166,5 +192,6 @@ Feature: Secure attachment storage
 - [ ] AI/OCR extraction requires clinician verification.
 - [ ] Attachment storage is private, encrypted, scanned/validated, and never public.
 - [ ] Offline queue handles at least VisitNote draft and retry.
+- [ ] Temporary passwords cannot be used beyond first login; forced change verified for staff, caregiver, and client accounts.
 - [ ] End-to-end demo works from discharge upload to escalation/outcome view.
 - [ ] Build/tests pass.

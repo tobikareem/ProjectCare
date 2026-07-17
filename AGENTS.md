@@ -138,7 +138,7 @@ All PHI (Protected Health Information) data requires:
 - **Encryption at rest** — SQL Server Transparent Data Encryption
 - **Role-based authorization** — enforce `[Authorize(Roles = "...")]` on every controller/endpoint that touches PHI
 - **Object-level authorization** — every `{id}` route that touches PHI must verify the current user can access that specific record to prevent IDOR
-- **Audit logging** — every read, write, update, and delete of PHI must be logged with `UserId`, `Timestamp`, `Action`, `EntityType`, `EntityId`; never log PHI values
+- **Audit logging** — every read, write, update, and delete of PHI must create a separate append-only audit event with `UserId`, `Timestamp`, `Action`, `EntityType`, `EntityId`; never place PHI values in the audit event or ordinary application logs
 - **No PHI in logs** — never log patient names, DOB, diagnosis, SSN, or address strings
 - **No PHI in URLs** — never put patient identifiers in query strings or route parameters without authorization checks
 - **Data retention**: 6 years for all medical records (Maryland requirement)
@@ -158,7 +158,7 @@ Enter plan mode for **any non-trivial task** (3+ steps, new entity, new endpoint
 ### 2. Subagent Strategy
 Use subagents to keep the main context window clean and focused:
 - Use the `dotnet-code-reviewer` subagent after every implementation — not just when asked
-- Use the Task tool to offload exploratory research (reading large specs, tracing cross-layer dependencies) to a subagent
+- Use the platform's subagent capability to offload exploratory research (reading large specs, tracing cross-layer dependencies)
 - One focused task per subagent invocation — avoid overloading a single subagent with multiple concerns
 
 ### 3. Self-Improvement Loop

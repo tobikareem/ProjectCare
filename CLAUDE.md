@@ -61,7 +61,7 @@ CarePath.Domain/
 ├── Enumerations/                         # UserRole, EmploymentType, ShiftStatus, etc.
 └── Interfaces/Repositories/              # IRepository<T>, IUnitOfWork
 
-CarePath.Infrastructure/                  # (CP-02 — EF Core, Repositories, Identity)
+Infrastructure/                           # (CP-02 — EF Core, Repositories, Identity)
 ├── Persistence/
 │   ├── CarePathDbContext.cs              # EF Core DbContext (IdentityDbContext<ApplicationUser>)
 │   ├── Configurations/                   # Fluent API entity configurations (Identity/, Scheduling/, Billing/)
@@ -163,7 +163,7 @@ All PHI (Protected Health Information) data requires:
 - **Encryption at rest** — SQL Server Transparent Data Encryption
 - **Role-based authorization** — enforce `[Authorize(Roles = "...")]` on every controller/endpoint that touches PHI
 - **Object-level authorization** — every `{id}` route that touches PHI must verify the current user can access that specific record to prevent IDOR
-- **Audit logging** — every read, write, update, and delete of PHI must be logged with `UserId`, `Timestamp`, `Action`, `EntityType`, `EntityId`; never log PHI values
+- **Audit logging** — every read, write, update, and delete of PHI must create a separate append-only audit event with `UserId`, `Timestamp`, `Action`, `EntityType`, `EntityId`; never place PHI values in the audit event or ordinary application logs
 - **No PHI in logs** — never log patient names, DOB, diagnosis, SSN, or address strings
 - **No PHI in URLs** — never put patient identifiers in query strings or route parameters without authorization checks
 - **Data retention**: 6 years for all medical records (Maryland requirement)
@@ -183,7 +183,7 @@ Enter plan mode for **any non-trivial task** (3+ steps, new entity, new endpoint
 ### 2. Subagent Strategy
 Use subagents to keep the main context window clean and focused:
 - Use the `dotnet-code-reviewer` subagent after every implementation — not just when asked
-- Use the Task tool to offload exploratory research (reading large specs, tracing cross-layer dependencies) to a subagent
+- Use Claude Code's Task tool to offload exploratory research (reading large specs, tracing cross-layer dependencies) to a subagent
 - One focused task per subagent invocation — avoid overloading a single subagent with multiple concerns
 
 ### 3. Self-Improvement Loop
@@ -332,7 +332,7 @@ Follow this sequence for every implementation task:
 | Testing | xUnit + Moq + FluentAssertions |
 | Mobile | .NET MAUI Blazor Hybrid |
 | Admin UI | Blazor WebAssembly |
-| Docs | Context7 MCP (`.claude/mcp.json`) |
+| Docs | Context7 MCP (configured in the active Claude Code environment) |
 | SMS/Voice | Twilio (planned for CP-03 Transitions reminders) |
 
 ---
@@ -346,6 +346,9 @@ Use these slash commands in Claude Code:
 | `/dotnet-code` | Implement a feature from spec, build, then auto-run the `dotnet-code-reviewer` subagent |
 | `/code-review` | Review all uncommitted changes via the `dotnet-code-reviewer` subagent |
 | `/commit-message` | Generate an emoji-typed commit message from staged changes |
+| `/hipaa-check` | Review PHI-adjacent changes for HIPAA exposure risks |
+| `/migration` | Review, generate, validate, or explicitly apply EF Core migrations |
+| `/new-spec` | Create requirements, design, and task specs for a feature |
 
 The `dotnet-code-reviewer` subagent (`.claude/agents/dotnet-code-reviewer.md`) is an expert .NET reviewer that enforces all rules above, checks specs, and uses Context7 for official docs. It is invoked automatically by both `/dotnet-code` and `/code-review`.
 

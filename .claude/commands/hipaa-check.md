@@ -154,7 +154,7 @@ Search for `[Authorize]` without `Roles =` on controllers that reference Client,
 
 ## Step 5: Audit Logging Check
 
-**Rule: Every read, write, and delete of PHI must be logged with UserId, Timestamp, Action, EntityType, EntityId.**
+**Rule: Every read, write, and delete of PHI must create a separate append-only audit event with UserId, Timestamp, Action, EntityType, and EntityId. Do not place PHI in ordinary application logs.**
 
 ### What to look for:
 - Repository methods or service methods that access PHI entities without audit logging
@@ -192,10 +192,11 @@ Search for `[Authorize]` without `Roles =` on controllers that reference Client,
 ### Safe patterns:
 ```csharp
 // GOOD - Separate DTOs for list vs detail
-public record ShiftListDto  // For list views - NO PHI
+public record ShiftListDto  // Minimum necessary fields; still PHI and requires authorization
 {
     public Guid Id { get; init; }
-    public string ClientName { get; init; }  // OK - name only
+    public Guid ClientId { get; init; }
+    public string ClientDisplayName { get; init; }  // A name is PHI; include only when required
     public DateTime ScheduledStart { get; init; }
     public ShiftStatus Status { get; init; }
 }
@@ -284,7 +285,7 @@ After completing all checks, produce a structured report:
 [PASS / PASS WITH WARNINGS / FAIL — with summary of required actions]
 ```
 
-Save this report to `_specs/hipaa-reviews/` with a descriptive filename (e.g., `hipaa-review-cp-02-scheduling-2026-02-21.md`).
+Return the report in the response by default. Save it under `_specs/hipaa-reviews/` only when the user explicitly requests a persistent report or when report creation is part of an approved implementation task.
 
 ---
 

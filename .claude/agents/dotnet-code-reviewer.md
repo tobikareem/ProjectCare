@@ -55,7 +55,7 @@ Overall assessment and prioritized action items.
 - **Nullable reference types** must be enabled and respected
 - **Clean Architecture dependency rules** — Domain has zero project dependencies; Application depends only on Domain; Infrastructure depends on Application & Domain
 - **FluentValidation** for input validation, not data annotations on DTOs
-- **Repository pattern** via interfaces defined in Application, implemented in Infrastructure
+- **Repository pattern** via interfaces defined in `Domain/Interfaces/Repositories`, implemented in Infrastructure
 
 ## Behavioral Guidelines
 

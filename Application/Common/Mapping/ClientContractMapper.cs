@@ -79,4 +79,19 @@ internal static class ClientContractMapper
             Notes = carePlan.Notes,
         };
     }
+
+    // D-S6-14: explicit field-by-field summary projection — never reuse the full clinical
+    // mapper for list views; the summary must not carry Description/Goals/Interventions/Notes.
+    internal static CarePlanSummaryDto ToSummaryDto(this CarePlan carePlan)
+    {
+        return new CarePlanSummaryDto
+        {
+            Id = carePlan.Id,
+            ClientId = carePlan.ClientId,
+            Title = carePlan.Title,
+            StartDate = carePlan.StartDate,
+            EndDate = carePlan.EndDate,
+            IsActive = carePlan.IsActive,
+        };
+    }
 }

@@ -315,7 +315,21 @@ public sealed class ClientOperationsService : IClientOperationsService
         return carePlan.ToDto();
     }
 
-    public async Task<PagedResult<CarePlanDto>> GetCarePlansAsync(
+    public async Task<CarePlanDto> GetCarePlanAsync(
+        Guid carePlanId,
+        CancellationToken cancellationToken = default)
+    {
+        // The controller's CarePlan IDOR guard runs first (D-S6-14); this in-service check is
+        // deliberate second-layer enforcement so the clinical read stays safe even if a future
+        // call site bypasses the controller.
+        var carePlan = await GetCarePlanEntityAsync(carePlanId, cancellationToken);
+        var client = await GetClientEntityAsync(carePlan.ClientId, cancellationToken);
+        await EnsureCanReadClientAsync(client, AccessScope.Full, cancellationToken);
+        await AuditAsync(ProtectedResourceType.CarePlan, carePlan.Id, AuditAction.Read, cancellationToken);
+        return carePlan.ToDto();
+    }
+
+    public async Task<PagedResult<CarePlanSummaryDto>> GetCarePlansAsync(
         Guid clientId,
         PagedRequest request,
         CancellationToken cancellationToken = default)
@@ -323,20 +337,23 @@ public sealed class ClientOperationsService : IClientOperationsService
         var client = await GetClientEntityAsync(clientId, cancellationToken);
         await EnsureCanReadClientAsync(client, AccessScope.Full, cancellationToken);
 
-        var carePlans = await unitOfWork.CarePlans.FindAsync(
+        // D-S6-14: minimum-necessary summary rows only; the clinical text is served by the
+        // audited per-plan detail read. Filtered, ordered, and paged at the repository.
+        var (carePlans, totalCount) = await unitOfWork.CarePlans.GetPagedDescendingAsync(
             carePlan => carePlan.ClientId == client.Id,
+            carePlan => carePlan.StartDate,
+            request.PageNumber,
+            request.PageSize,
             cancellationToken);
-        var ordered = carePlans.OrderByDescending(carePlan => carePlan.StartDate).ToArray();
-        var page = PagedResultFactory.Page(ordered, request.PageNumber, request.PageSize);
 
-        foreach (var carePlan in page)
+        foreach (var carePlan in carePlans)
         {
             await AuditAsync(ProtectedResourceType.CarePlan, carePlan.Id, AuditAction.Read, cancellationToken);
         }
 
         return PagedResultFactory.Create(
-            page.Select(carePlan => carePlan.ToDto()).ToArray(),
-            ordered.Length,
+            carePlans.Select(carePlan => carePlan.ToSummaryDto()).ToArray(),
+            totalCount,
             request.PageNumber,
             request.PageSize);
     }

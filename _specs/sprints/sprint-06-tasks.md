@@ -252,6 +252,33 @@ visible week entirely; Shift is a high-volume table). Authorized addition:
 - Pinned by `Sprint4SchedulingServiceTests` range tests and the
   `Sprint6ClientRouteAlignmentTests` URL pin.
 
+### D-S6-14 - Care-plan summary list + detail read split (approved by Tobi 2026-07-17)
+
+PROBLEM: the client-detail page must list a client's care plans, but the only read —
+`GET /api/clients/{clientId}/care-plans` — returned `CarePlanDto` rows carrying full clinical
+text (`Description`, `Goals`, `Interventions`, `Notes`), shipping clinical PHI to the browser
+for a list view (minimum-necessary violation), and no per-plan detail GET existed for drill-in.
+
+DECISION (two coordinated changes, one slice):
+
+- **Summary list** — the existing nested route now returns `PagedResult<CarePlanSummaryDto>`
+  (`Id`, `ClientId`, `Title`, `StartDate`, `EndDate?`, `IsActive` — nothing else; a broad
+  reflection denylist test fails if clinical fields are ever added). Same five roles, same
+  client-level object authorization, per-row CarePlan read audit; filtered/paged/ordered at
+  the repository (`StartDate` descending, `Id` tiebreaker) via a new generic descending-order
+  paging overload. Breaking response-shape change accepted because no shipped Razor component
+  consumed the route (verified 2026-07-17).
+- **Detail read** — new `GET /api/care-plans/{id:guid}` returns the full `CarePlanDto`
+  (same five roles; `ProtectedResourceType.CarePlan` IDOR guard, which delegates to the
+  owning client's staff/clinician/self-grant/assignment rules; audited clinical read;
+  PHI-safe identical missing/denied semantics). Clinical text loads only on drill-in.
+- Client: `ClientsClient.GetCarePlansAsync` retyped to the summary shape;
+  new `ClientsClient.GetCarePlanAsync(planId)`. Route shapes pinned in
+  `Sprint6ClientRouteAlignmentTests`.
+- Out of scope: search/filters, plan history/versioning, patient-facing rendering
+  (Sprint 7), any create/update contract change. CarePath.Web consumption is a separate
+  Codex-owned task.
+
 ### D-S6-7 - Accessibility baseline
 
 Every interactive primitive: keyboard operable, labeled (aria-label or visible label), visible
@@ -374,6 +401,7 @@ Owners: **Claude** = PM/Contracts/Client/Client.UI + sprint docs. **Codex** = We
 | S6-TASK-043 | Web: Schedule eligible shifts Step 3 per wireframe. After caregiver create/certification or from profile detail, list eligible open shifts for the selected caregiver, explain match reasons, and assign/review shifts through the same Schedule assignment API path; blocked/expired-cert cases render as non-assignable | Codex | S6-TASK-031, S6-TASK-038, S6-TASK-042 | Done 2026-07-16 — server paging, match/block reasons, disabled ineligible actions, assignment through `ShiftsClient`, and post-assignment page clamping implemented; paging/blocking tests green |
 | S6-TASK-044 | Web: Create shift page per wireframe `page-shift-create` (D-S6-12). Route `/shifts/create`; form maps field-for-field to `CreateShiftRequest`; client/facility select via `ClientsClient.GetPageAsync`; actions `Create & assign shift` (navigates to Assign page with new shift id) and `Create open shift` (saves unassigned → Schedule/coverage queue); wire Overview `＋ Create shift` and Schedule `＋ New shift` buttons to this route; guard errors via ApiErrorAlert; bUnit tests | Codex | S6-TASK-012, S6-TASK-031, D-S6-12 backend (done) | Done 2026-07-09 — `ShiftCreate` route `/shifts/create`, Overview/Schedule entry points wired, open/create-then-assign flows use `ShiftsClient.CreateAsync` with `CaregiverId = null`; verified by `dotnet test CarePath.Web.Tests/CarePath.Web.Tests.csproj /nr:false` (12 passed) |
 | S6-TASK-045 | Contracts/Application/Client: D-S6-12 backend — nullable `CreateShiftRequest.CaregiverId`, conditional eligibility guards in `ShiftOperationsService.CreateShiftAsync`, validator `NotEqual(Guid.Empty)` for supplied values, `ShiftsClient.CreateAsync` open-shift docs, contract-shape pin test + open-shift service tests | Claude | S6-TASK-001 | Done 2026-07-09 — all Application tests green (332); wireframe `page-shift-create`/`page-shift-assign` reworked and browser-verified |
+| S6-TASK-046 | Contracts/Application/Client: D-S6-14 backend — `CarePlanSummaryDto` + explicit mapper; list route converted to repository-paged summaries (StartDate desc, Id tiebreak, per-row read audit); new audited `GET /api/care-plans/{id:guid}` detail read behind the CarePlan IDOR guard PLUS an in-service `EnsureCanReadClientAsync` second layer; `ClientsClient` retype + `GetCarePlanAsync`; allowlist/denylist/mapper/service/controller/client/repo tests | Claude | S6-TASK-001, D-S6-14 | Done 2026-07-17 — build 0 warnings; Domain 268 + Application 378 + Infrastructure 86 + Web 39 green; reviewer clean (defense-in-depth improvement applied); full hipaa-check PASS. Follow-ups: pre-existing Clinician denial in `EnsureCanWriteClientClinicalRecordAsync` (ticketed separately); systemic duplicate read-audit rows (guard + service) noted for a dedicated cleanup decision |
 | S6-TASK-040 | bUnit test suite per D-S6-6 incl. PHI-exposure markup assertions. Must cover Overview quick action routing, Schedule coverage assignment, Caregiver roster/profile detail, Add caregiver Step 1, multi-certification Step 2, and eligible-shifts Step 3 in addition to Transitions pages | Codex (pages) + Claude (primitives) | S6-TASK-030..035, S6-TASK-037, S6-TASK-041..043 | Pending |
 | S6-TASK-050 | Browser PHI safety review per D-S6-3: grep Web for console/DTO serialization/storage writes; verify URLs are Guid-only; keyboard-only walkthrough of review->activate, escalation->acknowledge, caregiver create->certify->eligible-shifts, and schedule coverage->assign workflows | Codex + Claude | S6-TASK-040 | Pending |
 | S6-TASK-060 | Exit verification: build 0 warnings, all tests green, reviewer pass, exit-gate items checked; PROGRESS/lessons updated; PM closes after review | Codex + Claude + Tobi | all above | Pending |

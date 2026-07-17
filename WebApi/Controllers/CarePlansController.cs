@@ -20,6 +20,14 @@ public sealed class CarePlansController : ControllerBase
         this.idorGuard = idorGuard;
     }
 
+    [HttpGet("{id:guid}")]
+    [Authorize(Roles = "Admin,Coordinator,Clinician,Client,Caregiver")]
+    public async Task<ActionResult<CarePlanDto>> GetCarePlan(Guid id, CancellationToken cancellationToken)
+    {
+        await EnsureAuthorizedAsync(ProtectedResourceType.CarePlan, id, ObjectAccessAction.Read, cancellationToken);
+        return Ok(await service.GetCarePlanAsync(id, cancellationToken));
+    }
+
     [HttpPut("{id:guid}")]
     [Authorize(Roles = "Admin,Coordinator,Clinician")]
     public async Task<ActionResult<CarePlanDto>> UpdateCarePlan(Guid id, [FromBody] UpdateCarePlanRequest request, CancellationToken cancellationToken)

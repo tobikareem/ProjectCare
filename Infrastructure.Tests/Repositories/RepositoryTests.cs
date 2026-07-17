@@ -186,6 +186,45 @@ public class RepositoryTests
             "amy@example.test");
     }
 
+    [Fact]
+    public async Task GetPagedDescendingAsync_WhenOrderKeyProvided_ReturnsDescendingPageWithIdTiebreaker()
+    {
+        // Arrange
+        await using var context = CreateDbContext();
+        var repository = new Repository<User>(context);
+        var zoe = CreateUser("zoe@example.test");
+        zoe.FirstName = "Zoe";
+        var amyOne = CreateUser("amy-one@example.test");
+        amyOne.FirstName = "Amy";
+        var amyTwo = CreateUser("amy-two@example.test");
+        amyTwo.FirstName = "Amy";
+        var filteredOut = CreateUser("caregiver@example.test", UserRole.Caregiver);
+        filteredOut.FirstName = "Zz";
+        await repository.AddAsync(amyOne);
+        await repository.AddAsync(zoe);
+        await repository.AddAsync(amyTwo);
+        await repository.AddAsync(filteredOut);
+        await context.SaveChangesAsync();
+        var expectedAmyOrder = new[] { amyOne, amyTwo }
+            .OrderBy(user => user.Id)
+            .Select(user => user.Email)
+            .ToArray();
+
+        // Act
+        var (items, totalCount) = await repository.GetPagedDescendingAsync(
+            user => user.Role == UserRole.Admin,
+            user => user.FirstName,
+            pageNumber: 1,
+            pageSize: 10);
+
+        // Assert
+        totalCount.Should().Be(3);
+        items.Select(user => user.Email).Should().Equal(
+            "zoe@example.test",
+            expectedAmyOrder[0],
+            expectedAmyOrder[1]);
+    }
+
     [Theory]
     [InlineData(0, 10, "pageNumber")]
     [InlineData(1, 0, "pageSize")]

@@ -33,19 +33,19 @@
 
 <section class="match-grid" aria-label="Eligibility summary">
     <article class="card">
-        <span class="metric-label">Eligible open shifts</span>
+        <span class="metric-label">Assignable on this page</span>
         <div class="metric-value">@AssignableCount</div>
         <span class="trend">@TotalCount total reviewed</span>
     </article>
     <article class="card">
         <span class="metric-label">Credential fit</span>
         <div class="metric-value">@CredentialFitText</div>
-        <span class="trend-muted">From saved certifications</span>
+        <span class="trend-muted">Current page, from saved certifications</span>
     </article>
     <article class="card">
         <span class="metric-label">Availability fit</span>
         <div class="metric-value">@AvailabilityFitPercent%</div>
-        <span class="trend-muted">Weekday, weekend, and night checks</span>
+        <span class="trend-muted">Current page availability checks</span>
     </article>
 </section>
 
@@ -57,76 +57,80 @@
         </div>
     </div>
 
-    @if (isLoading)
-    {
-        <p class="empty-state">Loading eligible shifts...</p>
-    }
-    else if (eligibleShifts.Count == 0)
-    {
-        <p class="empty-state">No open shifts are available for review.</p>
-    }
-    else
-    {
-        <div class="data-table-wrap">
-            <table class="data-table">
-                <thead>
-                    <tr>
-                        <th>Open shift</th>
-                        <th>Requirement</th>
-                        <th>When</th>
-                        <th>Match</th>
-                        <th>Action</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    @foreach (var shift in eligibleShifts)
+    <PagedTable TItem="EligibleOpenShiftDto"
+                Result="eligibleShiftPage"
+                IsLoading="isLoading"
+                LoadingText="Loading eligible shifts..."
+                EmptyText="No open shifts are available for review."
+                TableClass="data-table"
+                PagerButtonClass="button button-secondary button-sm"
+                PagerLabel="Eligible shift pages"
+                PageSize="pageSize"
+                MinPageSize="DefaultPageSize"
+                EnableViewportPageSize="true"
+                ShowPagerWhenSinglePage="true"
+                OnPageChanged="LoadEligibleShiftPageAsync"
+                OnPageSizeChanged="ChangeEligibleShiftPageSizeAsync">
+        <HeaderTemplate>
+            <tr>
+                <th>Open shift</th>
+                <th>Requirement</th>
+                <th>When</th>
+                <th>Match</th>
+                <th>Action</th>
+            </tr>
+        </HeaderTemplate>
+        <RowTemplate Context="shift">
+            <tr>
+                <td><strong>@shift.ClientDisplayName</strong><span class="meta">@FormatServiceType(shift.ServiceType)</span></td>
+                <td>@string.Join(", ", shift.RequirementLabels)</td>
+                <td>@shift.ScheduledStartTime.ToLocalTime().ToString("MMM d, h:mm tt")</td>
+                <td>
+                    @if (shift.IsAssignable)
                     {
-                        <tr>
-                            <td><strong>@shift.ClientDisplayName</strong><span class="meta">@FormatServiceType(shift.ServiceType)</span></td>
-                            <td>@string.Join(", ", shift.RequirementLabels)</td>
-                            <td>@shift.ScheduledStartTime.ToLocalTime().ToString("MMM d, h:mm tt")</td>
-                            <td>
-                                @if (shift.IsAssignable)
-                                {
-                                    <StatusBadge Text="Assignable" Tone="@BadgeTone.Success" />
-                                    <span class="meta">@string.Join(", ", shift.MatchReasons)</span>
-                                }
-                                else
-                                {
-                                    <StatusBadge Text="Blocked" Tone="@BadgeTone.Danger" />
-                                    <span class="meta">@string.Join(", ", shift.BlockingReasons)</span>
-                                }
-                            </td>
-                            <td>
-                                <button class="text-link" type="button" disabled="@(!shift.IsAssignable || assigningShiftId == shift.ShiftId)" @onclick="() => AssignShiftAsync(shift)">Assign</button>
-                            </td>
-                        </tr>
+                        <StatusBadge Text="Assignable" Tone="@BadgeTone.Success" />
+                        <span class="meta">@string.Join(", ", shift.MatchReasons)</span>
                     }
-                </tbody>
-            </table>
-        </div>
-    }
+                    else
+                    {
+                        <StatusBadge Text="Blocked" Tone="@BadgeTone.Danger" />
+                        <span class="meta">@string.Join(", ", shift.BlockingReasons)</span>
+                    }
+                </td>
+                <td>
+                    <button class="text-link" type="button" disabled="@(!shift.IsAssignable || assigningShiftId == shift.ShiftId)" @onclick="() => AssignShiftAsync(shift)">Assign</button>
+                </td>
+            </tr>
+        </RowTemplate>
+    </PagedTable>
 </section>
 
 @code {
     [Parameter] public Guid CaregiverId { get; set; }
 
-    private IReadOnlyList<EligibleOpenShiftDto> eligibleShifts = [];
+    // Keep this single minimum in sync with PagedTable.MinPageSize above.
+    private const int DefaultPageSize = 5;
+
+    private PagedResult<EligibleOpenShiftDto>? eligibleShiftPage;
     private ApiResponse? error;
     private Guid? assigningShiftId;
     private bool isLoading;
+    private int pageNumber = 1;
+    private int pageSize = DefaultPageSize;
+
+    private IReadOnlyList<EligibleOpenShiftDto> eligibleShifts => eligibleShiftPage?.Items ?? [];
 
     private int AssignableCount => eligibleShifts.Count(shift => shift.IsAssignable);
 
-    private int TotalCount => eligibleShifts.Count;
+    private int TotalCount => eligibleShiftPage?.TotalCount ?? 0;
 
     private string CredentialFitText => AssignableCount > 0
         ? "Fit"
         : eligibleShifts.Any(shift => shift.BlockingReasons.Any(reason => reason.Contains("Credential", StringComparison.OrdinalIgnoreCase))) ? "Blocked" : "Pending";
 
-    private int AvailabilityFitPercent => TotalCount == 0
+    private int AvailabilityFitPercent => eligibleShifts.Count == 0
         ? 0
-        : (int)Math.Round(eligibleShifts.Count(shift => !shift.BlockingReasons.Any(reason => reason.Contains("Availability", StringComparison.OrdinalIgnoreCase))) * 100m / TotalCount);
+        : (int)Math.Round(eligibleShifts.Count(shift => !shift.BlockingReasons.Any(reason => reason.Contains("Availability", StringComparison.OrdinalIgnoreCase))) * 100m / eligibleShifts.Count);
 
     protected override async Task OnInitializedAsync() => await LoadEligibleShiftsAsync();
 
@@ -134,17 +138,43 @@
     {
         isLoading = true;
         error = null;
-        var response = await CaregiversClient.GetEligibleOpenShiftsAsync(CaregiverId, new PagedRequest { PageNumber = 1, PageSize = 20 });
+        var response = await CaregiversClient.GetEligibleOpenShiftsAsync(
+            CaregiverId,
+            new PagedRequest { PageNumber = pageNumber, PageSize = pageSize });
         if (response.Success && response.Data is not null)
         {
-            eligibleShifts = response.Data.Items;
+            eligibleShiftPage = response.Data;
         }
         else
         {
+            eligibleShiftPage = null;
             error = response;
         }
 
         isLoading = false;
+    }
+
+    private async Task LoadEligibleShiftPageAsync(int requestedPageNumber)
+    {
+        if (requestedPageNumber < 1 || requestedPageNumber == pageNumber)
+        {
+            return;
+        }
+
+        pageNumber = requestedPageNumber;
+        await LoadEligibleShiftsAsync();
+    }
+
+    private async Task ChangeEligibleShiftPageSizeAsync(int requestedPageSize)
+    {
+        if (requestedPageSize < DefaultPageSize || requestedPageSize == pageSize)
+        {
+            return;
+        }
+
+        pageSize = requestedPageSize;
+        pageNumber = 1;
+        await LoadEligibleShiftsAsync();
     }
 
     private async Task AssignShiftAsync(EligibleOpenShiftDto shift)
@@ -165,6 +195,11 @@
         if (response.Success)
         {
             await LoadEligibleShiftsAsync();
+            if (eligibleShiftPage is not null && pageNumber > Math.Max(eligibleShiftPage.TotalPages, 1))
+            {
+                pageNumber = Math.Max(eligibleShiftPage.TotalPages, 1);
+                await LoadEligibleShiftsAsync();
+            }
         }
         else
         {

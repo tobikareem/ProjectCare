@@ -6,40 +6,47 @@
     </span>
 </a>
 
-<p class="nav-label">Workspace</p>
-<nav class="side-nav" aria-label="Workspace navigation">
-    <NavLink href="" Match="NavLinkMatch.All">
-        <span aria-hidden="true">&#x2302;</span><span>Overview</span>
-    </NavLink>
-    <NavLink href="schedule">
-        <span aria-hidden="true">&#x25A6;</span><span>Schedule</span>
-        <span class="nav-count" aria-label="7 open shifts">7</span>
-    </NavLink>
-    <NavLink href="caregivers">
-        <span aria-hidden="true">&#x2659;</span><span>Caregivers</span>
-    </NavLink>
-    <NavLink href="clients">
-        <span aria-hidden="true">&#x2661;</span><span>Clients</span>
-    </NavLink>
-    <NavLink href="visit-notes">
-        <span aria-hidden="true">&#x25A4;</span><span>Visit notes</span>
-        <span class="nav-count" aria-label="3 pending notes">3</span>
-    </NavLink>
-</nav>
+<AuthorizeView Roles="Admin,Coordinator,Clinician">
+    <Authorized>
+        <p class="nav-label">Workspace</p>
+        <nav class="side-nav" aria-label="Workspace navigation">
+            <AuthorizeView Roles="Admin,Coordinator">
+                <Authorized Context="operationsContext">
+                    <NavLink href="" Match="NavLinkMatch.All">
+                        <span aria-hidden="true">&#x2302;</span><span>Overview</span>
+                    </NavLink>
+                    <NavLink href="schedule">
+                        <span aria-hidden="true">&#x25A6;</span><span>Schedule</span>
+                    </NavLink>
+                    <NavLink href="caregivers">
+                        <span aria-hidden="true">&#x2659;</span><span>Caregivers</span>
+                    </NavLink>
+                </Authorized>
+            </AuthorizeView>
+            <NavLink href="clients">
+                <span aria-hidden="true">&#x2661;</span><span>Clients</span>
+            </NavLink>
+            <NavLink href="visit-notes">
+                <span aria-hidden="true">&#x25A4;</span><span>Visit notes</span>
+            </NavLink>
+        </nav>
 
-<p class="nav-label">Business</p>
-<nav class="side-nav" aria-label="Business navigation">
-    <NavLink href="billing">
-        <span aria-hidden="true">$</span><span>Billing</span>
-    </NavLink>
-    <NavLink href="analytics">
-        <span aria-hidden="true">&#x2197;</span><span>Analytics</span>
-    </NavLink>
-    <NavLink href="compliance">
-        <span aria-hidden="true">&#x2713;</span><span>Compliance</span>
-        <span class="nav-count" aria-label="4 compliance alerts">4</span>
-    </NavLink>
-</nav>
+        <AuthorizeView Roles="Admin,Coordinator">
+            <Authorized Context="businessContext">
+                <p class="nav-label">Business</p>
+                <nav class="side-nav" aria-label="Business navigation">
+                    <NavLink href="billing"><span aria-hidden="true">$</span><span>Billing</span></NavLink>
+                    <AuthorizeView Roles="Admin">
+                        <Authorized Context="analyticsContext">
+                            <NavLink href="analytics"><span aria-hidden="true">&#x2197;</span><span>Analytics</span></NavLink>
+                        </Authorized>
+                    </AuthorizeView>
+                    <NavLink href="compliance"><span aria-hidden="true">&#x2713;</span><span>Compliance</span></NavLink>
+                </nav>
+            </Authorized>
+        </AuthorizeView>
+    </Authorized>
+</AuthorizeView>
 
 <AuthorizeView Roles="Admin">
     <Authorized>

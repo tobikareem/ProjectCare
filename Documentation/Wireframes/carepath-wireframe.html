@@ -197,6 +197,12 @@
       box-shadow: 0 4px 14px rgb(7 63 67 / 4%);
     }
 
+    .error-boundary {
+      max-width: 680px;
+      margin: 32px auto;
+      border-left: 4px solid var(--red);
+    }
+
     .metric-card { position: relative; min-height: 137px; overflow: hidden; }
     .metric-card::after {
       position: absolute; right: -22px; bottom: -28px;
@@ -2346,6 +2352,7 @@
                 <section class="card" aria-labelledby="escalations-heading" style="margin-bottom:16px;border-left:4px solid var(--red)">
                   <div class="section-header">
                     <h2 id="escalations-heading" style="color:var(--red)">⚠ Open escalations</h2>
+                    <button class="text-link" type="button" data-web-page="transitions-escalations">View queue →</button>
                   </div>
                   <div class="alert-item" style="margin-bottom:10px">
                     <strong>Beverly T. — Missed critical task</strong>
@@ -2720,6 +2727,69 @@
           </div>
 
           <!-- ── Transitions: Patient Plan ── -->
+          <!-- ── Global: Sanitized page error ── -->
+          <div id="page-error" class="web-page">
+            <section class="card error-boundary" role="alert" aria-labelledby="wireframe-error-heading">
+              <p class="eyebrow">CarePath</p>
+              <h1 id="wireframe-error-heading">Something went wrong</h1>
+              <p>The page could not be completed. No patient or client details were included in this message.</p>
+              <p class="meta">Reference: 7f4c…a921</p>
+              <button class="button button-primary" type="button" data-message="Page retry requested">Try again</button>
+            </section>
+          </div>
+
+          <!-- ── Transitions: Escalations ── -->
+          <div id="page-transitions-escalations" class="web-page">
+            <div class="page-heading">
+              <div>
+                <p class="eyebrow">Transitions · Escalations</p>
+                <h1>Escalation queue</h1>
+                <p class="subtle">Coordinator review of missed tasks, warning symptoms, and failed-contact events.</p>
+              </div>
+              <button class="button button-secondary" type="button" data-web-page="transitions">← Dashboard</button>
+            </div>
+
+            <div style="display:grid;grid-template-columns:minmax(0,1.25fr) minmax(300px,.75fr);gap:20px">
+              <section class="card" aria-labelledby="escalation-queue-heading">
+                <div class="section-header">
+                  <div>
+                    <h2 id="escalation-queue-heading">Open queue</h2>
+                    <span class="subtle">2 escalation records</span>
+                  </div>
+                  <label class="check-row"><input type="checkbox" checked> Open only</label>
+                </div>
+                <div class="alert-item" style="margin-bottom:10px;border-left:4px solid var(--red)">
+                  <strong>Missed critical task · High priority</strong>
+                  <p>Created Jun 24, 9:10 AM · Plan …7A21</p>
+                  <div style="display:flex;gap:12px;margin-top:10px">
+                    <button class="button button-sm button-primary" type="button" data-message="Escalation selected">Acknowledge</button>
+                    <button class="text-link" type="button" data-web-page="transitions-patient">Open plan</button>
+                  </div>
+                </div>
+                <div class="alert-item" style="border-left:4px solid var(--amber)">
+                  <strong>Warning symptoms reported · Urgent review</strong>
+                  <p>Created Jun 23, 4:40 PM · Plan …19B4</p>
+                  <div style="display:flex;gap:12px;margin-top:10px">
+                    <button class="button button-sm button-primary" type="button" data-message="Escalation selected">Acknowledge</button>
+                    <button class="text-link" type="button" data-web-page="transitions-patient">Open plan</button>
+                  </div>
+                </div>
+              </section>
+
+              <aside class="card" aria-labelledby="acknowledge-heading">
+                <h2 id="acknowledge-heading">Acknowledge escalation</h2>
+                <p class="subtle">Document the coordinator's human decision. This action does not autonomously contact outside parties.</p>
+                <label class="form-field" for="decision-level">Human decision level
+                  <select id="decision-level"><option>Coordinator alert</option><option>Family notification</option><option>Urgent care</option><option>Emergency 911</option></select>
+                </label>
+                <label class="form-field" for="resolution-note">Resolution note
+                  <textarea id="resolution-note" rows="5" placeholder="Record the action taken"></textarea>
+                </label>
+                <button class="button button-primary" type="button" data-message="Escalation acknowledgement recorded">Document acknowledgement</button>
+              </aside>
+            </div>
+          </div>
+
           <div id="page-transitions-patient" class="web-page">
             <div class="page-heading">
               <div>

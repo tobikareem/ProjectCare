@@ -42,12 +42,22 @@
         </header>
 
         <main id="main-content" class="web-page">
-            @Body
+            <SanitizedErrorBoundary @ref="errorBoundary">
+                @Body
+            </SanitizedErrorBoundary>
         </main>
     </div>
 </div>
 
 @code {
+    private SanitizedErrorBoundary? errorBoundary;
+
+    /// <inheritdoc />
+    protected override void OnParametersSet()
+    {
+        errorBoundary?.RecoverFromNavigation();
+    }
+
     private static void OnSearchSubmit()
     {
     }

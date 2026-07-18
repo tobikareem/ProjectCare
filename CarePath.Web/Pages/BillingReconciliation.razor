@@ -1,0 +1,275 @@
+@page "/billing/reconciliation"
+@attribute [Authorize(Roles = "Admin,Coordinator")]
+@using CarePath.Client.Api
+@using CarePath.Client.UI.Components
+@using CarePath.Contracts.Billing
+@using CarePath.Contracts.Clients
+@using CarePath.Contracts.Common
+@using CarePath.Contracts.Enumerations
+@using CarePath.Contracts.Scheduling
+@using CarePath.Web.Shared
+@using static CarePath.Web.Shared.BusinessFormatting
+@inject BillingClient BillingApi
+@inject ClientsClient ClientsApi
+@inject NavigationManager Navigation
+@inject BillingReconciliationNavigationState ReconciliationNavigation
+
+<PageTitle>Billing reconciliation</PageTitle>
+
+<div class="page-heading">
+    <div>
+        <p class="eyebrow">Business · Billing</p>
+        <h1>Billing reconciliation</h1>
+        <p class="subtle">Find and resolve delivered services that have not reached an invoice.</p>
+    </div>
+    <div class="button-row">
+        <button class="button button-secondary" type="button" @onclick="GoToBilling">← Back to billing</button>
+        <button class="button button-primary" type="button" @onclick="GoToGenerate">Generate invoice</button>
+    </div>
+</div>
+
+<section class="metric-grid reconciliation-metrics" aria-label="Reconciliation totals">
+    <article class="card metric-card"><span class="metric-label">Revenue at risk</span><div class="metric-value metric-value-red">@Money(_results?.Kpis.RevenueAtRiskValue ?? 0)</div><span class="trend trend-red">Across the full filter</span></article>
+    <article class="card metric-card"><span class="metric-label">Unresolved services</span><div class="metric-value">@(_results?.Kpis.UnresolvedCount ?? 0)</div><span class="trend trend-muted">Requires review</span></article>
+    <article class="card metric-card"><span class="metric-label">Aged risk</span><div class="metric-value">@(_results?.Kpis.AgedCount ?? 0)</div><span class="trend trend-amber">Older than server threshold</span></article>
+    <article class="card metric-card"><span class="metric-label">Aged value</span><div class="metric-value metric-value-amber">@Money(_results?.Kpis.AgedValue ?? 0)</div><span class="trend trend-amber">Priority follow-up</span></article>
+</section>
+
+<section class="card reconciliation-filters" aria-labelledby="reconciliation-filters-heading">
+    <div class="section-header"><div><h2 id="reconciliation-filters-heading">Review filters</h2><p class="subtle">Searches are sent in the authenticated request body.</p></div></div>
+    <div class="reconciliation-filter-grid">
+        <label class="form-field">Period start<InputDate @bind-Value="_periodStart" /></label>
+        <label class="form-field">Period end<InputDate @bind-Value="_periodEnd" /></label>
+        <label class="form-field">Client or facility
+            <select value="@_clientFilter" @onchange="ClientFilterChanged"><option value="">All clients</option>@foreach (var client in ClientOptions){<option value="@client.Id">@client.FullName</option>}</select>
+        </label>
+        <label class="form-field">Service line
+            <select @bind="_serviceFilter"><option value="">All service lines</option>@foreach (var service in Enum.GetValues<ServiceType>()){<option value="@service">@ServiceTypeLabel(service)</option>}</select>
+        </label>
+        <label class="form-field">Reason
+            <select @bind="_reasonFilter"><option value="">All reasons</option>@foreach (var reason in Enum.GetValues<BillingExclusionReason>().Where(reason => reason != BillingExclusionReason.Eligible)){<option value="@reason">@ReasonLabel(reason)</option>}</select>
+        </label>
+        <label class="check-row"><input type="checkbox" @bind="_agedRiskOnly" /> Aged risk only</label>
+    </div>
+    <div class="filter-actions">
+        <div class="client-filter-pager">
+            <button class="button button-secondary button-sm" type="button" disabled="@(_clientsPage is null || !_clientsPage.HasPreviousPage || _loadingClients)" @onclick="PreviousClientsAsync">Previous clients</button>
+            <span class="subtle">Client filter page @(_clientsPage?.PageNumber ?? 1) of @Math.Max(_clientsPage?.TotalPages ?? 1, 1)</span>
+            <button class="button button-secondary button-sm" type="button" disabled="@(_clientsPage is null || !_clientsPage.HasNextPage || _loadingClients)" @onclick="NextClientsAsync">Next clients</button>
+        </div>
+        <button class="button button-primary" type="button" disabled="@_loading" @onclick="ApplyFiltersAsync">@(_loading ? "Reviewing..." : "Review services")</button>
+    </div>
+</section>
+
+@if (_searchError is not null)
+{
+    <ApiErrorAlert Response="_searchError" />
+}
+
+<div class="reconciliation-workspace">
+    <section class="card reconciliation-table-card" aria-labelledby="reconciliation-table-heading">
+        <div class="section-header"><div><h2 id="reconciliation-table-heading">Services requiring review</h2><p class="subtle">Oldest service first · server-paged</p></div><span class="meta">@(_results?.TotalCount ?? 0) matching</span></div>
+        <PagedTable TItem="BillingReconciliationRowDto" Result="ResultPage" IsLoading="_loading" LoadingText="Loading reconciliation..." EmptyText="No services match these reconciliation filters." TableClass="data-table" PagerButtonClass="button button-secondary button-sm" PagerLabel="Reconciliation pages" PageSize="PageSize" MinPageSize="PageSize" ShowPagerWhenSinglePage="true" OnPageChanged="LoadPageAsync">
+            <HeaderTemplate><tr><th>Service date</th><th>Client / facility</th><th>Caregiver</th><th>Issue</th><th>Potential revenue</th><th>Age</th><th>Action</th></tr></HeaderTemplate>
+            <RowTemplate Context="row">
+                <tr class="@(_selectedShiftId == row.ShiftId ? "selected-row" : null)">
+                    <td>@LongDate(row.ServiceDateUtc)</td><td>@row.ClientDisplayName<span class="meta">@ServiceTypeLabel(row.ServiceType)</span></td><td>@(string.IsNullOrWhiteSpace(row.CaregiverDisplayName) ? "Unassigned" : row.CaregiverDisplayName)</td>
+                    <td><span class="status @ReasonTone(row.Reason)">@ReasonLabel(row.Reason)</span></td><td>@(row.EstimatedValue is { } value ? Money(value) : "Pending")</td><td>@row.AgeDays days</td>
+                    <td><button class="text-link" type="button" aria-label="@($"{ActionLabel(row.CorrectiveDestination)} for {row.ClientDisplayName} on {LongDate(row.ServiceDateUtc)}")" disabled="@_detailLoading" @onclick="() => OpenDetailAsync(row)">@ActionLabel(row.CorrectiveDestination)</button></td>
+                </tr>
+            </RowTemplate>
+        </PagedTable>
+    </section>
+
+    <aside class="card reconciliation-detail" aria-labelledby="reconciliation-detail-heading">
+        <div class="section-header"><div><h2 id="reconciliation-detail-heading">Reconciliation detail</h2><p class="subtle">Correct or explicitly resolve the service.</p></div>@if (_detail is not null){<button class="text-link" type="button" @onclick="CloseDetail">Close</button>}</div>
+        @if (_detailError is not null)
+        {
+            <ApiErrorAlert Response="_detailError" />
+        }
+        else if (_detailLoading)
+        {
+            <p role="status" class="empty-state compact">Loading reconciliation detail...</p>
+        }
+        else if (_detail is null)
+        {
+            <p class="empty-state compact">Select a service to review its corrective action and resolution history.</p>
+        }
+        else
+        {
+            <div class="profile-list">
+                <div class="profile-row"><span>Client / facility</span><strong>@_detail.Row.ClientDisplayName</strong></div>
+                <div class="profile-row"><span>Caregiver</span><strong>@(string.IsNullOrWhiteSpace(_detail.Row.CaregiverDisplayName) ? "Unassigned" : _detail.Row.CaregiverDisplayName)</strong></div>
+                <div class="profile-row"><span>Service date</span><strong>@LongDate(_detail.Row.ServiceDateUtc)</strong></div>
+                <div class="profile-row"><span>Issue</span><strong>@ReasonLabel(_detail.Row.Reason)</strong></div>
+            </div>
+
+            @if (_actionError is not null){<ApiErrorAlert Response="_actionError" />}
+
+            @switch (_detail.Row.CorrectiveDestination)
+            {
+                case BillingCorrectiveDestination.InvoiceDetail:
+                    <button class="button button-primary" type="button" disabled="@(!_detail.Row.OwningInvoiceId.HasValue)" @onclick="OpenOwningInvoice">View owning invoice</button>
+                    break;
+                case BillingCorrectiveDestination.ShiftTimeCorrection:
+                    <section class="detail-form" aria-labelledby="time-correction-heading"><h3 id="time-correction-heading">Correct service time</h3><label class="form-field">Actual start<input type="datetime-local" @bind="_actualStart" @bind:format="yyyy-MM-ddTHH:mm" /></label><label class="form-field">Actual end<input type="datetime-local" @bind="_actualEnd" @bind:format="yyyy-MM-ddTHH:mm" /></label><label class="form-field">Unpaid break minutes<input type="number" min="0" @bind="_breakMinutes" /></label><label class="form-field">Reason<select @bind="_timeReason">@foreach (var reason in Enum.GetValues<BillingTimeCorrectionReason>()){<option value="@reason">@EnumLabel(reason.ToString())</option>}</select></label>@if (!CanCorrectTime){<p class="field-error" role="alert">End time must follow start time, and the break must fit within the service window.</p>}<button class="button button-primary" type="button" disabled="@(_actionLoading || !CanCorrectTime)" @onclick="CorrectTimeAsync">Save corrected time</button></section>
+                    break;
+                case BillingCorrectiveDestination.ShiftRateUpdate:
+                    <div class="billing-warning" role="note"><strong>Rate correction needs the protected shift-rate editor.</strong><p>The current shift detail contract does not return compensation fields, so this page will not guess or overwrite the caregiver pay rate.</p></div>
+                    break;
+                case BillingCorrectiveDestination.ShiftLifecycle:
+                    <button class="button button-primary" type="button" @onclick="OpenSchedule">Open schedule workflow</button>
+                    break;
+                case BillingCorrectiveDestination.NonBillableResolution:
+                    <section class="detail-form" aria-labelledby="resolution-heading"><h3 id="resolution-heading">Resolve as non-billable</h3><label class="form-field">Operational reason<select @bind="_resolutionReason">@foreach (var reason in ResolutionReasons){<option value="@reason">@EnumLabel(reason.ToString())</option>}</select></label><label class="form-field">PHI-free note<textarea maxlength="500" @bind="_resolutionNote" placeholder="Optional operational billing note — no clinical details"></textarea></label><button class="button button-primary" type="button" disabled="@_actionLoading" @onclick="ResolveAsync">Record resolution</button></section>
+                    break;
+                case BillingCorrectiveDestination.None:
+                    @if (_detail.Row.Reason == BillingExclusionReason.NonBillableResolved)
+                    {
+                        <section class="detail-form"><label class="form-field">PHI-free reopen note<textarea maxlength="500" @bind="_reopenNote" placeholder="Optional operational reason for reopening"></textarea></label><button class="button button-secondary" type="button" disabled="@_actionLoading" @onclick="ReopenAsync">Reopen service</button></section>
+                    }
+                    else
+                    {
+                        <p class="subtle">No corrective action is available for this classification.</p>
+                    }
+                    break;
+            }
+
+            <section class="resolution-history" aria-labelledby="resolution-history-heading"><h3 id="resolution-history-heading">Resolution history</h3>@if (_detail.ResolutionHistory.Count == 0){<p class="subtle">No resolution has been recorded.</p>}else{@foreach (var record in _detail.ResolutionHistory){<div class="history-row"><div><strong>@EnumLabel(record.Reason.ToString())</strong><span class="meta">@record.ResolvedByDisplayName · @LongDate(record.ResolvedAtUtc)</span>@if (!string.IsNullOrWhiteSpace(record.Note)){<span class="meta">@record.Note</span>}</div>@if (record.IsSuperseded){<span class="status status-amber">Superseded</span>}</div>}}</section>
+        }
+    </aside>
+</div>
+
+<div class="billing-warning revenue-control" role="note"><strong>Revenue-leakage control</strong><p>Items leave the unresolved queue only after they become invoice-eligible or an authorized user records a non-billable decision. Source records are never deleted.</p></div>
+
+@code {
+    private const int PageSize = 10;
+    private const int ClientPageSize = 20;
+    [SupplyParameterFromQuery(Name = "reason")] public string? ReasonQuery { get; set; }
+    private DateTime _periodStart = DateTime.SpecifyKind(DateTime.UtcNow.Date.AddDays(-30), DateTimeKind.Utc);
+    private DateTime _periodEnd = DateTime.SpecifyKind(DateTime.UtcNow.Date.AddDays(1), DateTimeKind.Utc);
+    private string _clientFilter = string.Empty, _serviceFilter = string.Empty, _reasonFilter = string.Empty;
+    private bool _agedRiskOnly, _loading = true, _loadingClients, _detailLoading, _actionLoading;
+    private BillingReconciliationSearchResponseDto? _results;
+    private BillingReconciliationDetailDto? _detail;
+    private PagedResult<ClientSummaryDto>? _clientsPage;
+    private ClientSummaryDto? _selectedFilterClient;
+    private ApiResponse? _searchError, _detailError, _actionError;
+    private Guid? _selectedShiftId;
+    private DateTime _actualStart = DateTime.UtcNow.ToLocalTime().AddHours(-8), _actualEnd = DateTime.UtcNow.ToLocalTime();
+    private int _breakMinutes;
+    private BillingTimeCorrectionReason _timeReason = BillingTimeCorrectionReason.MissedCheckOut;
+    private BillingReconciliationReason _resolutionReason = BillingReconciliationReason.DataEntryError;
+    private string? _resolutionNote, _reopenNote;
+    private static IReadOnlyList<BillingReconciliationReason> ResolutionReasons => Enum.GetValues<BillingReconciliationReason>().Where(reason => reason != BillingReconciliationReason.Reopened).ToArray();
+    private IReadOnlyList<ClientSummaryDto> ClientOptions => (_clientsPage?.Items ?? []).Concat(_selectedFilterClient is null ? [] : [_selectedFilterClient]).DistinctBy(client => client.Id).ToArray();
+    private bool CanCorrectTime => _actualEnd > _actualStart && _breakMinutes >= 0 && _breakMinutes < (_actualEnd - _actualStart).TotalMinutes;
+    private PagedResult<BillingReconciliationRowDto>? ResultPage => _results is null ? null : new() { Items = _results.Rows, PageNumber = _results.PageNumber, PageSize = _results.PageSize, TotalCount = _results.TotalCount };
+
+    protected override async Task OnInitializedAsync()
+    {
+        var navigationContext = ReconciliationNavigation.Take();
+        if (navigationContext is not null)
+        {
+            _periodStart = navigationContext.PeriodStartUtc;
+            _periodEnd = navigationContext.PeriodEndUtc;
+            _clientFilter = navigationContext.ClientId.ToString();
+            _serviceFilter = navigationContext.ServiceType.ToString();
+            _reasonFilter = navigationContext.Reason.ToString();
+            _selectedFilterClient = new ClientSummaryDto { Id = navigationContext.ClientId, FullName = navigationContext.ClientDisplayName, ServiceType = navigationContext.ServiceType, IsActive = true };
+        }
+        else if (Enum.TryParse<BillingExclusionReason>(ReasonQuery, out var reason) && reason != BillingExclusionReason.Eligible) _reasonFilter = reason.ToString();
+        await Task.WhenAll(LoadClientsAsync(1), LoadPageAsync(1));
+    }
+
+    private async Task LoadClientsAsync(int pageNumber)
+    {
+        _loadingClients = true;
+        ApiResponse<PagedResult<ClientSummaryDto>> response;
+        try { response = await ClientsApi.GetPageAsync(new PagedRequest { PageNumber = pageNumber, PageSize = ClientPageSize }); }
+        catch (HttpRequestException) { response = ApiResponse<PagedResult<ClientSummaryDto>>.Fail(new ApiError("network.unreachable", "The client filter could not be loaded.")); }
+        _clientsPage = response is { Success: true, Data: not null } ? response.Data : null;
+        if (_clientsPage is null) _searchError ??= response;
+        _loadingClients = false;
+    }
+    private Task PreviousClientsAsync() => LoadClientsAsync((_clientsPage?.PageNumber ?? 1) - 1);
+    private Task NextClientsAsync() => LoadClientsAsync((_clientsPage?.PageNumber ?? 1) + 1);
+    private Task ApplyFiltersAsync() => LoadPageAsync(1);
+
+    private void ClientFilterChanged(ChangeEventArgs args)
+    {
+        _clientFilter = args.Value?.ToString() ?? string.Empty;
+        _selectedFilterClient = Guid.TryParse(_clientFilter, out var id) ? ClientOptions.FirstOrDefault(client => client.Id == id) : null;
+    }
+
+    private async Task LoadPageAsync(int pageNumber)
+    {
+        _loading = true; _searchError = null; _results = null; CloseDetail();
+        ApiResponse<BillingReconciliationSearchResponseDto> response;
+        try { response = await BillingApi.SearchReconciliationAsync(CurrentSearch(pageNumber)); }
+        catch (HttpRequestException) { response = ApiResponse<BillingReconciliationSearchResponseDto>.Fail(new ApiError("network.unreachable", "The reconciliation queue could not be loaded.")); }
+        if (response is { Success: true, Data: not null }) _results = response.Data; else _searchError = response;
+        _loading = false;
+    }
+
+    private async Task OpenDetailAsync(BillingReconciliationRowDto row)
+    {
+        if (row.CorrectiveDestination == BillingCorrectiveDestination.InvoiceDetail && row.OwningInvoiceId.HasValue) { Navigation.NavigateTo($"/billing/invoices/{row.OwningInvoiceId.Value}"); return; }
+        _selectedShiftId = row.ShiftId; _detail = null; _detailError = null; _actionError = null; _detailLoading = true;
+        ApiResponse<BillingReconciliationDetailDto> response;
+        try { response = await BillingApi.GetReconciliationDetailAsync(row.ShiftId); }
+        catch (HttpRequestException) { response = ApiResponse<BillingReconciliationDetailDto>.Fail(new ApiError("network.unreachable", "The reconciliation detail could not be loaded.")); }
+        if (response is { Success: true, Data: not null }) { _detail = response.Data; InitializeActionForm(response.Data); } else _detailError = response;
+        _detailLoading = false;
+    }
+
+    private void InitializeActionForm(BillingReconciliationDetailDto detail)
+    {
+        _actualStart = detail.Row.ScheduledStartUtc.ToLocalTime(); _actualEnd = detail.Row.ScheduledEndUtc.ToLocalTime(); _breakMinutes = 0; _resolutionNote = null; _reopenNote = null; _actionError = null;
+    }
+
+    private async Task CorrectTimeAsync() => await ApplyDetailMutationAsync(() => BillingApi.CorrectShiftTimeAsync(_detail!.Row.ShiftId, new CorrectShiftTimeRequest { ActualStartUtc = _actualStart.ToUniversalTime(), ActualEndUtc = _actualEnd.ToUniversalTime(), BreakMinutes = _breakMinutes, Reason = _timeReason }));
+    private async Task ResolveAsync() => await ApplyDetailMutationAsync(() => BillingApi.ResolveNonBillableAsync(_detail!.Row.ShiftId, new ResolveNonBillableRequest { Reason = _resolutionReason, Note = CleanNote(_resolutionNote) }));
+    private async Task ReopenAsync() => await ApplyDetailMutationAsync(() => BillingApi.ReopenResolutionAsync(_detail!.Row.ShiftId, new ReopenResolutionRequest { Note = CleanNote(_reopenNote) }));
+
+    private async Task ApplyDetailMutationAsync(Func<Task<ApiResponse<BillingReconciliationDetailDto>>> action)
+    {
+        if (_detail is null) return; _actionLoading = true; _actionError = null;
+        ApiResponse<BillingReconciliationDetailDto> response;
+        try { response = await action(); }
+        catch (HttpRequestException) { response = ApiResponse<BillingReconciliationDetailDto>.Fail(new ApiError("network.unreachable", "The reconciliation action could not be completed.")); }
+        if (response is { Success: true, Data: not null }) { _detail = response.Data; await RefreshAfterMutationAsync(); } else _actionError = response;
+        _actionLoading = false;
+    }
+
+    private async Task RefreshAfterMutationAsync()
+    {
+        ApiResponse<BillingReconciliationSearchResponseDto> response;
+        try { response = await BillingApi.SearchReconciliationAsync(CurrentSearch(_results?.PageNumber ?? 1)); }
+        catch (HttpRequestException) { response = ApiResponse<BillingReconciliationSearchResponseDto>.Fail(new ApiError("network.unreachable", "The reconciliation queue could not be refreshed.")); }
+        if (response is { Success: true, Data: not null })
+        {
+            _results = response.Data;
+            if (_selectedShiftId is not { } selectedId || !_results.Rows.Any(row => row.ShiftId == selectedId)) CloseDetail();
+        }
+        else
+        {
+            _searchError = response;
+            CloseDetail();
+        }
+    }
+
+    private BillingReconciliationSearchRequest CurrentSearch(int pageNumber) => new() { PeriodStartUtc = UtcDate(_periodStart), PeriodEndUtc = UtcDate(_periodEnd), ClientId = Guid.TryParse(_clientFilter, out var id) ? id : null, ServiceType = Enum.TryParse<ServiceType>(_serviceFilter, out var service) ? service : null, Reason = Enum.TryParse<BillingExclusionReason>(_reasonFilter, out var reason) ? reason : null, AgedRiskOnly = _agedRiskOnly, PageNumber = pageNumber, PageSize = PageSize };
+    private void OpenOwningInvoice() { if (_detail?.Row.OwningInvoiceId is { } id) Navigation.NavigateTo($"/billing/invoices/{id}"); }
+    private void GoToBilling() => Navigation.NavigateTo("/billing");
+    private void GoToGenerate() => Navigation.NavigateTo("/billing/generate");
+    private void OpenSchedule() => Navigation.NavigateTo("/schedule");
+    private void CloseDetail() { _detail = null; _detailError = null; _actionError = null; _selectedShiftId = null; }
+    private static DateTime UtcDate(DateTime value) => DateTime.SpecifyKind(value.Date, DateTimeKind.Utc);
+    private static string? CleanNote(string? value) => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
+    private static string ServiceTypeLabel(ServiceType value) => value == ServiceType.InHomeCare ? "In-home care" : "Facility staffing";
+    private static string ReasonLabel(BillingExclusionReason reason) => EnumLabel(reason.ToString());
+    private static string EnumLabel(string value) => System.Text.RegularExpressions.Regex.Replace(value, "([a-z])([A-Z])", "$1 $2");
+    private static string ReasonTone(BillingExclusionReason reason) => reason is BillingExclusionReason.AlreadyInvoiced or BillingExclusionReason.NonBillableResolved ? "status-green" : reason is BillingExclusionReason.MissingActualTime or BillingExclusionReason.MissingBillRate ? "status-red" : "status-amber";
+    private static string ActionLabel(BillingCorrectiveDestination destination) => destination switch { BillingCorrectiveDestination.InvoiceDetail => "View invoice", BillingCorrectiveDestination.ShiftTimeCorrection => "Correct time", BillingCorrectiveDestination.ShiftRateUpdate => "Review rate", BillingCorrectiveDestination.ShiftLifecycle => "Review shift", BillingCorrectiveDestination.NonBillableResolution => "Resolve", _ => "Review" };
+}

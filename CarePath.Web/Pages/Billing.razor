@@ -1,4 +1,5 @@
 @page "/billing"
+@page "/billing/invoices/{InvoiceId:guid}"
 @attribute [Authorize(Roles = "Admin,Coordinator")]
 @using System.Globalization
 @using CarePath.Client.Api
@@ -8,6 +9,7 @@
 @using CarePath.Contracts.Enumerations
 @using static CarePath.Web.Shared.BusinessFormatting
 @inject BillingClient BillingApi
+@inject NavigationManager Navigation
 
 <PageTitle>Billing &amp; Invoices</PageTitle>
 
@@ -17,8 +19,10 @@
         <h1>Billing &amp; Invoices</h1>
         <p class="subtle">@HeadingSummary</p>
     </div>
-    <button class="button button-primary" type="button" disabled title="Invoice generation needs a client picker endpoint"
-            aria-label="Generate invoices (coming soon)">$ Generate invoices</button>
+    <div class="button-row">
+        <button class="button button-secondary" type="button" @onclick="OpenReconciliation">Review uninvoiced services</button>
+        <button class="button button-primary" type="button" @onclick="OpenGenerate">$ Generate invoices</button>
+    </div>
 </div>
 
 <section class="metric-grid metric-grid-3" aria-label="Billing totals">
@@ -313,6 +317,10 @@ else
     private PaymentMethod _paymentMethod = PaymentMethod.Check;
     private DateTime _paymentDate = DateTime.UtcNow.Date;
     private string? _paymentReference;
+    private Guid? _handledRouteInvoiceId;
+
+    [Parameter]
+    public Guid? InvoiceId { get; set; }
 
     private IReadOnlyList<InvoiceSummaryDto> FilteredInvoices =>
         _invoices?.Items.Where(MatchesFilters).ToArray() ?? [];
@@ -391,7 +399,26 @@ else
             ? $"Balance due {Money(_detail!.Balance)}"
             : "Payment entry is disabled for this invoice.";
 
-    protected override Task OnInitializedAsync() => LoadPageAsync(1);
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadPageAsync(1);
+        await ApplyInvoiceRouteAsync();
+    }
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (_invoices is not null && InvoiceId != _handledRouteInvoiceId)
+        {
+            await ApplyInvoiceRouteAsync();
+        }
+    }
+
+    private async Task ApplyInvoiceRouteAsync()
+    {
+        _handledRouteInvoiceId = InvoiceId;
+        if (InvoiceId is { } invoiceId) await SelectInvoiceAsync(invoiceId);
+        else ClearDetailState();
+    }
 
     private async Task LoadPageAsync(int pageNumber)
     {
@@ -531,7 +558,20 @@ else
         _clientFilter = string.Empty;
     }
 
+    private void OpenGenerate() => Navigation.NavigateTo("/billing/generate");
+
+    private void OpenReconciliation() => Navigation.NavigateTo("/billing/reconciliation");
+
     private void CloseDetail()
+    {
+        if (InvoiceId.HasValue)
+        {
+            Navigation.NavigateTo("/billing");
+        }
+        ClearDetailState();
+    }
+
+    private void ClearDetailState()
     {
         _selectedInvoiceId = null;
         _detail = null;

@@ -16,11 +16,11 @@ namespace CarePath.Web.Tests;
 public sealed class NavigationAndErrorBoundaryTests
 {
     [Theory]
-    [InlineData("Admin", true, true, true, true, true, false, false)]
-    [InlineData("Coordinator", true, true, true, false, false, false, false)]
-    [InlineData("Clinician", false, true, false, false, false, false, false)]
-    [InlineData("Caregiver", false, false, false, false, false, true, false)]
-    [InlineData("Client", false, false, false, false, false, false, true)]
+    [InlineData("Admin", true, true, true, true, true, false, false, "Admin Portal")]
+    [InlineData("Coordinator", true, true, true, false, false, false, false, "Admin Portal")]
+    [InlineData("Clinician", false, true, false, false, false, false, false, "Admin Portal")]
+    [InlineData("Caregiver", false, false, false, false, false, true, false, "Caregiver Workspace")]
+    [InlineData("Client", false, false, false, false, false, false, true, "Client Portal")]
     public void NavMenu_ForRole_RendersOnlyAuthorizedDestinations(
         string role,
         bool showsOperations,
@@ -29,7 +29,8 @@ public sealed class NavigationAndErrorBoundaryTests
         bool showsAnalytics,
         bool showsAdmin,
         bool showsMyClients,
-        bool showsMyCaregivers)
+        bool showsMyCaregivers,
+        string expectedBrandSubtitle)
     {
         // Arrange
         using var context = new BunitContext();
@@ -44,6 +45,9 @@ public sealed class NavigationAndErrorBoundaryTests
         // Assert
         component.WaitForAssertion(() =>
         {
+            component.Markup.Should().Contain("CarePath Health");
+            component.Markup.Should().Contain(expectedBrandSubtitle);
+            component.Markup.Should().NotContain("aria-label=\"CarePath overview\"");
             component.Markup.Contains("href=\"schedule\"").Should().Be(showsOperations);
             component.Markup.Contains("href=\"caregivers\"").Should().Be(showsOperations);
             component.Markup.Contains("href=\"clients\"").Should().Be(showsClinicalWorkspace);

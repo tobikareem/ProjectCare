@@ -1,8 +1,17 @@
-<a class="brand" href="" aria-label="CarePath overview">
+@using System.Security.Claims
+
+<a class="brand" href="">
     <span class="brand-mark" aria-hidden="true">CP</span>
     <span>
-        <strong>CarePath</strong>
-        <span>Operations</span>
+        <strong>CarePath Health</strong>
+        <AuthorizeView>
+            <Authorized Context="brandContext">
+                <span>@BrandSubtitle(brandContext.User)</span>
+            </Authorized>
+            <NotAuthorized>
+                <span>Secure portal</span>
+            </NotAuthorized>
+        </AuthorizeView>
     </span>
 </a>
 
@@ -47,6 +56,23 @@
         </AuthorizeView>
     </Authorized>
 </AuthorizeView>
+
+@code {
+    private static string BrandSubtitle(ClaimsPrincipal user)
+    {
+        if (user.IsInRole("Admin") || user.IsInRole("Coordinator") || user.IsInRole("Clinician"))
+        {
+            return "Admin Portal";
+        }
+
+        if (user.IsInRole("Caregiver"))
+        {
+            return "Caregiver Workspace";
+        }
+
+        return user.IsInRole("Client") ? "Client Portal" : "Secure portal";
+    }
+}
 
 <AuthorizeView Roles="Caregiver">
     <Authorized>

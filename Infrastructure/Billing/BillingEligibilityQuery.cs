@@ -36,13 +36,16 @@ public sealed class BillingEligibilityQuery : IBillingEligibilityQuery
         DateTime periodEndUtc,
         CancellationToken cancellationToken = default)
     {
-        var classified = await Classified(context.Shifts.Where(shift =>
+        var shifts = context.Shifts
+            .Where(shift =>
                 shift.ClientId == clientId
                 && shift.ServiceType == serviceType
                 && shift.ScheduledStartTime >= periodStartUtc
-                && shift.ScheduledStartTime < periodEndUtc))
-            .OrderBy(entry => entry.Shift.ScheduledStartTime)
-            .ThenBy(entry => entry.Shift.Id)
+                && shift.ScheduledStartTime < periodEndUtc)
+            .OrderBy(shift => shift.ScheduledStartTime)
+            .ThenBy(shift => shift.Id);
+
+        var classified = await Classified(shifts)
             .ToListAsync(cancellationToken);
 
         return await ComposeRowsAsync(classified, cancellationToken);

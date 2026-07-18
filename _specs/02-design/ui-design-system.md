@@ -49,6 +49,9 @@ define is a STOP: flag for PM/wireframe update first, extract second, implement 
 
 ## Layout (web)
 
+- Production `CarePath.Web` chrome uses neutral company branding (`CarePath Health`) with
+  role-aware portal subtitles. The wireframe's prototype view switcher (`Web operations` /
+  `Caregiver mobile`) is an authoring control only and must not render in the shipped web app.
 - App shell grid: `250px` fixed sidebar + `minmax(0,1fr)` main column
 - Sidebar: `--teal-900` background, light text (`#e9f5f4`), section labels `#a7cecc`,
   active nav item `rgb(255 255 255 / 14%)` fill, count pills `#ffcfad`/`#542408`

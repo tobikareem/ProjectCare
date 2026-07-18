@@ -69,6 +69,8 @@ This file captures recurring mistakes, corrections, and hard-won patterns discov
 
 ## UI / Design
 
+- **Production web shells must not retain prototype mode labels** - A desktop admin app should not show wireframe controls such as "Web operations" / "Caregiver mobile" or MVP-only explanatory copy. When promoting a wireframe screen into CarePath.Web, replace prototype chrome with company-facing portal branding, keep the company name neutral in the shared shell, and make subtitles role-aware so caregiver/client sessions are not mislabeled as admin.
+
 - **Billing previews need operational attribution and drill-through, not anonymous aggregates** - For authorized Admin/Coordinator reconciliation, show the performing caregiver's minimum-necessary display name and role/license label. Exclusion counts must link to paged review details and corrective actions; an aggregate-only exclusion notice can hide revenue leakage. Keep caregiver pay, contact, GPS, clinical notes, and margin out of the preview.
 
 - **Place Blazor error boundaries inside the persistent layout chrome** - A boundary around the root `Router` replaces navigation and sign-out controls when a page fails and can trap users on deterministic errors. Wrap only `MainLayout`'s `@Body`, retain an `@ref`, and recover during parameter changes so navigation self-heals. Test that exception messages/PHI never render.

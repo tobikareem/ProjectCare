@@ -1,45 +1,21 @@
-.prototype-bar {
+.admin-banner {
     display: flex;
     align-items: center;
-    justify-content: space-between;
-    gap: 20px;
+    justify-content: flex-start;
     padding: 14px clamp(16px, 3vw, 36px);
-    color: #fff;
+    color: var(--surface);
     background: var(--teal-900);
 }
 
-.prototype-bar strong {
-    letter-spacing: 0.02em;
+.admin-banner strong {
+    display: block;
+    letter-spacing: 0;
 }
 
-.prototype-bar p {
+.admin-banner p {
     margin: 2px 0 0;
-    color: #cce3e3;
+    color: var(--teal-100);
     font-size: 0.86rem;
-}
-
-.view-switcher {
-    display: flex;
-    gap: 4px;
-    padding: 4px;
-    border: 1px solid rgb(255 255 255 / 35%);
-    border-radius: 11px;
-}
-
-.view-switcher button {
-    min-height: 38px;
-    padding: 7px 13px;
-    color: #fff;
-    background: transparent;
-    border: 0;
-    border-radius: 8px;
-    cursor: pointer;
-}
-
-.view-switcher button[aria-selected="true"] {
-    color: var(--teal-900);
-    background: #fff;
-    font-weight: 750;
 }
 
 .web-app {
@@ -214,17 +190,8 @@
 }
 
 @media (max-width: 780px) {
-    .prototype-bar {
-        align-items: flex-start;
-        flex-direction: column;
-    }
-
-    .view-switcher {
-        width: 100%;
-    }
-
-    .view-switcher button {
-        flex: 1;
+    .admin-banner {
+        padding: 12px 16px;
     }
 
     .web-app {

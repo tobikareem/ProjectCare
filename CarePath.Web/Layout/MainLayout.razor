@@ -5,14 +5,17 @@
 
 <a class="skip-link" href="#main-content">Skip to main content</a>
 
-<header class="prototype-bar">
+<header class="admin-banner">
     <div>
-        <strong>CarePath Health — Product Wireframe</strong>
-        <p>Interactive concept — no real patient data</p>
-    </div>
-    <div class="view-switcher" aria-label="Prototype view">
-        <button type="button" aria-selected="true">Web operations</button>
-        <button type="button" aria-selected="false">Caregiver mobile</button>
+        <strong>CarePath Health</strong>
+        <AuthorizeView>
+            <Authorized Context="bannerContext">
+                <p>@PortalLabel(bannerContext.User)</p>
+            </Authorized>
+            <NotAuthorized>
+                <p>Secure operations portal</p>
+            </NotAuthorized>
+        </AuthorizeView>
     </div>
 </header>
 
@@ -70,6 +73,21 @@
 
     private static string RoleLabel(ClaimsPrincipal user) =>
         user.FindFirst(ClaimTypes.Role)?.Value ?? string.Empty;
+
+    private static string PortalLabel(ClaimsPrincipal user)
+    {
+        if (user.IsInRole("Admin") || user.IsInRole("Coordinator") || user.IsInRole("Clinician"))
+        {
+            return "Admin Portal";
+        }
+
+        if (user.IsInRole("Caregiver"))
+        {
+            return "Caregiver Workspace";
+        }
+
+        return user.IsInRole("Client") ? "Client Portal" : "Secure operations portal";
+    }
 
     private static string Initials(string? displayName)
     {

@@ -1,0 +1,375 @@
+@page "/billing/generate"
+@attribute [Authorize(Roles = "Admin,Coordinator")]
+@using System.Globalization
+@using CarePath.Client.Api
+@using CarePath.Client.UI.Components
+@using CarePath.Contracts.Billing
+@using CarePath.Contracts.Clients
+@using CarePath.Contracts.Common
+@using CarePath.Contracts.Enumerations
+@using CarePath.Web.Shared
+@using static CarePath.Web.Shared.BusinessFormatting
+@inject BillingClient BillingApi
+@inject ClientsClient ClientsApi
+@inject NavigationManager Navigation
+@inject BillingReconciliationNavigationState ReconciliationNavigation
+
+<PageTitle>Generate invoice</PageTitle>
+
+<div class="page-heading">
+    <div>
+        <p class="eyebrow">Business · Billing</p>
+        <h1>@(_preview is null ? "Generate invoice" : "Preview billable shifts")</h1>
+        <p class="subtle">@HeadingText</p>
+    </div>
+    <button class="button button-secondary" type="button" @onclick="Back">← @(_preview is null ? "Back to billing" : "Edit invoice details")</button>
+</div>
+
+<div class="setup-steps" aria-label="Invoice generation steps">
+    <div class="setup-step @(_preview is null ? "active" : null)"><strong>1 · Select</strong><span class="meta">Client, service and period</span></div>
+    <div class="setup-step @(_preview is not null ? "active" : null)"><strong>2 · Preview</strong><span class="meta">Verify eligible shifts</span></div>
+    <div class="setup-step"><strong>3 · Generate</strong><span class="meta">Create and open invoice</span></div>
+</div>
+
+@if (_pageError is not null)
+{
+    <ApiErrorAlert Response="_pageError" />
+}
+
+@if (_stalePreview)
+{
+    <div class="billing-warning stale-preview" role="alert"><div><strong>The preview changed or expired.</strong><p>Run Preview again and review the latest eligible shifts before generating this invoice.</p></div></div>
+}
+
+@if (_preview is null)
+{
+    <div class="billing-generate-grid">
+        <section class="card form-section" aria-labelledby="invoice-details-heading">
+            <div class="section-header">
+                <div><h2 id="invoice-details-heading">Invoice details</h2><p class="subtle">Choose one billing account and period.</p></div>
+            </div>
+
+            @if (_clientsLoading)
+            {
+                <p role="status" class="empty-state compact">Loading clients and facilities...</p>
+            }
+            else
+            {
+                <div class="billing-form-grid">
+                    <label class="form-field">Client or facility
+                        <select id="invoice-client" disabled="@(_submitting || ClientOptions.Count == 0)" value="@_clientId" @onchange="ClientChanged">
+                            @if (ClientOptions.Count == 0)
+                            {
+                                <option value="">No billing accounts available</option>
+                            }
+                            @foreach (var client in ClientOptions)
+                            {
+                                <option value="@client.Id">@client.FullName</option>
+                            }
+                        </select>
+                    </label>
+                    <label class="form-field">Service line
+                        <select id="invoice-service" disabled="@_submitting" @bind="_serviceType">
+                            @foreach (var serviceType in Enum.GetValues<ServiceType>())
+                            {
+                                <option value="@serviceType">@ServiceTypeLabel(serviceType)</option>
+                            }
+                        </select>
+                    </label>
+                    <label class="form-field">Period start
+                        <InputDate id="invoice-period-start" disabled="@_submitting" @bind-Value="_periodStart" />
+                    </label>
+                    <label class="form-field">Period end
+                        <InputDate id="invoice-period-end" disabled="@_submitting" @bind-Value="_periodEnd" />
+                    </label>
+                    <label class="form-field">Due date
+                        <InputDate id="invoice-due-date" disabled="@_submitting" @bind-Value="_dueDate" />
+                    </label>
+                    <label class="form-field">Tax amount
+                        <input id="invoice-tax" type="number" min="0" step="0.01" inputmode="decimal" disabled="@_submitting" @bind="_taxAmount" />
+                    </label>
+                </div>
+                <label class="form-field">Internal invoice note
+                    <textarea id="invoice-note" maxlength="500" disabled="@_submitting" @bind="_notes" placeholder="Optional billing note — do not enter clinical details"></textarea>
+                </label>
+
+                <div class="client-picker-pager" aria-label="Client picker pages">
+                    <button class="button button-secondary button-sm" type="button" disabled="@(_clientsPage is null || !_clientsPage.HasPreviousPage || _clientsLoading)" @onclick="PreviousClientsAsync">Previous clients</button>
+                    <span class="subtle">Client page @(_clientsPage?.PageNumber ?? 1) of @Math.Max(_clientsPage?.TotalPages ?? 1, 1)</span>
+                    <button class="button button-secondary button-sm" type="button" disabled="@(_clientsPage is null || !_clientsPage.HasNextPage || _clientsLoading)" @onclick="NextClientsAsync">Next clients</button>
+                </div>
+
+                @if (!string.IsNullOrWhiteSpace(_validationMessage))
+                {
+                    <p class="field-error" role="alert">@_validationMessage</p>
+                }
+
+                <button class="button button-primary" type="button" disabled="@(!CanPreview)" @onclick="PreviewAsync">
+                    @(_submitting ? "Checking shifts..." : "Preview billable shifts →")
+                </button>
+            }
+        </section>
+
+        <aside class="card form-section" aria-labelledby="preview-checks-heading">
+            <div><p class="eyebrow">Before generation</p><h2 id="preview-checks-heading">What Preview checks</h2></div>
+            <div class="profile-row"><span>Shift status</span><strong>Completed</strong></div>
+            <div class="profile-row"><span>Time records</span><strong>Valid check-in/out</strong></div>
+            <div class="profile-row"><span>Billing period</span><strong>Within selected dates</strong></div>
+            <div class="profile-row"><span>Prior billing</span><strong>Not already invoiced</strong></div>
+            <div class="billing-notice"><strong>No invoice is created yet</strong><p>Preview is read-only. You can return and edit these selections before generating.</p></div>
+        </aside>
+    </div>
+}
+else
+{
+    <div class="billing-generate-grid">
+        <section class="card form-section" aria-labelledby="preview-selection-heading">
+            <div class="section-header"><div><h2 id="preview-selection-heading">Selected billing details</h2><p class="subtle">Read-only snapshot used for this preview.</p></div><button class="text-link" type="button" @onclick="EditSelection">Edit</button></div>
+            <div class="billing-selection-grid">
+                <div class="profile-row"><span>Client / facility</span><strong>@SelectedClientName</strong></div>
+                <div class="profile-row"><span>Service line</span><strong>@ServiceTypeLabel(_serviceType)</strong></div>
+                <div class="profile-row"><span>Billing period</span><strong>@LongDate(_periodStart)–@LongDate(_periodEnd.AddDays(-1))</strong></div>
+                <div class="profile-row"><span>Due date</span><strong>@LongDate(_dueDate)</strong></div>
+            </div>
+        </section>
+
+        <aside class="card form-section" aria-labelledby="preview-summary-heading">
+            <div><p class="eyebrow">Preview result</p><h2 id="preview-summary-heading">Invoice summary</h2></div>
+            <div class="profile-row"><span>Eligible shifts</span><strong>@_preview.EligibleShiftCount</strong></div>
+            <div class="profile-row"><span>Billable hours</span><strong>@Hours(_preview.TotalBillableHours) hrs</strong></div>
+            <div class="profile-row"><span>Subtotal</span><strong>@Money(_preview.Subtotal)</strong></div>
+            <div class="profile-row"><span>Tax</span><strong>@Money(_taxAmount)</strong></div>
+            <div class="profile-row"><span>Total</span><strong>@Money(_preview.Subtotal + _taxAmount)</strong></div>
+            <span class="meta">Preview expires @PreviewExpiryText</span>
+            @if (_preview.ExclusionCounts.Count > 0)
+            {
+                <div class="billing-warning" role="note">
+                    <strong>@_preview.ExclusionCounts.Sum(item => item.Count) shifts not included</strong>
+                    <div class="exclusion-links">
+                        @foreach (var exclusion in _preview.ExclusionCounts.Where(item => item.Count > 0))
+                        {
+                            <button class="text-link" type="button" @onclick="() => ReviewExclusion(exclusion.Reason)">@exclusion.Count @ExclusionLabel(exclusion.Reason)</button>
+                        }
+                    </div>
+                </div>
+            }
+        </aside>
+    </div>
+
+    <section class="card billing-preview-table" aria-labelledby="billable-shifts-heading">
+        <div class="section-header">
+            <div><h2 id="billable-shifts-heading">Billable shifts</h2><p class="subtle">Caregiver pay, margin, contact details, GPS, and clinical notes are excluded.</p></div>
+        </div>
+        <div class="data-table-wrap">
+            <table class="data-table">
+                <thead><tr><th>Service date</th><th>Caregiver / qualification</th><th>Actual window</th><th>Hours</th><th>Bill rate</th><th>Line total</th></tr></thead>
+                <tbody>
+                    @if (_previewLoading)
+                    {
+                        <tr><td colspan="6" role="status">Refreshing preview...</td></tr>
+                    }
+                    else if (_preview.Rows.Count == 0)
+                    {
+                        <tr><td colspan="6">No eligible shifts are available for this selection.</td></tr>
+                    }
+                    else
+                    {
+                        @foreach (var row in _preview.Rows)
+                        {
+                            <tr>
+                                <td>@LongDate(row.ServiceDateUtc)</td>
+                                <td>@row.CaregiverDisplayName<span class="meta">@row.QualificationLabel</span></td>
+                                <td>@TimeWindow(row.ServiceStartUtc, row.ServiceEndUtc)</td>
+                                <td>@Hours(row.BillableHours)</td>
+                                <td>@Money(row.BillRate)/hr</td>
+                                <td><strong>@Money(row.LineTotal)</strong></td>
+                            </tr>
+                        }
+                    }
+                </tbody>
+            </table>
+        </div>
+        <div class="billing-table-footer">
+            <span class="subtle">Page @_preview.PageNumber of @PreviewTotalPages · @_preview.EligibleShiftCount eligible shifts</span>
+            <div class="button-row">
+                <button class="button button-secondary button-sm" type="button" disabled="@(_preview.PageNumber <= 1 || _previewLoading)" @onclick="() => LoadPreviewPageAsync(_preview.PageNumber - 1)">Previous</button>
+                <button class="button button-secondary button-sm" type="button" disabled="@(_preview.PageNumber >= PreviewTotalPages || _previewLoading)" @onclick="() => LoadPreviewPageAsync(_preview.PageNumber + 1)">Next</button>
+            </div>
+        </div>
+    </section>
+
+    <div class="card billing-generate-action">
+        <p class="subtle">Eligibility and prior billing are checked again when you generate the invoice.</p>
+        <button class="button button-primary" type="button" disabled="@(!CanGenerate)" @onclick="GenerateAsync">@(_submitting ? "Generating..." : $"Generate {Money(_preview.Subtotal + _taxAmount)} invoice")</button>
+    </div>
+}
+
+@code {
+    private const int ClientPageSize = 20;
+    private const int PreviewPageSize = 10;
+    private PagedResult<ClientSummaryDto>? _clientsPage;
+    private ClientSummaryDto? _selectedClient;
+    private InvoicePreviewResponseDto? _preview;
+    private ApiResponse? _pageError;
+    private Guid _clientId;
+    private ServiceType _serviceType = ServiceType.InHomeCare;
+    private DateTime _periodStart = new DateTime(DateTime.UtcNow.Year, DateTime.UtcNow.Month, 1, 0, 0, 0, DateTimeKind.Utc).AddMonths(-1);
+    private DateTime _periodEnd = new DateTime(DateTime.UtcNow.Year, DateTime.UtcNow.Month, 1, 0, 0, 0, DateTimeKind.Utc);
+    private DateTime _dueDate = new DateTime(DateTime.UtcNow.Year, DateTime.UtcNow.Month, 1, 0, 0, 0, DateTimeKind.Utc).AddDays(30);
+    private decimal _taxAmount;
+    private string? _notes;
+    private string? _validationMessage;
+    private bool _clientsLoading;
+    private bool _previewLoading;
+    private bool _submitting;
+    private bool _stalePreview;
+
+    private IReadOnlyList<ClientSummaryDto> ClientOptions => (_clientsPage?.Items ?? []).Concat(_selectedClient is null ? [] : [_selectedClient]).DistinctBy(client => client.Id).ToArray();
+    private string SelectedClientName => _selectedClient?.FullName ?? "Selected billing account";
+    private bool CanPreview => !_clientsLoading && !_submitting && _clientId != Guid.Empty && _periodEnd.Date > _periodStart.Date && _dueDate.Date >= _periodEnd.Date && _taxAmount >= 0;
+    private bool CanGenerate => !_submitting && !_previewLoading && !_stalePreview && _preview is { EligibleShiftCount: > 0, PreviewToken.Length: > 0 };
+    private int PreviewTotalPages => _preview is null ? 1 : Math.Max(1, (int)Math.Ceiling(_preview.EligibleShiftCount / (double)_preview.PageSize));
+    private string PreviewExpiryText => _preview is null ? string.Empty : _preview.PreviewTokenExpiresAtUtc.ToLocalTime().ToString("h:mm tt", CultureInfo.InvariantCulture);
+    private string HeadingText => _preview is null ? "Select a billing account and period before reviewing eligible shifts." : $"{SelectedClientName} · {ServiceTypeLabel(_serviceType)}";
+
+    protected override Task OnInitializedAsync() => LoadClientsAsync(1);
+
+    private async Task LoadClientsAsync(int pageNumber)
+    {
+        _clientsLoading = true;
+        _pageError = null;
+        ApiResponse<PagedResult<ClientSummaryDto>> response;
+        try { response = await ClientsApi.GetPageAsync(new PagedRequest { PageNumber = pageNumber, PageSize = ClientPageSize }); }
+        catch (HttpRequestException) { response = ApiResponse<PagedResult<ClientSummaryDto>>.Fail(new ApiError("network.unreachable", "The client list could not be loaded.")); }
+        if (response is { Success: true, Data: not null })
+        {
+            _clientsPage = response.Data;
+            if (_selectedClient is null)
+            {
+                var first = _clientsPage.Items.FirstOrDefault();
+                _clientId = first?.Id ?? Guid.Empty;
+                _selectedClient = first;
+                if (first is not null)
+                {
+                    _serviceType = first.ServiceType;
+                }
+            }
+        }
+        else
+        {
+            _clientsPage = null;
+            _clientId = Guid.Empty;
+            _selectedClient = null;
+            _pageError = response;
+        }
+        _clientsLoading = false;
+    }
+
+    private Task PreviousClientsAsync() => LoadClientsAsync((_clientsPage?.PageNumber ?? 1) - 1);
+    private Task NextClientsAsync() => LoadClientsAsync((_clientsPage?.PageNumber ?? 1) + 1);
+
+    private void ClientChanged(ChangeEventArgs args)
+    {
+        _clientId = Guid.TryParse(args.Value?.ToString(), out var id) ? id : Guid.Empty;
+        var client = ClientOptions.FirstOrDefault(item => item.Id == _clientId);
+        if (client is not null)
+        {
+            _selectedClient = client;
+            _serviceType = client.ServiceType;
+        }
+    }
+
+    private async Task PreviewAsync() => await LoadPreviewPageAsync(1);
+
+    private async Task LoadPreviewPageAsync(int pageNumber)
+    {
+        if (!ValidateSelection()) return;
+        _submitting = _preview is null;
+        _previewLoading = _preview is not null;
+        _pageError = null;
+        _stalePreview = false;
+        ApiResponse<InvoicePreviewResponseDto> response;
+        try
+        {
+            response = await BillingApi.PreviewInvoiceAsync(new InvoicePreviewRequest
+            {
+                ClientId = _clientId,
+                ServiceType = _serviceType,
+                PeriodStartUtc = UtcDate(_periodStart),
+                PeriodEndUtc = UtcDate(_periodEnd),
+                PageNumber = pageNumber,
+                PageSize = PreviewPageSize,
+            });
+        }
+        catch (HttpRequestException)
+        {
+            response = ApiResponse<InvoicePreviewResponseDto>.Fail(new ApiError("network.unreachable", "The invoice preview could not be loaded."));
+        }
+        if (response is { Success: true, Data: not null }) _preview = response.Data;
+        else { _preview = null; _pageError = response; }
+        _submitting = false;
+        _previewLoading = false;
+    }
+
+    private async Task GenerateAsync()
+    {
+        if (!CanGenerate || _preview is null) return;
+        _submitting = true;
+        _pageError = null;
+        ApiResponse<InvoiceDetailDto> response;
+        try
+        {
+            response = await BillingApi.CreateInvoiceAsync(new CreateInvoiceRequest
+            {
+                ClientId = _clientId,
+                ServiceType = _serviceType,
+                PeriodStartUtc = UtcDate(_periodStart),
+                PeriodEndUtc = UtcDate(_periodEnd),
+                DueDate = UtcDate(_dueDate),
+                TaxAmount = _taxAmount,
+                Notes = string.IsNullOrWhiteSpace(_notes) ? null : _notes.Trim(),
+                PreviewToken = _preview.PreviewToken,
+            });
+        }
+        catch (HttpRequestException)
+        {
+            response = ApiResponse<InvoiceDetailDto>.Fail(new ApiError("network.unreachable", "The invoice could not be generated."));
+        }
+        if (response is { Success: true, Data: not null })
+        {
+            _preview = null; // Clear the opaque token before navigation.
+            Navigation.NavigateTo($"/billing/invoices/{response.Data.Id}");
+            return;
+        }
+        _pageError = response;
+        _stalePreview = response.Errors.Any(error => error.Code == "invoice.preview_stale");
+        if (_stalePreview)
+        {
+            _preview = null; // Drop the stale opaque token and require a new preview response.
+        }
+        _submitting = false;
+    }
+
+    private bool ValidateSelection()
+    {
+        _validationMessage = null;
+        if (_clientId == Guid.Empty) _validationMessage = "Select a client or facility.";
+        else if (_periodEnd.Date <= _periodStart.Date) _validationMessage = "Period end must be after period start.";
+        else if (_dueDate.Date < _periodEnd.Date) _validationMessage = "Due date must be on or after the period end.";
+        else if (_taxAmount < 0) _validationMessage = "Tax amount cannot be negative.";
+        return _validationMessage is null;
+    }
+
+    private void Back() { if (_preview is null) Navigation.NavigateTo("/billing"); else EditSelection(); }
+    private void EditSelection() { _preview = null; _pageError = null; _stalePreview = false; }
+    private void ReviewExclusion(BillingExclusionReason reason)
+    {
+        ReconciliationNavigation.Set(new BillingReconciliationNavigationContext(
+            _clientId, _serviceType, UtcDate(_periodStart), UtcDate(_periodEnd), reason, SelectedClientName));
+        Navigation.NavigateTo("/billing/reconciliation");
+    }
+    private static DateTime UtcDate(DateTime value) => DateTime.SpecifyKind(value.Date, DateTimeKind.Utc);
+    private static string TimeWindow(DateTime start, DateTime end) => $"{start.ToLocalTime():h:mm tt}–{end.ToLocalTime():h:mm tt}";
+    private static string ServiceTypeLabel(ServiceType value) => value == ServiceType.InHomeCare ? "In-home care" : "Facility staffing";
+    private static string ExclusionLabel(BillingExclusionReason reason) => reason switch { BillingExclusionReason.AlreadyInvoiced => "already invoiced", BillingExclusionReason.NonBillableResolved => "resolved non-billable", BillingExclusionReason.CancelledOrNoShow => "cancelled or no-show", BillingExclusionReason.NotCompleted => "not completed", BillingExclusionReason.MissingActualTime => "missing time", BillingExclusionReason.InvalidBillableTime => "invalid time", BillingExclusionReason.MissingBillRate => "missing rate", _ => "excluded" };
+}

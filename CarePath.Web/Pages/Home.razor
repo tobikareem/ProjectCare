@@ -120,7 +120,7 @@
             <div class="quick-actions">
                 <button type="button" @onclick="NavigateToCreateClient">+ Add client</button>
                 <button type="button" @onclick="NavigateToCreateCaregiver">＋ Add caregiver</button>
-                <button type="button" @onclick="NavigateToBilling">$ Generate invoices</button>
+                <button type="button" @onclick="NavigateToGenerateInvoice">$ Generate invoices</button>
                 <button type="button" @onclick="NavigateToCredentials">✓ Review credentials</button>
             </div>
         </section>
@@ -294,6 +294,8 @@
     private void NavigateToCreateCaregiver() => Navigation.NavigateTo("/caregivers/create");
 
     private void NavigateToBilling() => Navigation.NavigateTo("/billing");
+
+    private void NavigateToGenerateInvoice() => Navigation.NavigateTo("/billing/generate");
 
     private void NavigateToCredentials() => Navigation.NavigateTo("/compliance");
 }

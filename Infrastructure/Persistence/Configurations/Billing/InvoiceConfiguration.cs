@@ -9,6 +9,15 @@ namespace CarePath.Infrastructure.Persistence.Configurations.Billing;
 /// </summary>
 public sealed class InvoiceConfiguration : IEntityTypeConfiguration<Invoice>
 {
+    private readonly SqlDialect _dialect;
+
+    /// <summary>Initializes the configuration with the active provider's SQL dialect.</summary>
+    /// <param name="dialect">Dialect used to build provider-valid filtered index expressions.</param>
+    public InvoiceConfiguration(SqlDialect dialect)
+    {
+        _dialect = dialect;
+    }
+
     /// <inheritdoc />
     public void Configure(EntityTypeBuilder<Invoice> builder)
     {
@@ -53,7 +62,7 @@ public sealed class InvoiceConfiguration : IEntityTypeConfiguration<Invoice>
         builder.HasIndex(invoice => invoice.ClientId).HasDatabaseName("IX_Invoices_ClientId");
         builder.HasIndex(invoice => new { invoice.ClientId, invoice.ServiceType, invoice.PeriodStartUtc, invoice.PeriodEndUtc })
             .IsUnique()
-            .HasFilter("[IsDeleted] = 0")
+            .HasFilter(_dialect.IsFalse("IsDeleted"))
             .HasDatabaseName("IX_Invoices_Client_Service_Period");
         builder.HasIndex(invoice => invoice.InvoiceDate).HasDatabaseName("IX_Invoices_InvoiceDate");
         builder.HasIndex(invoice => invoice.DueDate).HasDatabaseName("IX_Invoices_DueDate");

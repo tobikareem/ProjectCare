@@ -1,0 +1,68 @@
+{
+    // Environment (and therefore the database provider) comes from the matching
+    // profile in WebApi/Properties/launchSettings.json — one source of truth.
+    //   http    -> Development -> SQL Server LocalDB
+    //   homelab -> HomeLab     -> PostgreSQL on devpi.local
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "WebApi: Local (Development / SQL Server LocalDB)",
+            "type": "coreclr",
+            "request": "launch",
+            "preLaunchTask": "build-webapi",
+            "program": "${workspaceFolder}/WebApi/bin/Debug/net10.0/CarePath.WebApi.dll",
+            "args": [],
+            "cwd": "${workspaceFolder}/WebApi",
+            "stopAtEntry": false,
+            "console": "internalConsole",
+            "launchSettingsFilePath": "${workspaceFolder}/WebApi/Properties/launchSettings.json",
+            "launchSettingsProfile": "http"
+        },
+        {
+            "name": "WebApi: HomeLab (PostgreSQL on devpi.local)",
+            "type": "coreclr",
+            "request": "launch",
+            "preLaunchTask": "build-webapi",
+            "program": "${workspaceFolder}/WebApi/bin/Debug/net10.0/CarePath.WebApi.dll",
+            "args": [],
+            "cwd": "${workspaceFolder}/WebApi",
+            "stopAtEntry": false,
+            "console": "internalConsole",
+            "launchSettingsFilePath": "${workspaceFolder}/WebApi/Properties/launchSettings.json",
+            "launchSettingsProfile": "homelab",
+            // User secrets load only in Development, so HomeLab reads the password-bearing
+            // connection string from this file. It is untracked (.gitignore keeps .vscode/*
+            // except launch/tasks/settings/extensions), so the password stays out of git.
+            "envFile": "${workspaceFolder}/.vscode/homelab.env"
+        },
+        {
+            // Standalone Blazor WebAssembly: 'blazorwasm' starts the dev server AND attaches
+            // the browser debugger. The UI is a separate process from the API; it reaches the
+            // API over HTTP at the Api:BaseAddress in CarePath.Web/wwwroot/appsettings.json.
+            "name": "CarePath.Web UI (Blazor WASM)",
+            "type": "blazorwasm",
+            "request": "launch",
+            "cwd": "${workspaceFolder}/CarePath.Web",
+            "url": "http://localhost:5283"
+        }
+    ],
+    "compounds": [
+        {
+            // Starts the API first, then the UI. Stopping either stops both.
+            "name": "CarePath: API (HomeLab) + UI",
+            "configurations": [
+                "WebApi: HomeLab (PostgreSQL on devpi.local)",
+                "CarePath.Web UI (Blazor WASM)"
+            ],
+            "stopAll": true
+        },
+        {
+            "name": "CarePath: API (Local SQL Server) + UI",
+            "configurations": [
+                "WebApi: Local (Development / SQL Server LocalDB)",
+                "CarePath.Web UI (Blazor WASM)"
+            ],
+            "stopAll": true
+        }
+    ]
+}

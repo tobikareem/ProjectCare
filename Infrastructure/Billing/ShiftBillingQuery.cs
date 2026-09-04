@@ -83,6 +83,10 @@ public sealed class ShiftBillingQuery : IShiftBillingQuery
             && shift.ScheduledStartTime < periodEndUtc
             && shift.ActualStartTime.HasValue
             && shift.ActualEndTime.HasValue
-            && EF.Functions.DateDiffMinute(shift.ActualStartTime.Value, shift.ActualEndTime.Value) > shift.BreakMinutes);
+            // Positive billable time, i.e. Shift.BillableHours > 0. Expressed as an instant
+            // comparison rather than EF.Functions.DateDiffMinute so it translates on both
+            // SQL Server (DATEADD) and PostgreSQL (interval addition), and so the filter
+            // matches the domain rule exactly instead of DATEDIFF's minute-boundary counting.
+            && shift.ActualEndTime.Value > shift.ActualStartTime.Value.AddMinutes(shift.BreakMinutes));
     }
 }

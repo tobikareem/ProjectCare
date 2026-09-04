@@ -9,6 +9,15 @@ namespace CarePath.Infrastructure.Persistence.Configurations.Billing;
 /// </summary>
 public sealed class InvoiceLineItemConfiguration : IEntityTypeConfiguration<InvoiceLineItem>
 {
+    private readonly SqlDialect _dialect;
+
+    /// <summary>Initializes the configuration with the active provider's SQL dialect.</summary>
+    /// <param name="dialect">Dialect used to build provider-valid filtered index expressions.</param>
+    public InvoiceLineItemConfiguration(SqlDialect dialect)
+    {
+        _dialect = dialect;
+    }
+
     /// <inheritdoc />
     public void Configure(EntityTypeBuilder<InvoiceLineItem> builder)
     {
@@ -47,7 +56,7 @@ public sealed class InvoiceLineItemConfiguration : IEntityTypeConfiguration<Invo
         // "ShiftId IS NOT NULL" ON PURPOSE; do not add an IsDeleted condition.
         builder.HasIndex(lineItem => lineItem.ShiftId)
             .IsUnique()
-            .HasFilter("[ShiftId] IS NOT NULL")
+            .HasFilter(_dialect.IsNotNull("ShiftId"))
             .HasDatabaseName("UX_InvoiceLineItems_ShiftId_NotNull");
         builder.HasIndex(lineItem => lineItem.ServiceDate).HasDatabaseName("IX_InvoiceLineItems_ServiceDate");
         builder.HasIndex(lineItem => lineItem.IsDeleted).HasDatabaseName("IX_InvoiceLineItems_IsDeleted");

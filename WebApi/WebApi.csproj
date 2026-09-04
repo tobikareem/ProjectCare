@@ -19,6 +19,8 @@
 
   <ItemGroup>
     <ProjectReference Include="..\Infrastructure\Infrastructure.csproj" />
+    <!-- Referenced so EF can load the PostgreSQL migrations assembly by name at runtime. -->
+    <ProjectReference Include="..\Infrastructure.Migrations.PostgreSql\Infrastructure.Migrations.PostgreSql.csproj" />
   </ItemGroup>
 
 </Project>

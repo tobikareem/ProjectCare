@@ -9,6 +9,15 @@ namespace CarePath.Infrastructure.Persistence.Configurations.Identity;
 /// </summary>
 public sealed class ApplicationUserConfiguration : IEntityTypeConfiguration<ApplicationUser>
 {
+    private readonly SqlDialect _dialect;
+
+    /// <summary>Initializes the configuration with the active provider's SQL dialect.</summary>
+    /// <param name="dialect">Dialect used to build provider-valid filtered index expressions.</param>
+    public ApplicationUserConfiguration(SqlDialect dialect)
+    {
+        _dialect = dialect;
+    }
+
     /// <inheritdoc />
     public void Configure(EntityTypeBuilder<ApplicationUser> builder)
     {
@@ -30,7 +39,7 @@ public sealed class ApplicationUserConfiguration : IEntityTypeConfiguration<Appl
         builder
             .HasIndex(user => user.RefreshTokenHash)
             .IsUnique()
-            .HasFilter("[RefreshTokenHash] IS NOT NULL")
+            .HasFilter(_dialect.IsNotNull("RefreshTokenHash"))
             .HasDatabaseName("IX_AspNetUsers_RefreshTokenHash");
 
         builder

@@ -6,11 +6,14 @@ using CarePath.Domain.Entities.Identity;
 using CarePath.Domain.Entities.Scheduling;
 using CarePath.Domain.Entities.Transitions;
 using CarePath.Infrastructure.Identity;
+using CarePath.Infrastructure.Persistence.Configurations.Billing;
+using CarePath.Infrastructure.Persistence.Configurations.Identity;
 using CarePath.Infrastructure.Persistence.Converters;
 using CarePath.Infrastructure.Persistence.Interceptors;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.EntityFrameworkCore.Metadata;
 
 namespace CarePath.Infrastructure.Persistence;
@@ -97,6 +100,11 @@ public class CarePathDbContext : IdentityDbContext<ApplicationUser, IdentityRole
     {
         base.OnConfiguring(optionsBuilder);
         optionsBuilder.AddInterceptors(_auditableEntityInterceptor);
+
+        // The provider-aware configurations have no parameterless constructor by design; the
+        // assembly scan reports skipping them, but OnModelCreating applies them explicitly.
+        optionsBuilder.ConfigureWarnings(warnings =>
+            warnings.Ignore(CoreEventId.SkippedEntityTypeConfigurationWarning));
     }
 
     /// <inheritdoc />
@@ -105,6 +113,14 @@ public class CarePathDbContext : IdentityDbContext<ApplicationUser, IdentityRole
         base.OnModelCreating(builder);
 
         builder.ApplyConfigurationsFromAssembly(typeof(CarePathDbContext).Assembly);
+
+        // Configurations that emit provider-specific SQL take a dialect instead, so they have
+        // no parameterless constructor and are excluded from the scan above.
+        var dialect = SqlDialect.For(Database.ProviderName);
+        builder.ApplyConfiguration(new ApplicationUserConfiguration(dialect));
+        builder.ApplyConfiguration(new InvoiceConfiguration(dialect));
+        builder.ApplyConfiguration(new InvoiceLineItemConfiguration(dialect));
+
         ApplyBaseEntityConventions(builder);
     }
 
@@ -134,12 +150,10 @@ public class CarePathDbContext : IdentityDbContext<ApplicationUser, IdentityRole
             if (property.ClrType == typeof(DateTime))
             {
                 property.SetValueConverter(UtcDateTimeConverter);
-                property.SetColumnType("datetime2");
             }
             else if (property.ClrType == typeof(DateTime?))
             {
                 property.SetValueConverter(NullableUtcDateTimeConverter);
-                property.SetColumnType("datetime2");
             }
         }
     }

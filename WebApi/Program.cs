@@ -100,14 +100,31 @@ if (swaggerEnabled)
 if (app.Environment.IsDevelopment())
 {
     app.MapOpenApi();
+}
 
-    using var scope = app.Services.CreateScope();
+// Startup database work is configuration-driven rather than environment-gated, so any
+// environment (Development, HomeLab, ...) reports which provider it actually resolved.
+using (var scope = app.Services.CreateScope())
+{
     var context = scope.ServiceProvider.GetRequiredService<CarePathDbContext>();
-    var userManager = scope.ServiceProvider.GetRequiredService<UserManager<ApplicationUser>>();
-    var roleManager = scope.ServiceProvider.GetRequiredService<RoleManager<IdentityRole<Guid>>>();
+    var startupLogger = scope.ServiceProvider.GetRequiredService<ILoggerFactory>().CreateLogger("CarePath.Startup");
 
-    await context.Database.MigrateAsync();
-    await CarePathDbContextSeed.SeedAsync(context, userManager, roleManager, builder.Configuration, app.Environment);
+    // Connection-only probe: opens a connection and closes it. Creates and alters nothing.
+    var canConnect = await context.Database.CanConnectAsync();
+    startupLogger.LogInformation(
+        "Database connectivity check via {Provider}: {Result}",
+        context.Database.ProviderName,
+        canConnect ? "SUCCEEDED" : "FAILED");
+
+    // Each provider now has its own migrations assembly, so this is configuration-driven only.
+    if (app.Configuration.GetValue<bool>("Database:AutoMigrate"))
+    {
+        var userManager = scope.ServiceProvider.GetRequiredService<UserManager<ApplicationUser>>();
+        var roleManager = scope.ServiceProvider.GetRequiredService<RoleManager<IdentityRole<Guid>>>();
+
+        await context.Database.MigrateAsync();
+        await CarePathDbContextSeed.SeedAsync(context, userManager, roleManager, builder.Configuration, app.Environment);
+    }
 }
 
 app.UseCors(webClientCorsPolicy);

@@ -28,23 +28,32 @@ namespace CarePath.Infrastructure;
 /// </summary>
 public static class DependencyInjection
 {
+    // PostgreSQL migrations live in their own assembly so they never mix with the SQL Server
+    // set, which EF would otherwise discover together in CarePath.Infrastructure.
+    private const string PostgreSqlMigrationsAssembly = "CarePath.Infrastructure.Migrations.PostgreSql";
+
     /// <summary>
-    /// Adds the Infrastructure layer using the configured SQL Server connection string.
+    /// Adds the Infrastructure layer using the configured database provider and connection string.
     /// </summary>
     /// <param name="services">Service collection to register with.</param>
-    /// <param name="configuration">Application configuration containing <c>ConnectionStrings:DefaultConnection</c>.</param>
+    /// <param name="configuration">
+    /// Application configuration containing the optional <c>Database:Provider</c> value and a
+    /// connection string (<c>ConnectionStrings:{Provider}Connection</c>, falling back to
+    /// <c>ConnectionStrings:DefaultConnection</c>).
+    /// </param>
     /// <returns>The same service collection for chaining.</returns>
     /// <exception cref="InvalidOperationException">
-    /// Thrown when the <c>DefaultConnection</c> connection string is missing.
+    /// Thrown when <c>Database:Provider</c> names an unsupported provider, or when no
+    /// connection string is configured for the selected provider.
     /// </exception>
     public static IServiceCollection AddInfrastructure(
         this IServiceCollection services,
         IConfiguration configuration)
     {
-        var connectionString = configuration.GetConnectionString("DefaultConnection")
-            ?? throw new InvalidOperationException("Connection string 'DefaultConnection' not found.");
+        var provider = ResolveProvider(configuration);
+        var connectionString = ResolveConnectionString(configuration, provider);
 
-        services.AddInfrastructure(connectionString);
+        services.AddInfrastructure(connectionString, provider);
         services.AddSingleton(configuration);
         if (configuration.GetValue<bool>("Storage:EnableLocalPrivateStorage"))
         {
@@ -58,29 +67,50 @@ public static class DependencyInjection
     }
 
     /// <summary>
-    /// Adds the Infrastructure layer using the supplied SQL Server connection string.
+    /// Adds the Infrastructure layer using the supplied connection string and database provider.
     /// </summary>
     /// <param name="services">Service collection to register with.</param>
-    /// <param name="connectionString">SQL Server connection string.</param>
+    /// <param name="connectionString">Connection string for the selected provider.</param>
+    /// <param name="provider">Database provider to register. Defaults to SQL Server.</param>
     /// <returns>The same service collection for chaining.</returns>
     public static IServiceCollection AddInfrastructure(
         this IServiceCollection services,
-        string connectionString)
+        string connectionString,
+        DatabaseProvider provider = DatabaseProvider.SqlServer)
     {
         services.AddLogging();
         services.AddHttpContextAccessor();
         services.AddScoped<AuditableEntityInterceptor>();
 
+        var migrationsAssembly = typeof(CarePathDbContext).Assembly.GetName().Name;
+
         services.AddDbContext<CarePathDbContext>(options =>
         {
-            options.UseSqlServer(connectionString, sqlOptions =>
+            switch (provider)
             {
-                sqlOptions.MigrationsAssembly(typeof(CarePathDbContext).Assembly.GetName().Name);
-                sqlOptions.EnableRetryOnFailure(
-                    maxRetryCount: 3,
-                    maxRetryDelay: TimeSpan.FromSeconds(5),
-                    errorNumbersToAdd: null);
-            });
+                case DatabaseProvider.PostgreSql:
+                    options.UseNpgsql(connectionString, npgsqlOptions =>
+                    {
+                        npgsqlOptions.MigrationsAssembly(PostgreSqlMigrationsAssembly);
+                        npgsqlOptions.EnableRetryOnFailure(
+                            maxRetryCount: 3,
+                            maxRetryDelay: TimeSpan.FromSeconds(5),
+                            errorCodesToAdd: null);
+                    });
+                    break;
+
+                case DatabaseProvider.SqlServer:
+                default:
+                    options.UseSqlServer(connectionString, sqlOptions =>
+                    {
+                        sqlOptions.MigrationsAssembly(migrationsAssembly);
+                        sqlOptions.EnableRetryOnFailure(
+                            maxRetryCount: 3,
+                            maxRetryDelay: TimeSpan.FromSeconds(5),
+                            errorNumbersToAdd: null);
+                    });
+                    break;
+            }
         });
 
         services
@@ -117,9 +147,43 @@ public static class DependencyInjection
         // persistence is configured for the deployment environment (pre-production follow-up).
         services.AddDataProtection().SetApplicationName("CarePath");
         services.AddScoped<IAssignmentHistoryQuery, AssignmentHistoryQuery>();
-        services.AddScoped<IPersistenceConflictDetector, SqlServerPersistenceConflictDetector>();
+        // Unique-violation detection is provider-specific; selection follows the same
+        // Database:Provider value that chose the DbContext provider above.
+        if (provider == DatabaseProvider.PostgreSql)
+        {
+            services.AddScoped<IPersistenceConflictDetector, PostgreSqlPersistenceConflictDetector>();
+        }
+        else
+        {
+            services.AddScoped<IPersistenceConflictDetector, SqlServerPersistenceConflictDetector>();
+        }
+
         services.AddScoped<IDischargeExtractionService, RuleBasedDischargeExtractionService>();
 
         return services;
+    }
+
+    private static DatabaseProvider ResolveProvider(IConfiguration configuration)
+    {
+        var configured = configuration["Database:Provider"];
+        if (string.IsNullOrWhiteSpace(configured))
+        {
+            return DatabaseProvider.SqlServer;
+        }
+
+        return Enum.TryParse<DatabaseProvider>(configured, ignoreCase: true, out var provider)
+            ? provider
+            : throw new InvalidOperationException(
+                $"Unsupported database provider '{configured}'. Supported values: {string.Join(", ", Enum.GetNames<DatabaseProvider>())}.");
+    }
+
+    // The provider-specific name wins so one environment can hold both connection strings and
+    // switch with a single Database:Provider value. DefaultConnection remains the fallback for
+    // deployments (including production) that define only one connection string.
+    private static string ResolveConnectionString(IConfiguration configuration, DatabaseProvider provider)
+    {
+        return configuration.GetConnectionString($"{provider}Connection")
+            ?? configuration.GetConnectionString("DefaultConnection")
+            ?? throw new InvalidOperationException("Connection string 'DefaultConnection' not found.");
     }
 }

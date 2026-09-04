@@ -4,7 +4,7 @@ namespace CarePath.Infrastructure.Persistence.Converters;
 
 /// <summary>
 /// Converts nullable <see cref="DateTime"/> values to UTC for storage and restores
-/// <see cref="DateTimeKind.Utc"/> when values are read from SQL Server.
+/// <see cref="DateTimeKind.Utc"/> when values are read from the database.
 /// </summary>
 public sealed class NullableUtcDateTimeConverter : ValueConverter<DateTime?, DateTime?>
 {

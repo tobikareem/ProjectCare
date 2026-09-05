@@ -1,0 +1,33 @@
+# SECURITY: .vscode/homelab.env holds the PostgreSQL password and the JWT signing
+# key. Excluding it keeps those out of the build context entirely, so they can
+# never be captured in an image layer. Secrets reach the container at run time
+# via `docker run --env-file` instead.
+.vscode/
+
+# Build outputs — stale host artifacts would be copied over the container's own
+# build and can break it (different OS/architecture).
+**/bin/
+**/obj/
+
+# Version control and agent/editor tooling
+.git/
+.gitignore
+.github/
+.agents/
+.claude/
+.codex/
+
+# Not needed to build or run the API
+*.Tests/
+Documentation/
+_specs/
+*.md
+
+# Client applications: separate concerns, not referenced by WebApi
+CarePath.Web/
+CarePath.Client/
+CarePath.Client.UI/
+
+# Local-only tooling
+Dockerfile
+.dockerignore

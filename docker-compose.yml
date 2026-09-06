@@ -37,7 +37,7 @@ services:
     env_file:
       # Secrets stay on the Pi, outside the image and outside git. Compose does
       # not expand `~`, but it does interpolate ${HOME}.
-      - ${HOME}/carepath-api.env
+      - /home/tobi/carepath-api.env
     volumes:
       # Persists the ASP.NET Data Protection key ring so invoice-preview tokens
       # survive container replacement.

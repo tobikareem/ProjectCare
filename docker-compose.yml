@@ -1,0 +1,56 @@
+# CarePath HomeLab stack (Raspberry Pi). Replaces the manual `docker run` commands.
+#
+#   docker compose up -d      start / reconcile
+#   docker compose down       stop and remove CONTAINERS only — data is safe
+#   docker compose down -v    NEVER RUN: -v deletes volumes
+#
+# Both volumes and the network are declared `external` because they already
+# exist and hold live data. Without that, Compose would create prefixed copies
+# (carepath_postgres-data) and PostgreSQL would initdb into an empty volume.
+name: carepath
+
+services:
+  postgres-dev:
+    image: postgres:17
+    container_name: postgres-dev
+    restart: unless-stopped
+    ports:
+      # Kept so psql and GUI clients on the LAN keep working. Container-to-
+      # container traffic does not use this; it goes over carepath-net.
+      - "5432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    networks:
+      - carepath-net
+
+  carepath-api:
+    image: carepath-api:local
+    container_name: carepath-api
+    restart: unless-stopped
+    depends_on:
+      # Ordering only: Compose starts postgres-dev first but does not wait for
+      # it to accept connections. Harmless here — the API logs its startup
+      # connectivity check and keeps serving either way.
+      - postgres-dev
+    ports:
+      - "5240:8080"
+    env_file:
+      # Secrets stay on the Pi, outside the image and outside git. Compose does
+      # not expand `~`, but it does interpolate ${HOME}.
+      - ${HOME}/carepath-api.env
+    volumes:
+      # Persists the ASP.NET Data Protection key ring so invoice-preview tokens
+      # survive container replacement.
+      - carepath-dataprotection:/home/app/.aspnet/DataProtection-Keys
+    networks:
+      - carepath-net
+
+volumes:
+  postgres-data:
+    external: true
+  carepath-dataprotection:
+    external: true
+
+networks:
+  carepath-net:
+    external: true

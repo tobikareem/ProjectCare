@@ -59,6 +59,23 @@ services:
       retries: 3
       start_period: 30s
 
+  nginx:
+    image: nginx:stable-alpine
+    container_name: carepath-nginx
+    restart: unless-stopped
+    depends_on:
+      # Ordering only. nginx resolves the API through Docker DNS at request time, so it
+      # starts fine on its own and simply returns 502 until an instance is up.
+      - carepath-api
+    ports:
+      # The only service publishing a host port for HTTP. API replicas stay internal,
+      # which is also what makes `--scale carepath-api=N` free of port conflicts.
+      - "5240:80"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/conf.d/default.conf:ro
+    networks:
+      - carepath-net
+
 volumes:
   postgres-data:
     external: true

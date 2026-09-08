@@ -31,7 +31,7 @@ services:
 
   carepath-api:
     image: carepath-api:local
-    container_name: carepath-api
+    # container_name: carepath-api
     restart: unless-stopped
     depends_on:
       postgres-dev:

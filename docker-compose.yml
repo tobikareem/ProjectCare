@@ -48,6 +48,14 @@ services:
       - carepath-dataprotection:/home/app/.aspnet/DataProtection-Keys
     networks:
       - carepath-net
+    healthcheck:
+      # Exec form, not CMD-SHELL: the chiseled image has no shell, curl, or wget. The app
+      # probes its own /health/ready over loopback using the runtime already in the image.
+      test: ["CMD", "/usr/bin/dotnet", "/app/CarePath.WebApi.dll", "--healthcheck"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
 
 volumes:
   postgres-data:

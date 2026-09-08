@@ -22,16 +22,20 @@ services:
       - postgres-data:/var/lib/postgresql/data
     networks:
       - carepath-net
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U devuser -d carepathhealth_homelab"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
 
   carepath-api:
     image: carepath-api:local
     container_name: carepath-api
     restart: unless-stopped
     depends_on:
-      # Ordering only: Compose starts postgres-dev first but does not wait for
-      # it to accept connections. Harmless here — the API logs its startup
-      # connectivity check and keeps serving either way.
-      - postgres-dev
+      postgres-dev:
+        condition: service_healthy
     ports:
       - "5240:8080"
     env_file:

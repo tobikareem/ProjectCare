@@ -6,6 +6,12 @@
       "runtimeExecutable": "dotnet",
       "runtimeArgs": ["run", "--project", "CarePath.Web", "--no-build", "--urls", "http://localhost:5297"],
       "port": 5297
+    },
+    {
+      "name": "wireframe",
+      "runtimeExecutable": "python3",
+      "runtimeArgs": ["-m", "http.server", "5299", "--directory", "Documentation/Wireframes"],
+      "port": 5299
     }
   ]
 }

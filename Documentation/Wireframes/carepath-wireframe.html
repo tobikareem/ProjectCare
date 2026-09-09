@@ -791,6 +791,50 @@
     @media (prefers-reduced-motion: reduce) {
       *, *::before, *::after { scroll-behavior: auto !important; transition: none !important; }
     }
+
+    /* SaaS journey — proposal for ADR 0003; existing design tokens retained. */
+    .journey { background:var(--surface-alt); min-height:90vh; }
+    .journey-head { padding:28px clamp(20px,4vw,64px) 20px; background:var(--surface); border-bottom:1px solid var(--line); }
+    .journey-head h1 { margin:4px 0 8px; }
+    .journey-map { display:flex; gap:8px; overflow:auto; padding:12px 0; }
+    .journey-map button { white-space:nowrap; border:1px solid var(--line); border-radius:var(--radius); padding:10px 14px; color:var(--muted); background:var(--surface); cursor:pointer; min-height:44px; }
+    .journey-map button[aria-current=step] { background:var(--teal-900); color:var(--surface); border-color:var(--teal-900); }
+    .journey-stage { max-width:1440px; margin:auto; padding:28px clamp(16px,4vw,64px); }
+    .journey-caption { display:flex; justify-content:space-between; align-items:center; gap:16px; margin-bottom:16px; }
+    .journey-caption p { margin:0; }
+    .journey-window { border:1px solid var(--line); border-radius:var(--radius); background:var(--surface); box-shadow:var(--shadow); overflow:hidden; }
+    .journey-address { padding:10px 20px; text-align:center; border-bottom:1px solid var(--line); background:var(--surface-alt); font-size:.8rem; color:var(--muted); overflow-wrap:anywhere; }
+    .journey-brand { display:flex; align-items:center; gap:12px; font-weight:800; }
+    .journey-mark { width:44px; height:44px; display:grid; place-items:center; border-radius:var(--radius); color:var(--surface); background:var(--teal-700); }
+    .journey-split { display:grid; grid-template-columns:1fr 1fr; min-height:510px; }
+    .journey-story { background:var(--teal-900); color:var(--surface); padding:48px; display:flex; flex-direction:column; justify-content:space-between; gap:36px; }
+    .journey-story h2 { font-size:clamp(1.8rem,3vw,2.8rem); line-height:1.14; max-width:440px; }
+    .journey-story p { color:var(--teal-100); max-width:400px; }
+    .journey-form { padding:40px; align-self:center; }
+    .journey-form h2 { font-size:1.8rem; margin:8px 0; }
+    .journey-form label { display:grid; gap:6px; margin:18px 0; font-weight:650; }
+    .journey-form input, .journey-form select { width:100%; padding:12px; border:1px solid var(--line); border-radius:var(--radius); color:var(--ink); background:var(--surface); }
+    .journey-actions { display:flex; flex-wrap:wrap; gap:10px; margin-top:24px; }
+    .journey-shell { display:grid; grid-template-columns:210px minmax(0,1fr); min-height:510px; }
+    .journey-side { padding:24px 18px; background:var(--teal-900); color:var(--surface); }
+    .journey-side p { font-size:.78rem; color:var(--teal-100); margin-top:30px; }
+    .journey-side button { display:block; width:100%; text-align:left; padding:12px; margin:6px 0; background:transparent; color:var(--surface); border:0; border-radius:var(--radius); cursor:pointer; }
+    .journey-side button[aria-current=page] { background:var(--teal-700); }
+    .journey-work { padding:28px; min-width:0; }
+    .journey-work h2 { font-size:1.65rem; margin:10px 0; }
+    .journey-grid { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:16px; margin:24px 0; }
+    .journey-tile { padding:20px; border:1px solid var(--line); border-radius:var(--radius); background:var(--surface); }
+    .journey-tile strong { display:block; font-size:1.8rem; margin:8px 0; }
+    .journey-row { display:flex; align-items:center; justify-content:space-between; gap:16px; padding:16px 0; border-bottom:1px solid var(--line); }
+    .journey-row p { margin:3px 0; }
+    .journey-note { padding:16px 20px; border-radius:var(--radius); background:var(--teal-100); color:var(--teal-900); margin-top:20px; }
+    .journey-center { max-width:660px; padding:44px 24px; margin:auto; }
+    .journey-center h2 { font-size:1.9rem; }
+    .journey-options { display:flex; flex-wrap:wrap; gap:8px; margin:20px 0; }
+    .journey-options button { min-height:44px; padding:8px 14px; background:var(--surface); border:1px solid var(--line); border-radius:var(--radius); cursor:pointer; }
+    .journey-options button[aria-pressed=true] { color:var(--teal-900); background:var(--teal-100); border-color:var(--teal-700); }
+    .journey-foot { display:flex; justify-content:space-between; gap:16px; margin-top:22px; align-items:center; }
+    @media(max-width:780px) { .journey-split,.journey-shell { grid-template-columns:1fr; } .journey-story { padding:28px; } .journey-story h2 { margin:0; } .journey-form,.journey-work { padding:24px; } .journey-side { display:none; } .journey-grid { grid-template-columns:1fr; } .journey-caption,.journey-row { align-items:flex-start; flex-wrap:wrap; } .journey-foot { flex-wrap:wrap; } }
   </style>
 </head>
 <body>
@@ -799,18 +843,25 @@
   <header class="prototype-bar">
     <div>
       <strong>CarePath Health — Product Wireframe</strong>
-      <p>Interactive concept — no real patient data</p>
+      <p>Interactive concept — synthetic data · Web operations shows the BrightCare sample</p>
     </div>
     <div class="view-switcher" role="tablist" aria-label="Choose prototype">
-      <button id="web-tab" type="button" role="tab" aria-selected="true" aria-controls="web-view">Web operations</button>
+      <button id="journey-tab" type="button" role="tab" aria-selected="true" aria-controls="journey-view">SaaS journey</button>
+      <button id="web-tab" type="button" role="tab" aria-selected="false" aria-controls="web-view">Web operations</button>
       <button id="mobile-tab" type="button" role="tab" aria-selected="false" aria-controls="mobile-view">Caregiver mobile</button>
     </div>
   </header>
 
   <main id="main-content" class="prototype-shell">
 
+    <section id="journey-view" class="view-panel journey" role="tabpanel" aria-labelledby="journey-tab">
+      <div class="journey-head"><p class="eyebrow">CarePath / The agency journey</p><h1>One platform. Each agency's own workspace.</h1><p class="subtle">Follow the experience from welcome to daily care. Select any step to explore.</p><nav id="journey-map" class="journey-map" aria-label="SaaS journey steps"></nav></div>
+      <div class="journey-stage"><div class="journey-caption"><p id="journey-context"></p><span class="status status-amber">Design proposal · synthetic data</span></div><div class="journey-window"><div id="journey-address" class="journey-address"></div><div id="journey-screen"></div></div><div class="journey-foot"><button class="button button-secondary" id="journey-back" type="button">← Previous step</button><span id="journey-progress" class="subtle" aria-live="polite"></span><button class="button button-primary" id="journey-next" type="button">Next step →</button></div><p class="meta">Interactive wireframe only. Sign-in, invitations, onboarding, support and recovery are simulated; nothing is sent or provisioned.</p></div>
+    </section>
+
+
     <!-- ═══════════════════════════ WEB VIEW ═══════════════════════════ -->
-    <section id="web-view" class="view-panel" role="tabpanel" aria-labelledby="web-tab">
+    <section id="web-view" class="view-panel" role="tabpanel" aria-labelledby="web-tab" hidden>
       <div class="web-app">
 
         <aside class="sidebar" aria-label="Primary navigation">
@@ -3716,8 +3767,51 @@
     });
 
     /* ── Initialise ── */
+    selectView(document.getElementById('journey-tab'));
     showWebPage('overview');
     showMobileScreen('mobile-home');
   </script>
+
+  <script>
+  (() => {
+    const names=['Welcome','Create agency','Prepare workspace','Agency sign-in','First-time setup','Daily operations','Switch agency','Access & recovery'];
+    const screen=document.getElementById('journey-screen');
+    let step=0, agency='BrightCare', state='maintenance', provisioned=false;
+    const btn=(text,to,kind='primary')=>`<button type="button" class="button button-${kind}" data-journey="${to}">${text}</button>`;
+    const brand=(name='CarePath')=>`<div class="journey-brand"><span class="journey-mark" aria-hidden="true">${name==='CarePath'?'CP':name==='BrightCare'?'BC':'HH'}</span><span>${name}<small style="display:block;font-weight:400">${name==='CarePath'?'Agency management':'Home care'}</small></span></div>`;
+    const split=(story,body,name='CarePath')=>`<div class="journey-split"><div class="journey-story">${brand(name)}<div><h2>${story}</h2><p>Bring your people, schedules and care together in a workspace that belongs to your agency.</p></div><small>Powered by CarePath Health</small></div><div class="journey-form">${body}</div></div>`;
+    const shell=(body,platform=false)=>`<div class="journey-shell"><aside class="journey-side">${brand(platform?'CarePath':agency)}<p>${platform?'PLATFORM OPERATIONS':'YOUR WORKSPACE'}</p><button type="button" aria-current="page" data-journey="${platform?1:5}">${platform?'Organizations':'Overview'}</button>${platform?'':`<button type="button" data-detail="schedule">Schedule</button><button type="button" data-detail="caregivers">Caregivers</button><button type="button" data-detail="clients">Clients</button><button type="button" data-detail="transitions">Transitions</button>`}<p>${platform?'CUSTOMER ACCESS':'ACCOUNT'}</p><button type="button" data-journey="${platform?7:6}">${platform?'Service status':'Switch organization'}</button>${platform?'':`<button type="button" data-journey="3">Sign out</button>`}</aside><div class="journey-work">${body}</div></div>`;
+    const row=(title,meta,action)=>`<div class="journey-row"><div><b>${title}</b><p class="subtle">${meta}</p></div>${action}</div>`;
+    const badge=(label,tone='green')=>`<span class="status status-${tone}">${label}</span>`;
+    const pages=[
+      ()=>split('Great care starts with a connected team.',`<p class="eyebrow">Welcome to CarePath</p><h2>Your agency. Your way of caring.</h2><p class="subtle">A dedicated home for your team, clients and day-to-day operations.</p><div class="journey-actions">${btn('Explore agency onboarding →',1)}</div><hr><h3>Already part of an agency?</h3><p class="subtle">Use the workspace link provided by your organization.</p>${btn('Open BrightCare sign-in',3,'secondary')}<div class="journey-note">Prototype paths: onboarding follows a CarePath platform operator; sign-in follows an invited agency administrator.</div>`),
+      ()=>shell(`<p class="eyebrow">Organizations / New organization</p><h2>Welcome your next agency.</h2><p class="subtle">Create the workspace after the customer agreement and onboarding checks are complete.</p><form id="journey-create" class="journey-form" style="padding:0"><label>Organization name<input required value="BrightCare" readonly></label><label>Workspace address<input value="brightcare.carepathhealth.com" readonly></label><label>First organization administrator<input type="email" value="alex@carepath.example" readonly></label><div class="journey-note">Customer agreement and required onboarding approvals: recorded for this demonstration.</div><div class="journey-actions"><button class="button button-primary" type="submit">Create demo workspace →</button>${btn('Cancel',0,'secondary')}</div></form>`,true),
+      ()=>shell(`<p class="eyebrow">Organizations / BrightCare</p><h2>${provisioned?'BrightCare is ready to welcome its team.':'Preparing a place for BrightCare.'}</h2><p class="subtle">${provisioned?'The organization administrator can now use the agency entry link.':'Access stays closed until every readiness check is complete.'}</p>${row('Agency workspace','brightcare.carepathhealth.com',badge('Verified'))}${row('Private agency data','Storage, recovery and access checks',badge(provisioned?'Ready':'Checking',provisioned?'green':'amber'))}${row('Organization administrator','Alex · administrator invitation',badge(provisioned?'Ready to invite':'Waiting',provisioned?'green':'amber'))}<div class="journey-actions">${provisioned?btn('Preview administrator sign-in →',3):'<button type="button" class="button button-primary" data-provision>Simulate checks passing</button>'}</div><div class="journey-note">Platform operators manage organization readiness here. Patient records are not part of this console.</div>`,true),
+      ()=>split('Welcome back to your care team.',`<p class="eyebrow">${agency} workspace</p><h2>Sign in to ${agency}</h2><p class="subtle">Use your CarePath account to access this organization.</p><form id="journey-login"><label>Email address<input type="email" value="alex@carepath.example" readonly></label><label>Password<input type="password" value="demo-only" readonly></label><button class="button button-primary" type="submit">Continue with demo account →</button></form><p class="meta">Demo fields are read-only. Do not enter real credentials.</p><div class="journey-actions">${btn('Choose a different organization',6,'secondary')}</div>`,agency),
+      ()=>shell(`<p class="eyebrow">Getting started / Organization administrator</p><h2>Make ${agency} feel like home.</h2><p class="subtle">Your agency workspace is ready. Here is a clear path to your first day of care.</p>${row('1. Confirm your agency profile','Agency name, support contact and time zone',badge('Complete'))}${row('2. Review your brand','Agency monogram and approved CarePath theme',badge('Ready'))}${row('3. Add your care team','Invite staff and assign organization roles',btn('Preview team directory', 'team','secondary'))}${row('4. Plan the first shift','Add a client and match an available caregiver',btn('Preview scheduling','schedule','secondary'))}<div class="journey-actions">${btn('Open agency dashboard →',5)}</div><div class="journey-note">Each invitation grants access to this organization only. The same person can hold a separate membership elsewhere.</div>`),
+      ()=>shell(`<div class="journey-caption"><span class="eyebrow">${agency} / Overview</span>${badge('Organization administrator')}</div><h2>A clear view of today's care.</h2><p class="subtle">Tuesday, September 8 · ${agency==='BrightCare'?'Baltimore':'Annapolis'} · America/New_York</p><div class="journey-grid"><div class="journey-tile">Today's shifts<strong>${agency==='BrightCare'?'24':'8'}</strong><span class="subtle">Across your agency</span></div><div class="journey-tile">Open coverage<strong>${agency==='BrightCare'?'3':'1'}</strong><span class="subtle">Needs assignment</span></div><div class="journey-tile">Care team<strong>${agency==='BrightCare'?'18':'6'}</strong><span class="subtle">Active caregivers</span></div></div><h3>Start with what needs you.</h3>${row('Fill open shifts','Review availability and match your care team',btn('Open schedule','schedule','secondary'))}${row('Review your team','Manage profiles and certifications',btn('View caregivers','caregivers','secondary'))}${row('Follow up on recovery plans','Review coordinator alerts and next steps',btn('Open transitions','transitions','secondary'))}<div class="journey-note">You are working in <b>${agency}</b>. Switching organization opens its own workspace and clears the current view.</div>`),
+      ()=>`<div class="journey-center">${brand()}<p class="eyebrow">Your organizations</p><h2>Where are you working today?</h2><p class="subtle">Alex has separate administrator memberships in these two demonstration agencies.</p>${row('BrightCare','brightcare.carepathhealth.com',`<button type="button" class="button button-${agency==='BrightCare'?'secondary':'primary'}" data-agency="BrightCare">${agency==='BrightCare'?'Open current':'Switch to BrightCare'}</button>`)}${row('HelpingHands','helpinghands.carepathhealth.com',`<button type="button" class="button button-${agency==='HelpingHands'?'secondary':'primary'}" data-agency="HelpingHands">${agency==='HelpingHands'?'Open current':'Switch to HelpingHands'}</button>`)}<div class="journey-note">Only organizations with an active membership appear here. Your role and permissions are checked again when you switch.</div></div>`,
+      ()=>{const states={maintenance:['We’re updating your workspace.','Your agency is temporarily unavailable while we complete a scheduled update. Please try again shortly.','Maintenance'],revoked:['Your access has changed.','Please sign in again. If you still need access, contact your organization administrator.','Sign-in required'],outage:['We can’t open your workspace right now.','Please try again shortly. We will keep this screen clear until your access can be checked.','Service unavailable'],restore:['Your workspace is being recovered.','Your agency will be available after recovery checks are complete. Contact your administrator for an update.','Recovery in progress']};const x=states[state];return `<div class="journey-center"><p class="eyebrow">Prototype controls / Explore service states</p><div class="journey-options">${Object.entries({maintenance:'Update',revoked:'Access changed',outage:'Service outage',restore:'Recovery'}).map(([key,label])=>`<button type="button" data-state="${key}" aria-pressed="${state===key}">${label}</button>`).join('')}</div>${brand(agency)}<p>${badge(x[2],'amber')}</p><h2>${x[0]}</h2><p class="subtle">${x[1]}</p><div class="journey-actions">${btn('Return to sign-in',3,'secondary')}<button type="button" class="button button-primary" data-recover>${state==='revoked'?'Simulate access reapproved':'Simulate service ready'}</button></div><p class="meta">The action above is a prototype control. Production access resumes only after the applicable checks succeed.</p></div>`;}
+    ];
+    function render(focus=true){
+      document.getElementById('journey-map').innerHTML=names.map((name,i)=>`<button type="button" data-journey="${i}" ${i===step?'aria-current="step"':''}>${String(i+1).padStart(2,'0')} · ${name}</button>`).join('');
+      screen.innerHTML=pages[step]();
+      document.getElementById('journey-context').textContent=(step===1||step===2?'Platform operator':step===0?'Start here':'Agency member')+' / '+names[step];
+      document.getElementById('journey-address').textContent='Illustrative address · '+(step===0?'carepathhealth.com':step===1||step===2?'manage.carepathhealth.com':step===6?'account.carepathhealth.com':agency.toLowerCase()+'.carepathhealth.com');
+      document.getElementById('journey-progress').textContent=`Step ${step+1} of ${names.length} · ${names[step]}`;
+      document.getElementById('journey-back').disabled=step===0;
+      document.getElementById('journey-next').textContent=step===7?'Restart journey ↺':'Next step →';
+      if(focus){const heading=screen.querySelector('h2');heading.tabIndex=-1;heading.focus({preventScroll:true});}
+    }
+    function go(value){if(!/^\d+$/.test(String(value))){const mapping={team:'user-management',schedule:'schedule',caregivers:'caregivers',transitions:'transitions'};openDetail(mapping[value]||value);return;}if(Number(value)===0){agency='BrightCare';provisioned=false;state='maintenance';}if([1,2].includes(Number(value))||(step===0&&Number(value)===3))agency='BrightCare';step=Number(value);render();}
+    function openDetail(page){if(agency!=='BrightCare'){announce('Detailed screens use the BrightCare sample. Switch to BrightCare to explore them.');return;}selectView(document.getElementById('web-tab'));showWebPage(page);const heading=document.querySelector('#page-'+page+' h1');if(heading){heading.tabIndex=-1;heading.focus();}}
+    document.getElementById('journey-view').addEventListener('click',e=>{const b=e.target.closest('button');if(!b)return;if(b.dataset.journey!==undefined)go(b.dataset.journey);if(b.dataset.detail)openDetail(b.dataset.detail);if(b.hasAttribute('data-provision')){provisioned=true;render();}if(b.dataset.agency){agency=b.dataset.agency;step=5;render();}if(b.dataset.state){state=b.dataset.state;render();}if(b.hasAttribute('data-recover')){step=3;render();} });
+    screen.addEventListener('submit',e=>{e.preventDefault();if(e.target.id==='journey-create'){agency='BrightCare';provisioned=false;step=2;}else{step=4;}render();});
+    document.getElementById('journey-back').addEventListener('click',()=>go(Math.max(0,step-1)));
+    document.getElementById('journey-next').addEventListener('click',()=>go((step+1)%8));
+    render(false);
+  })();
+  </script>
+
 </body>
 </html>

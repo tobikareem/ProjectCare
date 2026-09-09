@@ -107,3 +107,31 @@ with tokens — never one-off styles in app projects.
 1. Change `Documentation/Wireframes/carepath-wireframe.html` (design decision, PM-reviewed).
 2. Re-extract affected tokens/patterns into `carepath-ui.css` and update this spec.
 3. Components/pages pick the change up via the custom properties — no page edits expected.
+
+
+## SaaS Journey Proposal (2026-09-08)
+
+The wireframe now opens on an eight-step **SaaS journey** for visual review of ADR 0003:
+welcome → platform operator creates an agency → workspace readiness → agency-branded
+sign-in → first-time setup → daily operations → organization switching → access and
+service recovery states. Existing Web operations and Caregiver mobile tabs remain available.
+
+This is a proposed wireframe, not approval of the Phase 1 SaaS implementation specifications.
+All identities, metrics, invitations, provisioning and recovery actions are synthetic and
+local to the prototype. Read-only demo credentials prevent collection of real passwords.
+Platform onboarding shows organization readiness without patient records. The agency shell
+shows its current organization, role and a membership-based switcher. BrightCare and
+HelpingHands use distinct monograms and workspace addresses with the existing approved
+palette; no arbitrary theme values or custom CSS are exposed to customers.
+
+Service-state previews cover maintenance, revoked access, control-plane unavailability and
+recovery. Customer text describes next actions without database, token or routing details.
+Simulation controls are visibly identified as prototype controls and must not ship in the
+application. Detailed legacy operations screens use the BrightCare synthetic sample;
+HelpingHands remains in its own summary instead of reusing another agency's detailed view.
+
+No design token values changed, so the extracted `carepath-ui.css` tokens remain current.
+Journey-specific layouts are scoped to this proposal. Extract approved shared patterns
+before implementing these screens in application projects. These new layouts adapt to a
+single column on narrow screens and retain labeled inputs, keyboard focus indicators,
+step navigation, and text-based status labels.

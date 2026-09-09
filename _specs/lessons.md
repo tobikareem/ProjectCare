@@ -105,6 +105,8 @@ This file captures recurring mistakes, corrections, and hard-won patterns discov
 
 ## Architecture Decision Records
 
+- **Strengthen the accepted tenancy architecture before implementation** - Review identified underspecified routing verification, token invalidation, restore semantics, schema compatibility, control-plane resilience, and elastic-pool isolation. The mistake was treating architectural intent as a complete operational contract. Preserve database-per-organization and turn these concerns into explicit failure rules, recovery procedures, and verification gates before implementation; do not infer a request to replace the architecture.
+
 - **Do not overstate a single control's compliance coverage** - "TDE satisfies encryption at rest" was too strong: encryption at rest spans files, backups, exports, logs, and secrets. State that a control covers its layer and "forms part of" the overall requirement, consistent with the artifact inventory elsewhere in the same document.
 - **CI rules for dual-provider migrations must allow legitimate provider differences** - Requiring identical SQL Server and PostgreSQL model snapshots forces byte-for-byte equivalence where store types, indexes, and annotations differ by design. Phrase the rule as "same domain schema intent, no uncommitted model changes per provider."
 - **Name one source of truth for every replicated fact** - The ADR said role lives on the control-plane membership and also that tenant DBs hold role assignments, which would need synchronization rules. When a fact appears in two stores, declare one authoritative and state that the other does not carry it.

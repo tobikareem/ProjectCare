@@ -111,7 +111,7 @@ The request pipeline would:
 3. prove that the user has an active membership in that organization.
 4. Issue or validate a token containing immutable `organization_id`, `membership_id`, and user identifiers.
 5. Select the organization's registered database without accepting a connection string or tenant ID from the client.
-6. create the scoped `CarePathDbContext` for that database.
+6. Verify database identity and schema compatibility before creating the scoped `CarePathDbContext` (Section 8.2).
 7. enforce role and object-level authorization inside the selected tenant.
 8. record PHI access in that tenant's append-only audit store.
 
@@ -143,7 +143,7 @@ The request pipeline would:
 |---|---|
 | Host header or subdomain spoofing | Resolve only registered, normalized domains behind a trusted proxy; never trust a client-provided `OrganizationId`. |
 | Token used against a different tenant | Require token organization claim to exactly match resolved organization; reject before database selection. |
-| Wrong database selected | Use a server-side tenant registry keyed by immutable organization ID, typed connection factory, allowlisted server targets, and fail-closed resolution. |
+| Wrong database selected | Verify the database's immutable organization marker and deployment ID against the registry before operational queries; use database-scoped runtime credentials and the checks in Section 8.2. |
 | Connection-string disclosure | Store secrets in an approved secret manager; control-plane records should hold secret references, not plaintext credentials. |
 | Migration partially succeeds | Maintain per-tenant schema version and migration status; use staged rollouts, idempotent orchestration where supported, retry policy, and deployment stop thresholds. |
 | Destructive rollback destroys PHI | Use forward-only PHI migrations and retention-safe recovery procedures. |
@@ -205,7 +205,7 @@ Scores use 1 (weak) to 5 (strong). Cost scores favor lower cost; simplicity scor
 | Per-tenant backup/restore | 5 | 2 | Physical database boundaries are materially easier to recover independently. |
 | Customer export/offboarding | 5 | 3 | Separate databases simplify dataset boundaries but files and control-plane data still require coordination. |
 | Platform analytics | 2 | 5 | Separate databases need a privacy-reviewed aggregation pipeline. |
-| Noisy-neighbor containment | 5 | 2 | Dedicated resources can be scaled or throttled independently. |
+| Noisy-neighbor containment | 3 | 2 | Elastic pools share compute; per-database limits and pool headroom reduce contention. Dedicated capacity provides stronger isolation (Section 8.7). |
 | Very large tenant count | 2 | 5 | Thousands of small databases require mature fleet automation. |
 | Enterprise customization | 5 | 3 | Dedicated databases allow tenant-specific infrastructure tiers without changing the application model. |
 | Future regional placement | 5 | 3 | A database locator can route organizations to approved regions. |
@@ -213,7 +213,7 @@ Scores use 1 (weak) to 5 (strong). Cost scores favor lower cost; simplicity scor
 
 ## 8. Decision
 
-CarePath adopts a **shared non-PHI control plane with a separate operational database per organization** for the initial SaaS release. The decision is made against a committed three-year scale of **tens of agencies (up to about 50)**, so a single Azure SQL elastic pool and script-driven fleet operations are acceptable at first; automated provisioning and migration orchestration remain a GA gate (Section 11, Phase 5).
+CarePath adopts a **shared identity and SaaS management control plane with a separate operational database per organization** for the initial SaaS release. The planning assumption is **tens of agencies (up to about 50)** over three years. A shared Azure SQL elastic pool is the initial tenant capacity model, subject to workload sizing and Section 8.7. Scripts may support synthetic development; automated provisioning, migrations, and recovery are required before production tenant onboarding. This revision strengthens the accepted architecture without changing the database-per-organization decision.
 
 This prioritizes PHI isolation, incident containment, tenant-local restore, offboarding, and enterprise flexibility over the lowest possible infrastructure cost. It does not make CarePath HIPAA-compliant by itself and does not remove role, membership, object-level authorization, auditing, encryption, retention, logging, and vendor-agreement requirements.
 
@@ -230,28 +230,33 @@ Every request that can reach PHI follows this order. Each step fails closed; no 
 ```text
 Request arrives
   1. Resolve organization from the verified host name (subdomain or custom domain)
-  2. Authenticate the user against the control-plane identity store
-  3. Verify the user holds an active membership in the resolved organization
-  4. Validate that the access token's organization claim equals the resolved organization
-  5. Look up the organization's database location from the server-side tenant registry
-  6. Create the tenant-scoped CarePathDbContext for that database
+  2. Validate the access token signature, issuer, audience, lifetime, and required claims
+  3. Match token organization to resolved host; validate current identity, membership,
+     session, role, and security versions against authoritative control-plane state
+  4. Require active organization status and a ready, application-compatible registry entry
+  5. Open a restricted metadata connection and verify actual database identity and schema
+  6. Create the tenant-scoped CarePathDbContext on the verified connection
   7. Run role and object-level authorization inside that tenant database
   8. Record PHI access in that tenant's append-only audit store
 ```
 
-Steps 1 to 5 use the control plane only and touch no PHI. The client never supplies an organization id, a connection string, or a database name.
+Steps 1 to 4 use the control plane; step 5 reads only database bootstrap metadata. No operational record may be queried before these checks succeed. A signed token carries organization identity, but client input never determines the connection string or database name. Identity and membership metadata require explicit classification under Section 8.6.
 
-Step 5 also compares the organization's registered `SchemaVersion` against the schema version the running application supports. The rule is explicit:
+Each tenant database contains exactly one provisioning-controlled metadata record with immutable `OrganizationId`, a `DatabaseDeploymentId` unique to that deployed database, and `SchemaVersion`. The registry holds the expected organization, deployment ID, location revision, readiness state, and verified schema version. A restored or relocated database receives a new deployment ID through the privileged recovery workflow; its organization ID is preserved. Runtime credentials can read this metadata but cannot modify it.
 
 ```text
-Resolved tenant DB schema version  !=  application-supported schema version
+Registry missing/not ready, actual organization or deployment ID mismatched,
+actual schema differs from registry, or schema outside the supported set
         ↓
 reject tenant traffic (503 with no tenant detail, non-PHI platform audit event)
         ↓
-do not open the tenant DbContext or attempt normal request processing
+dispose the metadata connection; do not create the operational DbContext,
+query operational tables, retry another tenant, or fall back to a default database
 ```
 
-This is what keeps a partially failed fleet migration from serving requests against a mismatched schema. Migration orchestration (Section 11, Phase 5) updates `SchemaVersion` only after a tenant migration is verified, and the application reports its supported version at startup so the mismatch is observable per tenant.
+Verify metadata on every connection checkout used for operational work, including pooled connections, retries, jobs, and support sessions. Bind the resulting context immutably to the organization and registry revision; reopening a connection requires verification again. Route changes first block new work and drain or cancel existing scopes. There is no cached database-identity bypass. Runtime database principals are scoped to one tenant database with no schema-management privilege; provisioning/migration principals are separate. The shared application remains a common trust boundary even with separate principals.
+
+Tenant-local records inherit their organization scope from this verified context. Authorization must compare that scope with the authenticated organization before role shortcuts, including list queries; it must not assume an `OrganizationId` property exists on every entity. Files and messages carry independently checked organization scope. Section 8.4 defines schema admission and migration coordination.
 
 ### 8.3 Evolution path
 
@@ -259,7 +264,40 @@ This is what keeps a partially failed fleet migration from serving requests agai
 2. Keep the application schema identical across tenants; do not fork customer-specific schemas.
 3. Automate provisioning, migration, backup registration, restore testing, monitoring, and suspension before onboarding production tenants.
 4. Use Azure SQL elastic pools for cost sharing without combining tenant schemas.
-5. If scale later exceeds the committed range, extend the locator so small tenants can use approved shared database shards while enterprise tenants remain dedicated. This hybrid option must be designed explicitly; it should not emerge through ad hoc exceptions.
+5. Reassess measured workload, cost, and fleet operability when scale exceeds the planning range. Additional pools or dedicated capacity preserve this architecture. Shared-schema sharding requires a separate approved ADR and is not an automatic consequence of reaching 50 organizations.
+
+### 8.4 Schema compatibility and fleet migration
+
+- Each application release declares an explicit, tested set of supported tenant schema versions; an unlisted version is rejected under Section 8.2. A single version remains valid for releases that use maintenance windows. Version proximity alone does not prove compatibility.
+- Use additive schema changes followed by application rollout and later cleanup when rolling availability is required. Every application version still serving traffic must support the admitted schema. Cleanup waits until older instances and jobs are drained and protected data is preserved; PHI migrations remain forward-only.
+- Before migrating a tenant, mark it unavailable for new operational work, drain requests/jobs, and acquire a per-tenant migration lease. Perform the migration, validate the actual schema, then publish the verified registry version and readiness state. A lease expiry or process crash must leave the tenant unavailable until reconciliation confirms completion; it must not reopen traffic automatically.
+- The database's applied migration history is authoritative for schema state; registry `SchemaVersion` is an orchestrator-maintained admission projection. Because those stores cannot be updated atomically, disagreement rejects traffic until orchestration reconciles them. Application requests never migrate or repair metadata.
+- Canary failures stop fleet rollout at approved thresholds. Rollback may restore application binaries only when they support the current schema; otherwise keep the affected tenant in maintenance and deploy a forward fix. Phase 1 must approve compatibility tests, maintenance duration, stop thresholds, and deployment ordering for both data-plane and control-plane schema changes.
+
+### 8.5 Tenant restore and audit continuity
+
+- Restore to a new, isolated database. Preserve the source database and all recoverable post-restore-point audit evidence under retention and legal-hold rules. Append-only tables alone do not preserve audit continuity when an older database becomes active.
+- Before production onboarding, approve a tenant-scoped immutable audit archive or equivalent recovery-independent evidence store, with restricted access and a tested recovery objective. It is not a platform analytics store. Preserve actor, action, outcome, sequence/correlation, and original timestamps without clinical values; record recovery boundaries and any unrecoverable evidence gap explicitly.
+- Suspend tenant HTTP traffic and jobs; drain in-flight operations and fence older workers using the registry location revision. Recover and validate the database, reconcile its audit history with preserved evidence, and apply forward migrations to a supported schema before admission.
+- Reconcile referenced file versions, exports/signed access, pending jobs, retries, and completed external deliveries. Preserve delivery/idempotency evidence outside the rewound operational state so a restored reminder or billing workflow cannot repeat an already completed external action. Do not resume workers until reconciliation passes.
+- Keep current control-plane memberships, revocations, and suspension status authoritative. A tenant restore must not restore privileges. Validate tenant-local user-profile links against current membership state before reopening access.
+- Assign a new deployment ID, publish the new location revision through a conditional registry update, invalidate routing caches and old connection pools, and resume only after identity, schema, file, audit, and authorization checks pass. Failed cutover keeps the tenant suspended; returning to a previous database after new writes requires reconciliation, not a blind locator reversal.
+- Phase 1 must set RPO/RTO separately for operational records, audit evidence, files, and control-plane state, including regional loss and unavailable source-database scenarios. Recovery drills must demonstrate the full cutover and evidence preservation, not only successful SQL restore.
+
+### 8.6 Control-plane resilience and classification
+
+- The control plane is shared security-critical infrastructure. Identifiable `Client` memberships can reveal a healthcare relationship; do not label the entire store non-PHI. Phase 1 must classify identity/membership records and apply the approved access, audit, encryption, retention, and provider safeguards. Clinical documents and operational clinical content remain in tenant data planes. Platform event payloads exclude patient-identifying membership details and clinical values.
+- Initial authorization uses authoritative control-plane reads on every protected request and before each job or hub delivery that can disclose PHI. Status, role/security versions, session revocation, and routing readiness must not be accepted from stale caches or lagging replicas. If those checks time out or are unavailable, return a PHI-safe 503 and perform no operational query; pause jobs with bounded retry/backoff. A valid JWT alone does not authorize offline access.
+- Public approved branding may remain cached during an outage, but cannot authorize access or choose a database. Any future cache for security decisions requires a separately approved maximum staleness and demonstrated revocation bound; cache invalidation events alone are insufficient.
+- Set control-plane availability and recovery objectives before implementation, with bounded dependency timeouts, circuit breakers, retry budgets, failover tests, and protected recovery procedures. Reserve capacity separately from tenant workloads so tenant pool saturation does not exhaust the identity/routing database. Never use another organization or a default database as an availability fallback.
+- A control-plane restore must reconcile current registry deployments, memberships, and revocation evidence before protected traffic resumes. Increment a protected global authentication epoch outside the restored state to invalidate pre-recovery tokens and refresh sessions; this prevents recovery from reviving revoked credentials. Define and test the epoch's durable storage and recovery in Phase 1.
+
+### 8.7 Elastic-pool isolation and capacity assumptions
+
+- A database per organization isolates rows and database permissions, not compute, application availability, or regional failures. Tenant databases in one elastic pool share finite resources. The 3/5 containment score assumes enforced per-database limits and monitored headroom; it is not a dedicated-performance guarantee.
+- Size for concurrent peak scheduling, reporting, imports, jobs, migrations, and restore headroom, rather than organization count alone. Phase 1 must specify per-database resource bounds, application concurrency/rate limits, connection-pool budgets, query timeouts, and pool saturation alerts supported by the selected service tier.
+- Approve measured latency/error thresholds, sustained utilization thresholds, and an accountable operator for scaling a pool or moving a busy tenant to another pool/dedicated capacity. Exercise a noisy tenant beside a normal tenant and verify the latter's SLO under the configured controls before onboarding.
+- Include reserved control-plane capacity, additional pools, audit archives, restore overlap, and disaster recovery in Section 13 estimates. Do not promise dedicated compute or independent outage containment in the standard pooled tier.
 
 ## 9. Branding and Tenant Resolution Plan
 
@@ -277,7 +315,10 @@ Organization
 - DefaultTimeZone
 - DataRegion
 - DatabaseLocatorSecretReference
-- SchemaVersion   (set by migration orchestration; compared on every request, see 8.2)
+- SchemaVersion   (verified projection of applied migrations; see 8.4)
+- DatabaseDeploymentId
+- LocationRevision
+- ReadinessState  (provisioning, ready, maintenance, recovering, failed)
 
 OrganizationDomain
 - Id (Guid)
@@ -300,6 +341,7 @@ OrganizationMembership
 - PlatformUserId
 - OrganizationRole
 - Status
+- SecurityVersion (changes atomically with role/status changes)
 ```
 
 Rules:
@@ -324,7 +366,7 @@ The following decisions are recorded and supersede the open questions in earlier
 | How does a user reach their organization? | **Tenant-specific entry URL.** The subdomain resolves the organization before login. |
 | How does a user with several memberships switch organizations? | **New token per organization, one active organization per token.** Switching re-issues an access token with a different `organization_id` claim. No token ever spans two tenants. |
 | Which roles are organization roles versus platform roles? | `Admin` (renamed `OrganizationAdmin`), `Coordinator`, `Caregiver`, `Client`, `FacilityManager`, and `Clinician` are organization roles. `PlatformAdmin` is a control-plane role that never appears in a tenant token. |
-| What is the source of truth for a user's role in an organization? | **`OrganizationMembership` in the control plane is authoritative.** The membership row (`OrganizationId`, `PlatformUserId`, `OrganizationRole`) is the only place a tenant role is stored. The role is copied into the access token at issuance and read from the token by `ICurrentUserContext`. The tenant `User` profile does not carry a role; there is nothing to synchronize. |
+| What is the source of truth for a user's role in an organization? | **`OrganizationMembership` in the control plane is authoritative.** The role is copied into the token but accepted only after current membership role and security-version validation (Section 10.1). The tenant `User` profile does not carry a role. |
 | What access does `PlatformAdmin` have to customer PHI? | **None by default.** Platform administrators manage organizations, subscriptions, domains, and provisioning. PHI access requires a break-glass elevated session that is time-boxed, approved, records a reason, and produces enhanced audit events in both the control plane and the tenant audit store. |
 | Can an organization bring its own identity provider? | Deferred to a later tier. The control-plane identity design must not preclude external SSO per organization. |
 
@@ -332,9 +374,18 @@ Consequences for the current code:
 
 - `Infrastructure/Identity/ApplicationUser` and the Identity `DbContext` registration move to a control-plane context; `CarePathDbContext` stops inheriting from `IdentityDbContext`.
 - `User.Role` is removed from the tenant `User` entity. Role checks read the membership role from the token; the single-role enforcement in `IdentityRoleManagementService` moves to control-plane membership management.
-- The unconditional `Admin`/`Coordinator` shortcut in `Sprint4ObjectAuthorizationService` is replaced by a tenant precondition (resource organization equals token organization) evaluated before any role shortcut, as defense in depth even though tenant databases are physically separate.
+- The unconditional `Admin`/`Coordinator` shortcut in `Sprint4ObjectAuthorizationService` is replaced by a verified-context organization precondition evaluated before any role shortcut (Section 8.2), with current token security state validated under Section 10.1.
 - Email uniqueness checks in `AdminUserManagementService` and `IdentityProvisioningService` become control-plane operations; the "last active admin" invariant is evaluated per organization.
 - `ICurrentUserContext` gains `OrganizationId` and `MembershipId`; `AuthTokenResponse` and the Blazor authentication state provider surface the same values.
+
+### 10.1 Token invalidation and authorization freshness
+
+- Tokens carry immutable user, organization, membership, and session identifiers, the membership security version, user security version, and global authentication epoch. Roles and these versions are issued from a consistent control-plane authorization snapshot. Compare all identifiers, versions, current role, and active user/membership/organization/session state before accepting the token for PHI access.
+- Role changes and membership disable/removal atomically increment membership `SecurityVersion`; user disable, credential compromise, and global sign-out increment the user security version. Session logout revokes that session. Retain revocation state for the required token/session lifetime and preserve it through recovery. An old version or revoked session rejects authorization even when JWT signature and expiry remain valid.
+- Authorization checks starting after a committed revocation must reject the old token. Phase 1 must bound and test already admitted requests; long-running exports, streams, and privileged writes must recheck before subsequent disclosure or irreversible action. Hub deliveries and user-delegated jobs apply the same checks. Service jobs use explicit tenant-scoped service authority and current organization/readiness checks rather than a stored user token.
+- Refresh tokens are server-tracked, rotated on use, and bound to their user, session, and organization. Refresh revalidates current security state; reuse revokes the affected token family. Switching organization requires a fresh membership check and tenant-scoped issuance; it cannot broaden an existing token. Phase 1 defines access/refresh lifetimes and cross-subdomain session handling without placing tokens in URLs.
+- Break-glass sessions have separately approved scope, expiry, and revocation checked against current state, with actor attribution and tenant audit. Membership checks must not accidentally create a routine platform-admin bypass.
+- On authoritative-store failure, apply Section 8.6; do not continue with the role embedded in an otherwise valid token. Automated tests must prove downgrade, suspension, logout, refresh replay, and recovery invalidate access across application instances.
 
 ## 11. Delivery Plan
 
@@ -355,7 +406,7 @@ Consequences for the current code:
 - Inventory every tenant-owned entity and non-database artifact.
 - Threat-model tenant resolution, authentication, database routing, jobs, caching, files, messaging, SignalR, support access, exports, and analytics.
 - Define control-plane/data-plane data classification and prohibit PHI from the control plane unless specifically approved.
-- Define measurable isolation, recovery, availability, and migration success criteria.
+- Define measurable isolation, recovery, availability, and migration success criteria, including every contract in Sections 8.2, 8.4-8.7, and 10.1. Technical Lead owns routing, token, schema, and resilience design; Security/Compliance Owner owns classification and audit/retention review; Product Owner owns service objectives and capacity economics. All thresholds, recovery objectives, and unresolved implementation choices require recorded approval before Phase 1 exits.
 
 **Exit gate:** Requirements and design approved; tasks ready; security/compliance review complete.
 
@@ -363,7 +414,7 @@ Consequences for the current code:
 
 - Add organization, domain, branding, membership, subscription/status, database registry, and provisioning models.
 - Implement verified hostname resolution behind the deployment proxy.
-- Implement tenant-aware current-user context and token validation.
+- Implement tenant-aware current-user context, authoritative token/session invalidation, and control-plane outage/recovery behavior.
 - Split `PlatformAdmin` from `OrganizationAdmin` semantics.
 - Build an internal provisioning state machine with idempotency and audit events.
 
@@ -371,7 +422,7 @@ Consequences for the current code:
 
 ### Phase 3: Tenant Data Plane and Routing
 
-- Make `CarePathDbContext` creation tenant-aware through a server-side database locator.
+- Make `CarePathDbContext` creation tenant-aware through a server-side database locator with independent database-marker verification, scoped runtime credentials, and connection-reopen checks.
 - Define tenant database bootstrap, migrations, seed policy, encryption, backup registration, monitoring, and health checks.
 - Move operational user profiles and all PHI workflows behind tenant database routing.
 - Scope blobs, cache keys, SignalR groups, queued jobs, exports, and audit events to the resolved organization.
@@ -390,8 +441,8 @@ Consequences for the current code:
 
 ### Phase 5: Fleet Operations
 
-- Create tenant-aware migration orchestration with canary rollout, version tracking, retries, and stop thresholds.
-- Automate backup validation and tenant-local restore drills.
+- Create tenant-aware migration orchestration with tested application/schema compatibility, per-tenant draining and leases, canary rollout, version reconciliation, retries, and stop thresholds.
+- Automate backup validation and tenant-local restore drills, including independent audit preservation, files/jobs/delivery reconciliation, location fencing, and safe cutover.
 - Add provisioning, suspension, reactivation, export, and offboarding runbooks.
 - Add per-tenant health, capacity, cost, and security monitoring without PHI in telemetry.
 - Add privacy-reviewed aggregate analytics where justified.
@@ -424,10 +475,16 @@ At minimum, automated tests must cover:
 - Migration canary failure, partial fleet failure, retry, and deployment halt.
 - Suspended tenants denied service without destructive deletion.
 - Branding validation, domain verification, asset authorization, and accessibility.
+- Deliberately swapped locators/credentials, cloned database markers, wrong deployment IDs, metadata absence, pooled-connection reuse, reconnects, and stale routing revisions; assert zero operational queries on admission failure.
+- Role downgrade with an unexpired JWT, user/session revocation, membership suspension, refresh reuse, and break-glass expiry across multiple application instances; verify post-commit checks and bounded in-flight work.
+- Control-plane timeout, circuit opening, stale replicas/caches, failover, and restored security state; verify PHI-safe failure, paused jobs, and authentication-epoch invalidation without fallback routing.
+- Mixed application versions, supported/unsupported schema sets, migration crashes between database and registry updates, lease loss, and old workers surviving maintenance; verify only compatible, ready deployments reopen.
+- Tenant restore with post-restore-point audit events, newer files, revoked memberships, and already delivered reminders; verify evidence continuity, no privilege revival, no duplicate external actions, and failed-cutover containment.
+- A saturated tenant beside a normal tenant under configured pool and application limits, concurrent restore/migration load, connection budgets, and independent control-plane capacity; verify approved SLOs and scaling/move triggers.
 
 Production evidence must additionally verify encryption at rest and in transit, backups, restore exercises, secret management, BAAs, audit review, retention, legal holds, and incident-response processes. These cannot be proven solely by application unit tests.
 
-## 13. Cost Model to Validate Before Final Decision
+## 13. Cost Model to Validate Before Implementation
 
 Obtain real vendor pricing and estimate all values monthly at 10, 50, 100, 500, and 1,000 organizations:
 
@@ -458,14 +515,14 @@ Answers recorded on 2026-09-08. Items marked *Open* still need an owner before P
 
 | # | Question | Answer |
 |---|---|---|
-| 1 | Expected paying organizations after 12, 24, and 36 months? | Tens of agencies; the design commits to up to about 50 within three years. |
+| 1 | Expected paying organizations after 12, 24, and 36 months? | Planning assumption: tens of agencies, up to about 50 within three years; measured workload determines capacity. |
 | 2 | Smallest and largest expected caregiver and client counts per organization? | *Open.* Needed for elastic pool sizing. |
 | 3 | Subscription price and gross-margin target? | *Open.* Needed to validate the Section 13 cost model. |
 | 4 | Is a dedicated database standard or an enterprise tier? | Standard. Every organization receives its own Azure SQL database in a shared elastic pool. |
 | 5 | Does one login need access to multiple agencies? | Yes. One identity, many memberships (Section 10). |
 | 6 | Custom domains at launch or after subdomain launch? | After. Subdomains at launch, verified custom domains as a later tier. |
 | 7 | Single US hosting region initially? | *Open.* The locator carries `DataRegion` so a later answer does not change the model. |
-| 8 | Recovery point and recovery time objectives? | *Open.* Must be set before Phase 5 backup and restore automation. |
+| 8 | Recovery point and recovery time objectives? | *Open.* Product Owner and Technical Lead must approve separate operational, audit, file, and control-plane objectives before Phase 1 exits (Sections 8.5-8.6). |
 | 9 | Cross-organization benchmarking? | Not in scope. Any future aggregate reporting requires a separate privacy-reviewed specification. |
 | 10 | Platform-support access to PHI? | None by default; break-glass with approval, reason capture, time limit, and enhanced audit (Section 10). |
 
@@ -486,6 +543,7 @@ Answers recorded on 2026-09-08. Items marked *Open* still need an owner before P
 - HIPAA compliance, TDE/encryption, backups, legal holds, BAAs, provider configuration, and operational monitoring cannot be established by this design document or source code alone.
 - Centralized platform support creates a high-risk access path and needs an explicit, audited, minimum-necessary elevated-access design.
 - Platform analytics can become a new cross-tenant PHI store and must be excluded until separately specified and approved.
+- Identifiable client memberships require explicit control-plane classification. Routing, invalidation, recovery, compatibility, resilience, and resource controls in Sections 8 and 10 are design requirements; implementation tests and deployment evidence remain unverified.
 
 #### Information
 
@@ -499,11 +557,12 @@ Answers recorded on 2026-09-08. Items marked *Open* still need an owner before P
 
 **Accepted 2026-09-08.**
 
-- Shared non-PHI control plane plus one operational database per organization.
+- Shared identity and SaaS management control plane plus one operational database per organization, with explicit classification of identifiable memberships.
 - Azure SQL for production control plane and tenant databases; PostgreSQL retained for development and HomeLab portability only.
 - Control-plane identity: one platform login, globally unique email, explicit organization memberships, one active organization per access token, tenant-specific subdomain entry URLs at launch.
 - `PlatformAdmin` has no routine PHI access; break-glass only.
-- Append-only PHI audit records live in each tenant database. The control plane records only non-PHI platform events (provisioning, membership changes, break-glass sessions).
-- Committed scale: up to about 50 organizations over three years. Exceeding that triggers a new ADR for hybrid sharding.
+- Append-only PHI audit records live in each tenant database with recovery-independent preservation under Section 8.5. Control-plane event payloads exclude clinical values and patient-identifying membership details.
+- Planning scale: up to about 50 organizations over three years. Growth triggers capacity/operations reassessment; shared-schema sharding requires a separate approved ADR.
+- Independent database identity verification, authoritative token invalidation, reconciled restores, tested schema compatibility, fail-closed control-plane resilience, and measured elastic-pool limits are mandatory specification and verification gates before implementation and production onboarding respectively.
 
 Implementation may begin only after the Phase 1 requirements, design, and task specifications are approved.

@@ -3,17 +3,26 @@ using CarePath.Application.Abstractions.Auth;
 using CarePath.Infrastructure;
 using CarePath.Infrastructure.Identity;
 using CarePath.Infrastructure.Persistence;
+using CarePath.WebApi.Diagnostics;
 using CarePath.WebApi.Middleware;
 using CarePath.WebApi.ModelBinding;
 using CarePath.WebApi.OpenApi;
 using CarePath.WebApi.Security;
 using CarePath.WebApi.Serialization;
 using CarePath.WebApi.Validation;
+using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.OpenApi;
 
 const string webClientCorsPolicy = "WebClient";
+
+// Docker health-check mode: probe the running instance over loopback and exit, without
+// building the host. Must stay ahead of CreateBuilder so a probe never touches the database.
+if (args.Contains(HealthProbe.Argument, StringComparer.Ordinal))
+{
+    return await HealthProbe.RunAsync();
+}
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -22,6 +31,12 @@ builder.Services.AddApplication();
 builder.Services.AddScoped<ICurrentUserContext, HttpCurrentUserContext>();
 builder.Services.AddInfrastructure(builder.Configuration);
 builder.Services.AddCarePathAuthentication(builder.Configuration);
+
+// Liveness needs no registered checks; readiness is tagged so the two endpoints below can
+// select different subsets of the same registry.
+builder.Services
+    .AddHealthChecks()
+    .AddCheck<DatabaseHealthCheck>("database", tags: ["ready"]);
 
 // Application-layer validators require DateTimeKind.Utc; normalize every DateTime at the
 // HTTP boundary (JSON bodies via the converter, query/route values via the binder) so
@@ -132,6 +147,20 @@ app.UseCors(webClientCorsPolicy);
 app.UseAuthentication();
 app.UseAuthorization();
 
+// AllowAnonymous is required: the fallback authorization policy would otherwise answer both
+// endpoints with 401. Neither returns PHI — the default writer emits only the status word.
+app.MapHealthChecks("/health/live", new HealthCheckOptions
+{
+    Predicate = _ => false,
+}).AllowAnonymous();
+
+app.MapHealthChecks("/health/ready", new HealthCheckOptions
+{
+    Predicate = registration => registration.Tags.Contains("ready"),
+}).AllowAnonymous();
+
 app.MapControllers();
 
 app.Run();
+
+return 0;

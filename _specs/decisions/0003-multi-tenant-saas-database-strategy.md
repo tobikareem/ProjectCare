@@ -1,7 +1,8 @@
 # ADR 0003: Multi-Tenant SaaS Database Strategy
 
 **Date:** 2026-07-20  
-**Status:** In Review  
+**Decided:** 2026-09-08  
+**Status:** Accepted  
 **Decision owners:** Product Owner, Technical Lead, Security/Compliance Owner  
 **Related systems:** Domain, Application, Infrastructure, WebApi, CarePath.Contracts, CarePath.Client, CarePath.Client.UI  
 
@@ -14,7 +15,7 @@ This document plans CarePath's conversion from a single-organization healthcare 
 
 The primary decision is the isolation model for PHI and sensitive workforce and financial data. Branding is included because organization resolution, authentication, and data routing must all agree on the same tenant before the UI is rendered or PHI is accessed.
 
-This is a decision and discovery document, not authorization to implement. The requirements, design, and task specifications must be created and approved after this decision is accepted.
+This ADR records the accepted decision. It is not authorization to implement: the requirements, design, and task specifications (Phase 1 in Section 11) must be created and approved before code changes begin.
 
 ## 2. Terminology
 
@@ -27,17 +28,37 @@ This is a decision and discovery document, not authorization to implement. The r
 
 ## 3. Current-State Assessment
 
-CarePath's Clean Architecture is suitable for either tenancy strategy, but the current implementation is single-organization:
+A code review on 2026-09-08 (branch `postgres`) confirmed that CarePath is single-organization by construction. Clean Architecture, the repository pattern in Application, the convention-driven soft-delete filter, and fail-closed object authorization make tenancy tractable, but nothing tenant-aware exists yet.
 
-- PHI-bearing entities do not have `OrganizationId` or another tenant key.
-- `CarePathDbContext` is configured from one connection and exposes all operational entity sets.
-- The global EF Core filter enforces soft deletion only; it does not enforce tenant isolation.
-- `User.Role` is a single role on the user rather than an organization membership.
-- Current `Admin` semantics are platform-wide and must be separated from customer administration.
-- Authorization checks protect roles and individual resources, but do not establish an organization boundary.
-- Branding, organization provisioning, subscriptions, custom domains, and tenant-aware background processing do not yet exist.
+### 3.1 Persistence
 
-CarePath must not host unrelated agencies in the same production data store until one of the tenant-isolation designs is implemented and verified.
+- `BaseEntity` (`Domain/Entities/Common/BaseEntity.cs`) carries `Id`, audit fields, and `IsDeleted` only. None of the 19 domain entities, `ApplicationUser`, or the ASP.NET Identity tables reference an organization.
+- The only global query filter is soft deletion, applied by convention in `CarePathDbContext.ApplyBaseEntityConventions`. It does not enforce tenant isolation.
+- `AddInfrastructure` resolves one provider and one connection string at startup and registers a single `CarePathDbContext`. There is no per-request context factory.
+- Two providers are maintained with separate migration assemblies: SQL Server (`Infrastructure/Migrations`, six migrations) and PostgreSQL (`Infrastructure.Migrations.PostgreSql`, one squashed `InitialCreate`).
+- `Database:AutoMigrate` runs migrate-and-seed inside `Program.cs` at boot. This is acceptable for one database and unsuitable for a fleet.
+- Six infrastructure files query `CarePathDbContext` directly outside the generic repository (`BillingEligibilityQuery`, `BillingReconciliationStore`, `ShiftBillingQuery`, `AssignmentHistoryQuery`, `ClientAccessEvaluator`, `IdentityService`), about 21 query sites. Five of those call `IgnoreQueryFilters()`, which would also drop any tenant filter added as a global filter.
+- Globally unique constraints that assume one organization: domain `User.Email`, the ASP.NET `UserNameIndex`, and `Invoice.InvoiceNumber`. `Caregiver.UserId` and `Client.UserId` are unique, so one domain user cannot be a caregiver at two agencies.
+- Three foreign keys could bridge organizations in a shared schema with no structural guard: `Shift.CaregiverId`, `ClientAccessGrant.GranteeUserId`, and `BillingReconciliationResolution.ResolvedByUserId`.
+
+### 3.2 Identity and authorization
+
+- The JWT carries `sub`, `email`, `jti`, and role claims only (`JwtTokenService`). `ICurrentUserContext` exposes user id, name, roles, and correlation id. Neither has an organization.
+- `User.Role` is a single role on the user rather than an organization membership; `IdentityRoleManagementService` enforces one role per user.
+- `Sprint4ObjectAuthorizationService` authorizes `Admin` and `Coordinator` for every resource before any per-object check. Current `Admin` semantics are therefore platform-wide and must be separated from customer administration.
+- `IdorGuard` protects item routes only. List and search endpoints go straight to repositories and can only be isolated at the `DbContext` level.
+- `AdminUserManagementService` checks email uniqueness globally and enforces a "last active admin" invariant across the whole user table.
+- The Blazor client (`CarePath.Web`) logs in with email and password only, builds its principal from two claims (name and role), and has no organization selection.
+
+### 3.3 Audit, storage, jobs, configuration
+
+- `LoggingPhiAuditLogger` writes PHI audit entries to Serilog. There is no append-only audit table and `PhiAuditEntry` has no organization field.
+- `LocalFileStorageService` writes all objects to one flat directory keyed by GUID, with no organization prefix and no signed read URLs.
+- No hosted services, SignalR hubs, or queues exist. Transition reminders are persisted with `Scheduled` status and never dispatched; the future dispatcher will be the first execution path without an HTTP user context.
+- JWT issuer, audience, signing key, CORS origins, storage root, and Data Protection application name are single global values.
+- Maryland is baked into the model: `User.State` defaults to `"Maryland"`, `CertificationType` is scoped to the Maryland Board of Nursing, and billing thresholds (`BillingMath`, `BillingReconciliationService`) are compile-time constants rather than tenant settings.
+
+CarePath must not host unrelated agencies in the same production data store until the tenant-isolation design in this ADR is implemented and verified.
 
 ## 4. Decision Drivers
 
@@ -81,7 +102,7 @@ The database strategy must be evaluated against these priorities, in order:
        - audit events      - audit events        - audit events
 ```
 
-`*` The final identity design remains a separate decision. The recommended starting point is centralized authentication and organization membership in the control plane, with tenant-scoped operational user profiles in each data plane. The control plane must not become a convenient store for clinical PHI.
+`*` Identity design is decided in Section 10: centralized authentication and organization memberships live in the control plane, with tenant-scoped operational user profiles in each data plane. The control plane must not become a convenient store for clinical PHI.
 
 The request pipeline would:
 
@@ -190,26 +211,55 @@ Scores use 1 (weak) to 5 (strong). Cost scores favor lower cost; simplicity scor
 | Future regional placement | 5 | 3 | A database locator can route organizations to approved regions. |
 | Developer query simplicity | 4 | 2 | Separate databases reduce tenant predicates but require correct request-to-database routing. |
 
-## 8. Preliminary Recommendation
+## 8. Decision
 
-Use a **shared control plane with a separate operational database per organization** for CarePath's initial SaaS offering, provided the near-term customer count is measured in tens or low hundreds rather than many thousands of micro-tenants.
+CarePath adopts a **shared non-PHI control plane with a separate operational database per organization** for the initial SaaS release. The decision is made against a committed three-year scale of **tens of agencies (up to about 50)**, so a single Azure SQL elastic pool and script-driven fleet operations are acceptable at first; automated provisioning and migration orchestration remain a GA gate (Section 11, Phase 5).
 
-This recommendation prioritizes PHI isolation, incident containment, tenant-local restore, offboarding, and enterprise flexibility over the lowest possible infrastructure cost. It does not make CarePath HIPAA-compliant by itself and does not remove role, membership, object-level authorization, auditing, encryption, retention, logging, and vendor-agreement requirements.
+This prioritizes PHI isolation, incident containment, tenant-local restore, offboarding, and enterprise flexibility over the lowest possible infrastructure cost. It does not make CarePath HIPAA-compliant by itself and does not remove role, membership, object-level authorization, auditing, encryption, retention, logging, and vendor-agreement requirements.
 
-The recommendation should change to shared-database tenancy if validated business projections show all of the following:
+### 8.1 Database engine
 
-- A very large number of small, price-sensitive agencies.
-- Database-per-tenant cost makes the target subscription price unviable.
-- The team can implement and continuously test database-enforced tenant relationships, query isolation, job isolation, cache isolation, storage isolation, and tenant-selective recovery.
-- Enterprise customers do not require dedicated data infrastructure, or a hybrid extraction/routing model is accepted.
+- **Azure SQL** is the production engine for every tenant operational database and for the shared control plane. Elastic pools provide the cost-sharing model for database-per-tenant. Azure SQL TDE provides encryption at rest for the database layer and forms part of the overall encryption-at-rest controls; files, backups, exports, logs, and secrets carry their own controls (Sections 5.4 and 15).
+- **PostgreSQL** remains a supported development and HomeLab provider used to validate persistence portability. It is not an initial production tenant option.
+- Separate migration assemblies (`Infrastructure/Migrations` for SQL Server, `Infrastructure.Migrations.PostgreSql`) are retained while engineering supports both providers. Every schema change must be added to both. CI must verify that both migration models represent the same domain schema intent and that neither provider has uncommitted model changes; provider-specific store types, index definitions, and annotations may legitimately differ, so byte-for-byte snapshot equivalence is not required.
 
-### 8.1 Suggested Evolution Path
+### 8.2 Request pipeline
+
+Every request that can reach PHI follows this order. Each step fails closed; no later step runs if an earlier one does not produce a verified result.
+
+```text
+Request arrives
+  1. Resolve organization from the verified host name (subdomain or custom domain)
+  2. Authenticate the user against the control-plane identity store
+  3. Verify the user holds an active membership in the resolved organization
+  4. Validate that the access token's organization claim equals the resolved organization
+  5. Look up the organization's database location from the server-side tenant registry
+  6. Create the tenant-scoped CarePathDbContext for that database
+  7. Run role and object-level authorization inside that tenant database
+  8. Record PHI access in that tenant's append-only audit store
+```
+
+Steps 1 to 5 use the control plane only and touch no PHI. The client never supplies an organization id, a connection string, or a database name.
+
+Step 5 also compares the organization's registered `SchemaVersion` against the schema version the running application supports. The rule is explicit:
+
+```text
+Resolved tenant DB schema version  !=  application-supported schema version
+        ↓
+reject tenant traffic (503 with no tenant detail, non-PHI platform audit event)
+        ↓
+do not open the tenant DbContext or attempt normal request processing
+```
+
+This is what keeps a partially failed fleet migration from serving requests against a mismatched schema. Migration orchestration (Section 11, Phase 5) updates `SchemaVersion` only after a tenant migration is verified, and the application reports its supported version at startup so the mismatch is observable per tenant.
+
+### 8.3 Evolution path
 
 1. Begin with separate databases and a database locator abstraction.
 2. Keep the application schema identical across tenants; do not fork customer-specific schemas.
 3. Automate provisioning, migration, backup registration, restore testing, monitoring, and suspension before onboarding production tenants.
-4. Use database/server pooling where the selected SQL hosting platform supports safe cost sharing without combining tenant schemas.
-5. If scale later requires it, extend the locator so small tenants can use approved shared database shards while enterprise tenants remain dedicated. This hybrid option must be designed explicitly; it should not emerge through ad hoc exceptions.
+4. Use Azure SQL elastic pools for cost sharing without combining tenant schemas.
+5. If scale later exceeds the committed range, extend the locator so small tenants can use approved shared database shards while enterprise tenants remain dedicated. This hybrid option must be designed explicitly; it should not emerge through ad hoc exceptions.
 
 ## 9. Branding and Tenant Resolution Plan
 
@@ -227,7 +277,7 @@ Organization
 - DefaultTimeZone
 - DataRegion
 - DatabaseLocatorSecretReference
-- SchemaVersion
+- SchemaVersion   (set by migration orchestration; compared on every request, see 8.2)
 
 OrganizationDomain
 - Id (Guid)
@@ -254,26 +304,37 @@ OrganizationMembership
 
 Rules:
 
-- Default URL: `{slug}.carepathhealth.com`.
-- Optional custom domain after ownership verification and certificate provisioning.
+- Launch URL model: `{slug}.carepathhealth.com` for every organization, served under a wildcard certificate behind a trusted proxy that sets the host header.
+- Verified custom domains are a later tier, added after ownership verification and certificate provisioning.
 - Slugs and domains must be globally unique and normalized.
 - Branding supports only approved theme tokens and validated private logo assets; no arbitrary customer CSS, HTML, or JavaScript.
 - Authentication pages may display branding, but tenant identity must come from a verified domain—not from branding data sent by the browser.
 - The resolved organization, membership, token claim, database locator, storage scope, and audit scope must all match.
 - A disabled or suspended organization must fail closed while preserving records and retention obligations.
 
-## 10. Identity and Authorization Decisions Still Required
+## 10. Identity and Authorization Decisions
 
-Before implementation, approve answers to these questions:
+The following decisions are recorded and supersede the open questions in earlier drafts.
 
-1. Can one person belong to multiple organizations with one login?
-2. Is an email globally unique, or unique only within an organization?
-3. Will customer users switch organizations in one session, or authenticate through a tenant-specific URL each time?
-4. What exact support access can `PlatformAdmin` receive, and does it require time-limited approval, reason capture, and enhanced audit?
-5. Which roles are organization roles versus platform roles?
-6. Can an organization manage its own identity provider through SSO in a later tier?
+| Question | Decision |
+|---|---|
+| Can one person belong to multiple organizations with one login? | **Yes.** One platform identity, many memberships. This supports 1099 contractors who work for several agencies. |
+| Is an email globally unique, or unique only within an organization? | **Globally unique in the control plane.** Email identifies the platform identity. The per-tenant `User` profile is keyed by the platform user id, not by email. |
+| Where do credentials and ASP.NET Identity tables live? | **Control plane only.** `AspNetUsers`, password hashes, refresh tokens, lockout state, and memberships live in the control-plane database. Tenant databases hold only the tenant-local operational `User` profile. |
+| How does a user reach their organization? | **Tenant-specific entry URL.** The subdomain resolves the organization before login. |
+| How does a user with several memberships switch organizations? | **New token per organization, one active organization per token.** Switching re-issues an access token with a different `organization_id` claim. No token ever spans two tenants. |
+| Which roles are organization roles versus platform roles? | `Admin` (renamed `OrganizationAdmin`), `Coordinator`, `Caregiver`, `Client`, `FacilityManager`, and `Clinician` are organization roles. `PlatformAdmin` is a control-plane role that never appears in a tenant token. |
+| What is the source of truth for a user's role in an organization? | **`OrganizationMembership` in the control plane is authoritative.** The membership row (`OrganizationId`, `PlatformUserId`, `OrganizationRole`) is the only place a tenant role is stored. The role is copied into the access token at issuance and read from the token by `ICurrentUserContext`. The tenant `User` profile does not carry a role; there is nothing to synchronize. |
+| What access does `PlatformAdmin` have to customer PHI? | **None by default.** Platform administrators manage organizations, subscriptions, domains, and provisioning. PHI access requires a break-glass elevated session that is time-boxed, approved, records a reason, and produces enhanced audit events in both the control plane and the tenant audit store. |
+| Can an organization bring its own identity provider? | Deferred to a later tier. The control-plane identity design must not preclude external SSO per organization. |
 
-Preliminary preference: centralized authentication, tenant-specific entry URLs, explicit organization memberships, one active organization per access token, and no routine platform-administrator access to PHI.
+Consequences for the current code:
+
+- `Infrastructure/Identity/ApplicationUser` and the Identity `DbContext` registration move to a control-plane context; `CarePathDbContext` stops inheriting from `IdentityDbContext`.
+- `User.Role` is removed from the tenant `User` entity. Role checks read the membership role from the token; the single-role enforcement in `IdentityRoleManagementService` moves to control-plane membership management.
+- The unconditional `Admin`/`Coordinator` shortcut in `Sprint4ObjectAuthorizationService` is replaced by a tenant precondition (resource organization equals token organization) evaluated before any role shortcut, as defense in depth even though tenant databases are physically separate.
+- Email uniqueness checks in `AdminUserManagementService` and `IdentityProvisioningService` become control-plane operations; the "last active admin" invariant is evaluated per organization.
+- `ICurrentUserContext` gains `OrganizationId` and `MembershipId`; `AuthTokenResponse` and the Blazor authentication state provider surface the same values.
 
 ## 11. Delivery Plan
 
@@ -286,7 +347,7 @@ Preliminary preference: centralized authentication, tenant-specific entry URLs, 
 - Define regional hosting, recovery objectives, retention, offboarding, and legal-hold expectations.
 - Conduct legal/compliance review of CarePath's business-associate responsibilities and customer BAA model.
 
-**Exit gate:** ADR accepted and unresolved decisions have named owners and deadlines.
+**Exit gate:** ADR accepted and unresolved decisions have named owners and deadlines. *Status 2026-09-08: architecture, engine, scale, identity, and platform-access decisions are recorded in Sections 8 and 10. Subscription tiers, price floor, regional hosting, recovery objectives, and the customer BAA model remain open (Section 14).*
 
 ### Phase 1: Approved Specifications and Threat Model
 
@@ -391,20 +452,22 @@ Shared-database monthly cost =
 
 Do not decide from database list price alone. Include engineering labor, on-call burden, restore complexity, incident blast radius, customer security requirements, and the revenue enabled by a dedicated-data tier.
 
-## 14. Decision Questions for Review
+## 14. Decision Questions
 
-The product owner should answer these before this ADR becomes `Accepted`:
+Answers recorded on 2026-09-08. Items marked *Open* still need an owner before Phase 1 exits.
 
-1. How many paying organizations are expected after 12, 24, and 36 months?
-2. What are the smallest and largest expected caregiver/client counts per organization?
-3. What monthly subscription price and gross-margin target must the architecture support?
-4. Is a dedicated database a standard feature or an enterprise tier?
-5. Does one login need access to multiple agencies?
-6. Are custom domains required at launch or after subdomain launch?
-7. Are organizations limited to one US hosting region initially?
-8. What recovery point objective and recovery time objective will be promised?
-9. Is cross-organization benchmarking required, and can it use de-identified or aggregate data only?
-10. What platform-support access to customer PHI is contractually and operationally acceptable?
+| # | Question | Answer |
+|---|---|---|
+| 1 | Expected paying organizations after 12, 24, and 36 months? | Tens of agencies; the design commits to up to about 50 within three years. |
+| 2 | Smallest and largest expected caregiver and client counts per organization? | *Open.* Needed for elastic pool sizing. |
+| 3 | Subscription price and gross-margin target? | *Open.* Needed to validate the Section 13 cost model. |
+| 4 | Is a dedicated database standard or an enterprise tier? | Standard. Every organization receives its own Azure SQL database in a shared elastic pool. |
+| 5 | Does one login need access to multiple agencies? | Yes. One identity, many memberships (Section 10). |
+| 6 | Custom domains at launch or after subdomain launch? | After. Subdomains at launch, verified custom domains as a later tier. |
+| 7 | Single US hosting region initially? | *Open.* The locator carries `DataRegion` so a later answer does not change the model. |
+| 8 | Recovery point and recovery time objectives? | *Open.* Must be set before Phase 5 backup and restore automation. |
+| 9 | Cross-organization benchmarking? | Not in scope. Any future aggregate reporting requires a separate privacy-reviewed specification. |
+| 10 | Platform-support access to PHI? | None by default; break-glass with approval, reason capture, time limit, and enhanced audit (Section 10). |
 
 ## 15. HIPAA/PHI Engineering Review
 
@@ -432,9 +495,15 @@ The product owner should answer these before this ADR becomes `Accepted`:
 
 **PASS WITH WARNINGS for continued planning only.** Do not begin multi-agency production onboarding until an approved specification, threat model, implementation, isolation tests, operational evidence, and contractual/compliance gates are complete.
 
-## 16. Proposed Decision
+## 16. Recorded Decision
 
-**Proposed:** Adopt a shared non-PHI control plane and a separate operational database per organization for the initial CarePath SaaS release. Preserve a database-locator abstraction so a deliberately designed hybrid strategy remains possible later. Keep schemas uniform across organizations and automate the entire database lifecycle.
+**Accepted 2026-09-08.**
 
-**Status:** In Review. No architectural option is accepted until the questions in Section 14 are answered and the cost model is validated with the intended hosting provider.
+- Shared non-PHI control plane plus one operational database per organization.
+- Azure SQL for production control plane and tenant databases; PostgreSQL retained for development and HomeLab portability only.
+- Control-plane identity: one platform login, globally unique email, explicit organization memberships, one active organization per access token, tenant-specific subdomain entry URLs at launch.
+- `PlatformAdmin` has no routine PHI access; break-glass only.
+- Append-only PHI audit records live in each tenant database. The control plane records only non-PHI platform events (provisioning, membership changes, break-glass sessions).
+- Committed scale: up to about 50 organizations over three years. Exceeding that triggers a new ADR for hybrid sharding.
 
+Implementation may begin only after the Phase 1 requirements, design, and task specifications are approved.

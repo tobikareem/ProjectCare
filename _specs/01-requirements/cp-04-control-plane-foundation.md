@@ -1,6 +1,6 @@
 # CP-04 — Control Plane Foundation: Requirements
 
-**Status**: Draft  
+**Status**: Approved  
 **Author**: CarePath Health  
 **Created**: 2026-09-08  
 **Revised**: 2026-09-08 (v1.2: no in-app organization switching; organizations are reached only through their own domain)  
@@ -68,7 +68,9 @@ Feature: Organization registration (wireframe steps 2 to 5)
     When I submit a legal name, display name, slug "brightcare", default time zone, and the first administrator's email
     Then an Organization is created with Status = Pending and ReadinessState = Provisioning
     And an OrganizationDomain "brightcare.carepathhealth.com" is created as the primary, verified host
-    And an Admin membership for the first administrator is created in Status = Active
+    And a platform identity exists for the first administrator (created if the email is new)
+    And an Admin membership for the first administrator is created with Status = Provisioning and TenantUserId = null
+    And that membership cannot sign in until CP-06 provisions the tenant database, creates the tenant profile, links TenantUserId, and activates the membership
     And a platform audit event "OrganizationRegistered" is recorded with organization id and actor id only
     And no tenant database is created
     And the readiness screen shows the workspace as not yet ready
@@ -177,8 +179,10 @@ Feature: Membership management (wireframe step 7, "Invite your care team")
     Given I am an Admin of BrightCare
     And a platform identity already exists for "maria@example.com" as a member of Helping Hands
     When I create a BrightCare membership for that email with role Caregiver
-    Then a new OrganizationMembership links the existing platform user to BrightCare
+    Then a new OrganizationMembership links the existing platform user to BrightCare with Status = Provisioning
     And a tenant-side User profile is created in BrightCare's database carrying PlatformUserId
+    And TenantUserId is linked and only then does the membership become Active
+    And if profile creation fails the membership stays Provisioning and cannot sign in
     And no second platform identity is created
 
   Scenario: Organization admin invites a new person
@@ -302,17 +306,17 @@ Feature: Platform administration boundary (wireframe steps 2 to 5)
 | FR-017 | PlatformAdmin shall be a control-plane role. Platform tokens are issued only at `manage.*` hosts, carry `token_kind = platform` and no organization, are rejected at tenant hosts, and are subject to the same session, version, and epoch checks. Tenant tokens are rejected at `manage.*`. | Critical | PlatformAdmin | Both |
 | FR-018 | PlatformAdmin shall be able to register, list, view, update, suspend, and reactivate organizations, set ReadinessState between Provisioning, Ready, and Maintenance, and manage their domains and branding. Recovering and Failed are set only by CP-06 provisioning and recovery workflows. | High | PlatformAdmin | Both |
 | FR-018a | Suspend, reactivate, set maintenance, and end maintenance shall each require a recorded reason, produce a PlatformAuditEvent, and be confirmed through the confirmation dialog pattern in the UI design system. Suspend additionally requires the operator to type the organization slug. Set maintenance carries a member-facing message of at most 200 characters returned by the branding endpoint's ServiceState. Reason text is never shown to members. | High | PlatformAdmin | Both |
-| FR-019 | Registering an organization creates it with Status Pending and ReadinessState Provisioning, creates its primary verified subdomain, creates the first Admin membership, and creates no tenant database. | High | PlatformAdmin | Both |
+| FR-019 | Registering an organization creates it with Status Pending and ReadinessState Provisioning, creates its primary verified subdomain, ensures a platform identity for the first administrator, creates the first Admin membership with Status Provisioning and no TenantUserId, and creates no tenant database or tenant profile. Activation of that membership is part of CP-06 provisioning. | High | PlatformAdmin | Both |
 | FR-020 | Organization Admin shall be able to list memberships, create a membership for an existing or new platform user, change a membership's role, and deactivate or reactivate a membership, within their own organization only. The last Active Admin membership cannot be deactivated or demoted. | High | Admin | Both |
 | FR-021 | The system shall provide no endpoint, screen, or link that lists a user's other organizations or moves a session between organizations. An organization is reached only by opening its own host and signing in there. | Critical | All | Both |
-| FR-021 | The system shall expose an anonymous branding endpoint returning approved branding fields and the public ServiceState (Available, Maintenance, Recovering) for the resolved host. | Medium | Anonymous | Both |
-| FR-022 | Branding shall be limited to display name, monogram text, logo storage key, primary and accent color tokens from the design-system palette, support email, and support phone. No free-form CSS, HTML, or script. | Medium | PlatformAdmin, Admin | Both |
-| FR-023 | The CP-04 migration and startup backfill shall register the existing deployment as one Active, Ready organization from `ControlPlane:DefaultOrganization`, move all `ApplicationUser` rows, create memberships for active non-deleted users with their current role, register the existing database in OrganizationDataPlane with a new DatabaseDeploymentId, and write the matching TenantDeployment metadata row into the existing database. | Critical | System | Both |
-| FR-024 | The first PlatformAdmin shall be bootstrapped from configuration on an empty control plane, with the password read from user secrets or environment. | High | System | Both |
-| FR-025 | Every control-plane mutation, denied login, denied host resolution, revocation, refresh replay, and 503 decision shall write an append-only PlatformAuditEvent with actor platform user id, organization id when known, action, entity type, entity id, correlation id, outcome, and UTC timestamp. Never an email, a raw unknown host name (hash only), a token, or any PHI. | Critical | System | Both |
-| FR-026 | The Blazor web client shall read branding and ServiceState for its host on load, render the agency-branded sign-in page or the maintenance and outage states from the wireframe, show the current organization and role in the shell, and offer "Sign out". No organization switch is offered. | Medium | All tenant roles | Both |
-| FR-027 | The existing tenant API surface shall continue to function unchanged for the backfilled organization. | Critical | All tenant roles | Both |
-| FR-028 | Revocation tests shall run against at least two application instances sharing one control plane and prove that role downgrade, deactivation, suspension, sign-out, refresh replay, and epoch increment reject the old token on both instances. | High | System | Both |
+| FR-022 | The system shall expose an anonymous branding endpoint returning approved branding fields and the public ServiceState (Available, Maintenance, Recovering) for the resolved host. | Medium | Anonymous | Both |
+| FR-023 | Branding shall be limited to display name, monogram text, logo storage key, primary and accent color tokens from the design-system palette, support email, and support phone. No free-form CSS, HTML, or script. | Medium | PlatformAdmin, Admin | Both |
+| FR-024 | The CP-04 migration and startup backfill shall register the existing deployment as one Active, Ready organization from `ControlPlane:DefaultOrganization`, move all `ApplicationUser` rows, create memberships for active non-deleted users with their current role, register the existing database in OrganizationDataPlane with a new DatabaseDeploymentId, and write the matching TenantDeployment metadata row into the existing database. | Critical | System | Both |
+| FR-025 | The first PlatformAdmin shall be bootstrapped from configuration on an empty control plane, with the password read from user secrets or environment. | High | System | Both |
+| FR-026 | Every control-plane mutation, denied login, denied host resolution, revocation, refresh replay, and 503 decision shall write an append-only PlatformAuditEvent with actor platform user id, organization id when known, action, entity type, entity id, correlation id, outcome, and UTC timestamp. Never an email, a raw unknown host name (hash only), a token, or any PHI. | Critical | System | Both |
+| FR-027 | The Blazor web client shall read branding and ServiceState for its host on load, render the agency-branded sign-in page or the maintenance and outage states from the wireframe, show the current organization and role in the shell, and offer "Sign out". No organization switch is offered. | Medium | All tenant roles | Both |
+| FR-028 | The existing tenant API surface shall continue to function unchanged for the backfilled organization. | Critical | All tenant roles | Both |
+| FR-029 | Revocation tests shall run against at least two application instances sharing one control plane and prove that role downgrade, deactivation, suspension, sign-out, refresh replay, and epoch increment reject the old token on both instances. | High | System | Both |
 
 ### 3.2 Data Requirements
 
@@ -323,7 +327,7 @@ Control-plane entities (all `Guid` keys, UTC timestamps; full shapes in the desi
 | `Organization` | Customer agency | `Slug` unique, immutable; `Status` ∈ {Pending, Active, Suspended, Offboarded}; `ReadinessState` ∈ {Provisioning, Ready, Maintenance, Recovering, Failed}; `DefaultTimeZone` IANA id; `DataRegion` |
 | `OrganizationDomain` | Host name mapping | `HostName` normalized, unique platform-wide; `IsPrimary`; `VerificationStatus` ∈ {Pending, Verified}; generated subdomains are Verified on creation |
 | `OrganizationBranding` | White-label fields | One row per organization; colors restricted to named design-system tokens |
-| `OrganizationMembership` | Authoritative role | `(OrganizationId, PlatformUserId)` unique; `OrganizationRole` ∈ the six tenant roles; `Status` ∈ {Active, Inactive}; `SecurityVersion` int, incremented with every role or status change; `TenantUserId` = tenant-side `User.Id` |
+| `OrganizationMembership` | Authoritative role | `(OrganizationId, PlatformUserId)` unique; `OrganizationRole` ∈ the six tenant roles; `Status` ∈ {Provisioning, Active, Inactive}; only Active can sign in; `SecurityVersion` int, incremented with every role or status change; `TenantUserId` = tenant-side `User.Id`, null until the tenant profile exists |
 | `OrganizationDataPlane` | Database registry (ADR §9) | One per organization; `Provider`; `SecretReference` (never a connection string); `DatabaseDeploymentId`; `LocationRevision`; `SchemaVersion`; `RegisteredAtUtc` |
 | `PlatformUser` | ASP.NET Identity user | `IdentityUser<Guid>`; email unique; `SecurityVersion`; `IsPlatformAdmin`; no `DomainUserId` |
 | `PlatformSession` | One sign-in | `PlatformUserId`; `MembershipId` and `OrganizationId` (null for platform sessions); `TokenKind`; `CreatedAtUtc`; `LastRefreshedAtUtc`; `RevokedAtUtc`; `RevocationReason` |
@@ -410,7 +414,7 @@ The Security/Compliance Owner must confirm this table before the design spec is 
 ### 5.1 Quantitative Metrics
 
 - Two-organization tests: distinct tokens per host, each rejected at the other host, in 100 percent of cases.
-- Revocation tests (FR-028) pass on two application instances for all six revocation causes.
+- Revocation tests (FR-029) pass on two application instances for all six revocation causes.
 - Backfill on a copy of the HomeLab database yields one organization, one data-plane record, one TenantDeployment row, and one membership per active user, with zero login failures for existing accounts.
 - Freshness overhead under 10 ms p95 in the integration test host.
 - `dotnet build CarePath.sln` with zero warnings; full test suite passes.
@@ -492,7 +496,7 @@ The Security/Compliance Owner must confirm this table before the design spec is 
 | Identity move breaks existing logins | Medium | Critical | Backfill copies rows including password hash and security stamp; integration test logs in as every seeded user before and after; forward-only migration keeps old tables until verified. |
 | Per-request freshness read becomes a latency or availability bottleneck | Medium | High | Single indexed query; bounded timeout; circuit breaker returns PHI-safe 503; p95 budget measured in tests; control-plane capacity reserved separately. |
 | Host spoofing through X-Forwarded-Host | Medium | Critical | Forwarded headers honored only from configured known proxies; test with an unlisted source. |
-| Two DbContexts complicate membership creation | Medium | Medium | Control-plane write first, tenant profile second, compensating deactivation on failure; documented in design; no distributed transaction. |
+| Two DbContexts complicate membership creation and backfill | Medium | Medium | No distributed transaction. Memberships are created in a Provisioning state and activated only after the tenant profile is linked; backfill is an idempotent saga that inspects existing state on restart. Documented in design §3.4 and §4.6. |
 | Control-plane migrations diverge between providers | Medium | Medium | Both sets generated in the same task; CI intent check per ADR §8.1. |
 | `User.Role` and membership role drift | Low | Medium | All role writes go through the membership service, which mirrors to `User.Role` until CP-05 removes it. |
 | Epoch increment during an incident logs out every user | Low | Medium | Documented as a deliberate privileged action; audit event; runbook in CP-06 recovery procedure. |
@@ -504,9 +508,9 @@ The Security/Compliance Owner must confirm this table before the design spec is 
 
 | Stakeholder | Role | Status | Date | Comments |
 |-------------|------|--------|------|----------|
-| Tobi Kareem | Product Owner | Pending | - | Also approves the SaaS journey wireframe |
-| Tobi Kareem | Tech Lead | Pending | - | - |
-| TBD | Security/Compliance Owner | Pending | - | Must confirm §3.5 classification |
+| Tobi Kareem | Product Owner | Approved | 2026-09-08 | SaaS journey wireframe approved as UI source of truth |
+| Tobi Kareem | Tech Lead | Approved | 2026-09-08 | - |
+| TBD | Security/Compliance Owner | Pending | - | §3.5 classification to be confirmed before CP-04 implementation starts; does not block design |
 
 ---
 
@@ -527,13 +531,13 @@ The Security/Compliance Owner must confirm this table before the design spec is 
 | Journey step | Host | Actor | Requirements exercised | Behind the screen |
 |---|---|---|---|---|
 | 1 Welcome | carepathhealth.com | Anyone | FR-021 (no discovery) | Public site; no sign-in, lookup, or agency link; staff pointed to `manage.*` |
-| 2 Platform sign-in | manage.carepathhealth.com | PlatformAdmin | FR-017, FR-026 | Operator credentials; platform session and `token_kind = platform`; no organization |
+| 2 Platform sign-in | manage.carepathhealth.com | PlatformAdmin | FR-017, FR-025 | Operator credentials; platform session and `token_kind = platform`; no organization |
 | 3 Organizations | manage.carepathhealth.com | PlatformAdmin | FR-018 | List with status, readiness, member count; "New organization" |
-| 4 New organization | manage.carepathhealth.com | PlatformAdmin | FR-018, FR-019, FR-025 | Legal and display name, slug with address preview, time zone, region, first administrator; creates Pending / Provisioning, primary domain, first Admin membership, audit event |
-| 5 Organization | manage.carepathhealth.com | PlatformAdmin | FR-018, FR-021 (branding ServiceState) | Readiness rows (address, database, encryption and backup, administrator invitation); Set maintenance and Suspend once Ready; CP-06 performs the checks, CP-04 shows the state |
-| 6 Agency sign-in | {slug}.carepathhealth.com | Member | FR-003, FR-004, FR-008, FR-009, FR-021, FR-026 | Host resolution, branding, credential and membership check, session and token issue |
-| 7 Agency setup | {slug}.carepathhealth.com | Admin | FR-020, FR-022 | Display name, monogram or logo, approved theme, support contact, live sign-in preview; onboarding sidebar |
-| 8 Daily operations | {slug}.carepathhealth.com | Member | FR-010, FR-011, FR-016, FR-027 | Freshness check on every request; organization and role cue in shell |
+| 4 New organization | manage.carepathhealth.com | PlatformAdmin | FR-018, FR-019, FR-026 (audit event) | Legal and display name, slug with address preview, time zone, region, first administrator; creates Pending / Provisioning, primary domain, first Admin membership, audit event |
+| 5 Organization | manage.carepathhealth.com | PlatformAdmin | FR-018, FR-018a, FR-022 (branding ServiceState) | Readiness rows (address, database, encryption and backup, administrator invitation); Set maintenance and Suspend once Ready; CP-06 performs the checks, CP-04 shows the state |
+| 6 Agency sign-in | {slug}.carepathhealth.com | Member | FR-003, FR-004, FR-008, FR-009, FR-022, FR-027 | Host resolution, branding, credential and membership check, session and token issue |
+| 7 Agency setup | {slug}.carepathhealth.com | Admin | FR-020, FR-023 | Display name, monogram or logo, approved theme, support contact, live sign-in preview; onboarding sidebar |
+| 8 Daily operations | {slug}.carepathhealth.com | Member | FR-010, FR-011, FR-016, FR-028 | Freshness check on every request; organization and role cue in shell |
 | 9 Access & recovery | {slug}.carepathhealth.com | Member | FR-004, FR-011, FR-013, FR-015, FR-018 | Maintenance = 503 with branding; Access changed = 401 after revocation; Service outage = control-plane 503; Recovery = ReadinessState Recovering (CP-06) |
 
 ---
@@ -544,5 +548,7 @@ The Security/Compliance Owner must confirm this table before the design spec is 
 |---------|------|--------|---------|
 | 1.0 | 2026-09-08 | CarePath Health | Initial draft from ADR 0003 decisions and 2026-09-08 code review |
 | 1.1 | 2026-09-08 | CarePath Health | Aligned to ADR §8.2 pipeline, §8.6 classification and no-cache rule, §9 registry fields, §10.1 sessions, security versions, epoch, refresh families; added service states, platform hosts, and wireframe step map |
+| 1.5 | 2026-09-10 | CarePath Health | Design review: membership Provisioning state, first-admin activation deferred to CP-06, duplicate FR-021 fixed (branding is FR-022, later requirements renumbered) |
+| 1.4 | 2026-09-08 | CarePath Health | Approved by Product Owner and Tech Lead |
 | 1.3 | 2026-09-08 | CarePath Health | Wireframe rewritten as production-style screens with a platform sign-in, organizations list, new-organization form, and organization detail; step map is now nine steps |
 | 1.2 | 2026-09-08 | CarePath Health | Removed organization switcher and membership listing (FR-021 now forbids them); access to an organization is only through its own domain; step map reduced to seven steps |

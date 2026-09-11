@@ -1,6 +1,6 @@
 # CP-04 — Control Plane Foundation: Design
 
-**Status**: Draft  
+**Status**: Draft — readiness gaps resolved; formal approval pending
 **Author**: CarePath Health  
 **Created**: 2026-09-08  
 **Depends on**: CP-02 (Infrastructure, complete), Sprint 3 auth foundation (complete), ADR 0003 (Accepted)  
@@ -57,7 +57,7 @@ Domain/
 │   ├── Organization.cs, OrganizationDomain.cs, OrganizationBranding.cs
 │   ├── OrganizationMembership.cs, OrganizationDataPlane.cs
 │   ├── PlatformSession.cs, PlatformRefreshToken.cs, PlatformSecurityState.cs
-│   └── PlatformAuditEvent.cs
+│   └── PlatformAuditEvent.cs, ControlPlaneWorkflow.cs
 ├── Entities/Identity/TenantDeployment.cs
 ├── Enumerations/ OrganizationStatus.cs, OrganizationReadinessState.cs, DomainVerificationStatus.cs,
 │                 MembershipStatus.cs, TokenKind.cs, OrganizationSuspensionReason.cs
@@ -193,6 +193,11 @@ public class PlatformSession : BaseEntity
     public Guid? MembershipId { get; set; }
     public TokenKind TokenKind { get; set; }
     public DateTime LastRefreshedAtUtc { get; set; }
+    public long IssuedAuthenticationEpoch { get; set; }
+    public int IssuedUserSecurityVersion { get; set; }
+    public int? IssuedMembershipSecurityVersion { get; set; }
+    public UserRole? IssuedMembershipRole { get; set; }
+    public Guid? IssuedTenantUserId { get; set; }
     public DateTime? RevokedAtUtc { get; set; }
     public string? RevocationReason { get; set; }                  // 50, code not prose
 
@@ -253,7 +258,7 @@ public class TenantDeployment : BaseEntity
 public enum OrganizationStatus { Pending = 0, Active = 1, Suspended = 2, Offboarded = 3 }
 public enum OrganizationReadinessState { Provisioning = 0, Ready = 1, Maintenance = 2, Recovering = 3, Failed = 4 }
 public enum DomainVerificationStatus { Pending = 0, Verified = 1 }
-public enum MembershipStatus { Provisioning = 0, Active = 1, Inactive = 2 }
+public enum MembershipStatus { Provisioning = 0, Active = 1, Inactive = 2, Updating = 3 }
 public enum TokenKind { Tenant = 0, Platform = 1 }
 public enum OrganizationSuspensionReason { CustomerRequest = 0, AgreementEnded = 1, SecurityIncident = 2, ComplianceHold = 3, Other = 4 }
 ```
@@ -275,6 +280,7 @@ public interface IControlPlaneUnitOfWork
     IRepository<PlatformRefreshToken> RefreshTokens { get; }
     IRepository<PlatformSecurityState> SecurityState { get; }
     IRepository<PlatformAuditEvent> AuditEvents { get; }
+    IRepository<ControlPlaneWorkflow> Workflows { get; }
     Task<int> SaveChangesAsync(CancellationToken cancellationToken = default);
     Task<TResult> ExecuteInTransactionAsync<TResult>(IsolationLevel isolationLevel, Func<CancellationToken, Task<TResult>> operation, CancellationToken cancellationToken = default);
 }
@@ -308,6 +314,8 @@ public class AuthTokenResponse
 public sealed record OrganizationBrandingDto(string DisplayName, string Monogram, string? LogoUrl, string ThemeToken,
     string? SupportEmail, string? SupportPhone, ServiceState ServiceState, string? MaintenanceMessage);
 public enum ServiceState { Available = 0, Maintenance = 1, Recovering = 2 }
+public enum HostMode { Public = 0, Platform = 1, Tenant = 2 }
+public sealed record HostContextDto(HostMode Mode);
 
 public sealed record OrganizationSummaryDto(Guid Id, string DisplayName, string Slug, string PrimaryHost,
     OrganizationStatus Status, OrganizationReadinessState ReadinessState, int ActiveMembers, DateTime CreatedAtUtc);
@@ -361,7 +369,8 @@ public interface IOrganizationResolver
 // Application/Abstractions/Auth/ICurrentUserContext.cs   (extended)
 public interface ICurrentUserContext
 {
-    Guid? UserId { get; }
+    Guid? UserId { get; }             // verified tenant User.Id; null for platform sessions
+    Guid? PlatformUserId { get; }     // verified platform identity for either token kind
     string? UserName { get; }
     bool IsAuthenticated { get; }
     IReadOnlySet<string> Roles { get; }
@@ -374,6 +383,8 @@ public interface ICurrentUserContext
 
 // Application/Abstractions/Platform/IAuthorizationSnapshotReader.cs   (the hot path)
 public sealed record AuthorizationSnapshot(
+    Guid PlatformUserId, Guid? MembershipId, Guid? MembershipPlatformUserId,
+    Guid? MembershipOrganizationId, Guid? TenantUserId,
     bool UserEnabled, int UserSecurityVersion,
     bool SessionRevoked, TokenKind SessionKind, Guid? SessionOrganizationId,
     bool MembershipActive, int MembershipSecurityVersion, UserRole? MembershipRole,
@@ -395,7 +406,7 @@ public interface IPlatformAuditLogger
 }
 ```
 
-`JwtTokenRequest` is extended to `(Guid UserId, string Email, string Role, TokenKind Kind, Guid SessionId, Guid? OrganizationId, Guid? MembershipId, int? MembershipSecurityVersion, int UserSecurityVersion, long AuthEpoch, string? CorrelationId)`.
+`JwtTokenRequest` is extended to `(Guid PlatformUserId, string Email, string Role, TokenKind Kind, Guid SessionId, Guid? OrganizationId, Guid? MembershipId, int? MembershipSecurityVersion, int UserSecurityVersion, long AuthEpoch, string? CorrelationId)`.
 
 ### 3.3 Claims
 
@@ -413,7 +424,9 @@ public static class CarePathClaimTypes
 }
 ```
 
-Tokens keep `sub`, `email`, `jti`, `ClaimTypes.NameIdentifier`, `ClaimTypes.Email`, exactly one `ClaimTypes.Role`, plus the seven above. Platform tokens omit `organization_id`, `membership_id`, and `msv`.
+Tokens carry sub and NameIdentifier as the **platform** user ID, plus email, jti, exactly one role and the seven claims above. Disable implicit inbound claim remapping; reject duplicate/contradictory identifiers. Platform tokens omit organization, membership and membership-version claims.
+
+After freshness succeeds, bind `ICurrentUserContext.PlatformUserId` from the verified snapshot and `UserId` from its TenantUserId, never directly from NameIdentifier. Platform sessions have UserId = null. Platform audit uses PlatformUserId; tenant object authorization and audit retain tenant UserId. Verify the session/user/membership/organization links before binding. Before CP-06, operational access also requires the configured default organization and verified tenant-one deployment marker; other organizations cannot reach the fixed tenant context. CP-06 replaces this restriction with verified routing. Test deliberately unequal platform and tenant IDs.
 
 ### 3.4 Services
 
@@ -428,6 +441,7 @@ public sealed class AuthorizationFreshnessService
     public FreshnessDecision Evaluate(TokenClaims token, AuthorizationSnapshot? snapshot, IOrganizationContext host)
     {
         if (snapshot is null)                                   return Reject("session.unknown");
+        if (snapshot.PlatformUserId != token.PlatformUserId)   return Reject("session.user");
         if (snapshot.SessionRevoked)                            return Reject("session.revoked");
         if (snapshot.AuthenticationEpoch != token.AuthEpoch)    return Reject("epoch.stale");
         if (!snapshot.UserEnabled)                              return Reject("user.disabled");
@@ -445,6 +459,10 @@ public sealed class AuthorizationFreshnessService
         if (host.OrganizationId != token.OrganizationId)        return Reject("organization.mismatch");
         if (snapshot.SessionOrganizationId != token.OrganizationId) return Reject("session.organization");
         if (snapshot.OrganizationStatus != OrganizationStatus.Active) return Reject("organization.inactive");
+        if (snapshot.MembershipId != token.MembershipId ||
+            snapshot.MembershipPlatformUserId != token.PlatformUserId ||
+            snapshot.MembershipOrganizationId != token.OrganizationId ||
+            snapshot.TenantUserId is null) return Reject("membership.binding");
         if (!snapshot.MembershipActive)                         return Reject("membership.inactive");   // Provisioning and Inactive both land here
         if (snapshot.MembershipSecurityVersion != token.MembershipSecurityVersion) return Reject("membership.version");
         if (snapshot.MembershipRole?.ToString() != token.Role)  return Reject("membership.role");
@@ -464,8 +482,10 @@ LoginAsync(email, password, host, correlationId)
   2. IIdentityService.ValidateCredentialsAsync(email, password)         → 401 on failure (lockout preserved)
   3. Tenant: find Active membership (organizationId, platformUserId)    → 401 "membership.none"
      Platform: user must be PlatformAdmin                               → 401 "platform.role"
-  4. Read PlatformSecurityState.AuthenticationEpoch
-  5. Create PlatformSession(kind, orgId?, membershipId?) + PlatformRefreshToken(new FamilyId)
+  4. In a control-plane Serializable transaction, re-read current user/membership/organization state and epoch.
+     Reject disabled users, non-Active memberships, non-serving organizations and changed credential security stamp.
+  5. Persist session with immutable issuance baseline (epoch, user version, membership version/role, TenantUserId)
+     and refresh token (new FamilyId); commit before returning tokens. JWT claims use this same snapshot.
   6. IJwtTokenService.CreateTokenAsync(JwtTokenRequest{...versions, epoch, sessionId})
   7. Audit "LoginSucceeded" (org, session id) / "LoginDenied" (reason code, SubjectHash = sha256(email))
   8. Return AuthTokenResponse
@@ -473,9 +493,15 @@ LoginAsync(email, password, host, correlationId)
 RefreshAsync(refreshToken, host)
   1. Hash; load PlatformRefreshToken with Session
   2. If token already used or revoked → revoke whole family and session; audit "RefreshReplayDetected"; 401
-  3. Read snapshot for session; Evaluate(...) as above with the token's stored claims → 401/503
+  3. Reject ExpiresAtUtc <= clock.UtcNow with 401; never rotate an expired token.
+     Read current snapshot; Evaluate using the session's immutable issued versions/role and identifiers, not values
+     reconstructed from current security state. Require current TenantUserId == IssuedTenantUserId as well.
+     Version/identity mismatch → 401; authoritative state unavailable → 503.
   4. Mark token used; issue new token in same family; re-issue JWT with current versions
-  Steps 1 to 4 run in one Serializable transaction so concurrent replay cannot double-rotate.
+  Steps 1 to 4 run in one Serializable transaction with row concurrency protection. Commit replay revocation before
+  returning 401; do not roll it back through a business exception. A serialization/deadlock retry re-reads state;
+  a consumed token revokes the family/session. Rotation preserves the issuance baseline; only fresh sign-in changes
+  that baseline. Clients serialize refresh requests per session.
 
 LogoutAsync(sessionId)
   Revoke session ("logout") and all tokens in its families; audit "SessionRevoked".
@@ -492,7 +518,7 @@ Lifecycle
 
 CreateAsync(orgId, request)             — organization must be Ready (has a data plane)
   1. Validate; find PlatformUser by email or provision one (IIdentityProvisioningService, temporary-password path unchanged)
-  2. Assert no membership (orgId, platformUserId)                        → 409 "membership.exists"
+  2. Existing Active/Inactive/Updating membership → 409; existing Provisioning with matching creation operation resumes steps 4/5, otherwise persist a new creation operation.
   3. Control plane: add membership { Status = Provisioning, TenantUserId = null, SecurityVersion 1 }; SaveChanges; audit "MembershipProvisioning"
   4. Tenant: create domain User { PlatformUserId, Role = request.Role (mirror), IsActive = true }; SaveChanges
   5. Control plane: set TenantUserId, Status = Active, ActivatedAtUtc; SaveChanges; audit "MembershipActivated"
@@ -505,11 +531,25 @@ CreateFirstAdminAsync(orgId, email)     — called by OrganizationManagementServ
   tenant database, runs steps 4 and 5, and then sets the organization Ready. Until then the administrator cannot sign in,
   which matches the wireframe readiness screen ("Administrator invitation: Waiting").
 
-ChangeRoleAsync / SetStatusAsync         — Active or Inactive memberships only; Provisioning returns 409 "membership.provisioning"
-  Serializable transaction on the control plane: guard "last active admin" per organization,
-  apply change, SecurityVersion++, revoke sessions for that membership when deactivating,
-  mirror Role/IsActive onto the tenant User, audit.
+ChangeRoleAsync / SetStatusAsync — Active or Inactive only; Provisioning/Updating reject unrelated mutations.
+  A. Control-plane Serializable transaction: guard last-active-admin and expected version; persist the intended
+     mutation workflow; set Updating, increment SecurityVersion, revoke membership sessions, and append audit.
+     Commit. Updating denies login, refresh and protected requests while the two databases are being reconciled.
+  B. Tenant transaction: verify organization, TenantUserId and PlatformUserId; idempotently apply intended Role and
+     IsActive mirror. This tenant transaction does not claim atomicity with control-plane writes.
+  C. Control-plane transaction: require matching workflow ID/version and Updating state; finalize intended role/status,
+     complete workflow and append audit. Never modify organization suspension or readiness here.
+  Failure after A/B leaves access blocked. Resume the SAME durable workflow at B/C after inspecting target state;
+  never reactivate as compensation. Concurrent unrelated mutations return 409 while Updating.
+  The serialized last-admin check treats pending admin removals as unavailable. Two workflows cannot each remove
+  the final administrator. Reactivation never issues a session automatically.
 ```
+
+All account lifecycle entry points use this coordinator: AdminUsersController, CaregiverOperationsService creation,
+termination/reactivation, identity provisioning and development seeding. Status requests accept Active/Inactive only; Updating and Provisioning are service-owned and cannot be set by API clients. Preserve authorized Coordinator caregiver
+workflows through scoped service policies without granting general role administration. Termination blocks access
+in A before tenant mutation. No legacy service may independently write User.Role/IsActive or create credentials.
+Mirrors are compatibility projections, never authorization authority; CP-05 removes User.Role under ADR 0003.
 
 The backfill (§4.6) is the one path that creates memberships directly as Active, because the tenant profiles already exist and are linked in the same step.
 
@@ -581,6 +621,7 @@ public class PlatformUser : IdentityUser<Guid>
 | OrganizationDataPlane | `OrganizationDataPlanes` | PK `Id` (BaseEntity); unique `OrganizationId`; unique `DatabaseDeploymentId` | one-to-one via unique FK; `SecretReference` never logged |
 | PlatformSession | `PlatformSessions` | index `(PlatformUserId, RevokedAtUtc)`; index `(OrganizationId, RevokedAtUtc)`; index `(MembershipId, RevokedAtUtc)` | mass revocation paths |
 | PlatformRefreshToken | `PlatformRefreshTokens` | unique `TokenHash`; index `FamilyId`; index `SessionId` | |
+| ControlPlaneWorkflow | `ControlPlaneWorkflows` | unique IdempotencyKey; one unfinished workflow per target/kind | FK Restrict; lease and expected version under §4.6.1; append-only completed history |
 | PlatformSecurityState | `PlatformSecurityState` | PK fixed Guid; `RowVersion` concurrency token | seeded with epoch 1 in migration |
 | PlatformAuditEvent | `PlatformAuditEvents` | index `(OrganizationId, OccurredAtUtc)`; index `(Action, OccurredAtUtc)` | no update path; `IsDeleted` column exists via BaseEntity but is never set |
 | TenantDeployment (tenant DB) | `TenantDeployment` | PK `Id` (BaseEntity); unique `OrganizationId` | single row; runtime principal SELECT only (Azure SQL permission task) |
@@ -605,7 +646,7 @@ Two contexts, two providers, four migration sets:
 The tenant migration `RemoveIdentityAddTenantDeployment`:
 
 - **Up**: add `Users.PlatformUserId` (nullable uniqueidentifier, unique filtered index where not null); create `TenantDeployment`; **does not drop** `AspNet*` tables. The Identity entity types are removed from the model, so EF would generate `DropTable`; those operations are deleted from the scaffolded migration by hand and the snapshot is left without them (a lesson already recorded: PHI-adjacent migrations are forward-only).
-- **Down**: drop `TenantDeployment` and `PlatformUserId` only.
+- **Down**: reject rollback after backfill or protected linkage exists; do not drop populated TenantDeployment or PlatformUserId links. Recover through a reviewed forward migration.
 - A later cleanup migration (post-CP-06, after verification) drops the legacy Identity tables.
 
 The control-plane `InitialControlPlane` migration seeds `PlatformSecurityState` (epoch 1) and the `PlatformAdmin` Identity role.
@@ -634,7 +675,7 @@ serve traffic. Runs at startup after both migrations whenever ControlPlane:Defau
   Step A   [control plane, tx A]  Find Organization by Slug.
            - none      → create Organization { Status Active, ReadinessState Provisioning }, Domains, Branding,
                          DataPlane { DatabaseDeploymentId = new Guid, LocationRevision 1, SchemaVersion = last applied tenant migration }.
-           - exists    → reuse; if ReadinessState == Ready → verify TenantDeployment exists in the tenant DB and return (no-op path).
+           - exists    → reuse; inspect the durable Bootstrap workflow under §4.6.1; do not infer completion from ReadinessState.
            Commit A.
   Step B   [tenant, tx B]  Find TenantDeployment.
            - none      → insert { OrganizationId, DatabaseDeploymentId = DataPlane.DatabaseDeploymentId, SchemaVersion }.
@@ -649,7 +690,7 @@ serve traffic. Runs at startup after both migrations whenever ControlPlane:Defau
            - Membership (OrganizationId, PlatformUserId) exists → skip; else insert { TenantUserId = User.Id,
              OrganizationRole = User.Role, Status Active, SecurityVersion 1 }  (Active is safe here: the profile already exists).
            Commit C.
-  Step D   [control plane, tx D]  Re-read counts; set Organization.ReadinessState = Ready; audit "OrganizationBackfilled"
+  Step D   [control plane, tx D]  Validate counts/links; conditionally set bootstrap-owned Active/Provisioning organization Ready, mark workflow Completed; audit "OrganizationBackfilled"
            with ReasonCode "users=42;memberships=40". Commit D.
 
   Failure matrix
@@ -659,11 +700,40 @@ serve traffic. Runs at startup after both migrations whenever ControlPlane:Defau
     Any step partially committed is impossible within a single database because each step is one transaction.
 ```
 
+```text
 PlatformAdminBootstrap.RunAsync
   If no PlatformUser has IsPlatformAdmin: require ControlPlane:PlatformAdmin:Email and :Password (user secrets / env, never source);
   create PlatformUser with IsPlatformAdmin = true and Identity role PlatformAdmin; audit "PlatformAdminBootstrapped".
   Mirrors CarePathDbContextSeed's fail-closed handling of SeedData:DefaultPassword.
 ```
+
+### 4.6.1 Durable workflow ownership and restart rules
+
+Add `ControlPlaneWorkflow : BaseEntity` under Domain/Entities/Platform, with DbSet, configuration and unit-of-work
+repository in both provider models. Fields: Kind (Bootstrap/MembershipMutation), OrganizationId, MembershipId?,
+State (Pending/Running/Completed/Failed), Phase, IdempotencyKey (Guid, unique), ExpectedMembershipVersion (int?),
+PreviousRole/Status and IntendedRole/Status (nullable enums), LeaseOwner (Guid?), LeaseExpiresAtUtc, CompletedAtUtc,
+FailureCode (allowlisted). No names, credentials or clinical values. Membership status/role fields are treated as sensitive relationship metadata under the requirements classification; access is restricted to the coordinator and authorized recovery operators. Enforce one unfinished workflow per target/kind
+through a provider-appropriate unique constraint and transactional admission. Completed workflow records are retained.
+
+Acquire and renew a persisted ownership lease; lease loss stops new steps. Reconciliation inspects actual state
+rather than assuming a saved phase proves a cross-database commit. Tenant projection writes use expected-state
+checks; a stale worker must not overwrite a newer mutation. A replacement worker resumes the same intended change.
+No new workflow for the target is admitted until outstanding tenant writes are drained/fenced and completion verified.
+
+Bootstrap Step A uses the workflow, not service readiness:
+- Completed: verify exactly one TenantDeployment marker, matching organization/deployment IDs, and supported
+  actual/registered schema state; return without changing readiness, status, users or memberships.
+- Incomplete, owned bootstrap with Active/Provisioning organization: resume guarded A-D.
+- Maintenance, Recovering, Failed, Suspended or Offboarded: preserve state and stop bootstrap writes. An incomplete
+  bootstrap needs explicit operator reconciliation; restart never reopens the workspace.
+- Existing registration without a workflow, marker mismatch or unsupported schema: fail startup closed; do not adopt
+  a database silently. An operator migration must establish and verify a workflow for any legacy registration.
+
+Step D conditionally sets Ready only for the bootstrap-owned Active/Provisioning organization and marks the workflow
+Completed in that same control-plane transaction. Concurrent maintenance/suspension makes the update fail. Initial
+cutover drains all legacy writers; new instances serve no traffic until completion and verification. Later schema
+updates maintain marker/registry through migration orchestration, not this backfill. A lease permits only one runner.
 
 ### 4.7 Host Resolution and Snapshot Reader
 
@@ -685,7 +755,9 @@ public async Task<AuthorizationSnapshot?> ReadAsync(Guid sessionId, Cancellation
            join o in _db.Organizations on s.OrganizationId equals o.Id into os
            from o in os.DefaultIfEmpty()
            where s.Id == sessionId
-           select new AuthorizationSnapshot(u.IsEnabled, u.SecurityVersion, s.RevokedAtUtc != null, s.TokenKind, s.OrganizationId,
+           select new AuthorizationSnapshot(u.Id, m != null ? m.Id : null,
+                m != null ? m.PlatformUserId : null, m != null ? m.OrganizationId : null,
+                m != null ? m.TenantUserId : null, u.IsEnabled, u.SecurityVersion, s.RevokedAtUtc != null, s.TokenKind, s.OrganizationId,
                m != null && m.Status == MembershipStatus.Active && !m.IsDeleted, m != null ? m.SecurityVersion : 0,
                m != null ? m.OrganizationRole : null, o != null ? o.Status : null, o != null ? o.ReadinessState : null,
                _db.PlatformSecurityStates.Select(x => x.AuthenticationEpoch).First(), u.IsPlatformAdmin))
@@ -696,7 +768,7 @@ public async Task<AuthorizationSnapshot?> ReadAsync(Guid sessionId, Cancellation
 
 ### 4.8 IdentityService and Sessions
 
-`IdentityService` moves to `ControlPlaneDbContext` and `PlatformUser`. `ValidateCredentialsAsync` keeps lockout-on-failure and returns `IdentityUserResult(UserId, Email, DisplayName, IsPlatformAdmin)`; roles are no longer returned by Identity. `IssueRefreshTokenAsync` and `RotateRefreshTokenAsync` are replaced by `SessionStore` (Infrastructure) used by `PlatformAuthService`: `CreateSessionAsync`, `IssueRefreshTokenAsync(sessionId, familyId)`, `ConsumeRefreshTokenAsync(hash)` (Serializable), `RevokeSessionAsync`, `RevokeSessionsForMembershipAsync`, `RevokeSessionsForOrganizationAsync`.
+`IdentityService` moves to `ControlPlaneDbContext` and `PlatformUser`. `ValidateCredentialsAsync` keeps lockout-on-failure and returns `IdentityUserResult(PlatformUserId, Email, DisplayName, IsPlatformAdmin, SecurityStamp, UserSecurityVersion)`; roles are no longer returned by Identity. `IssueRefreshTokenAsync` and `RotateRefreshTokenAsync` are replaced by `SessionStore` (Infrastructure) used by `PlatformAuthService`: `CreateSessionAsync`, `IssueRefreshTokenAsync(sessionId, familyId)`, `ConsumeRefreshTokenAsync(hash)` (Serializable), `RevokeSessionAsync`, `RevokeSessionsForMembershipAsync`, `RevokeSessionsForOrganizationAsync`.
 
 Refresh token: 32 random bytes, base64url to the client, SHA-256 hex stored; lifetime `ControlPlane:RefreshTokenDays` (default 7). Access token lifetime stays `Jwt:AccessTokenExpirationMinutes` (default 60).
 
@@ -744,7 +816,7 @@ public async Task InvokeAsync(HttpContext ctx, IOrganizationResolver resolver, H
 }
 ```
 
-Unknown hosts are not rejected here; controllers see `HostKind.Unknown` and the branding endpoint returns 404 while every other endpoint returns 401 through the freshness middleware (`host.mismatch`). This keeps unknown and suspended byte-identical.
+Unknown hosts are not rejected here; controllers see `HostKind.Unknown` and the branding and bootstrap/context endpoints return 404 while other endpoints return 401 through the freshness middleware (`host.mismatch`). This keeps unknown and suspended byte-identical.
 
 ```csharp
 // WebApi/Middleware/AuthorizationFreshnessMiddleware.cs   (after UseAuthentication, before UseAuthorization)
@@ -756,13 +828,13 @@ catch (Exception e) when (e is ControlPlaneUnavailableException or OperationCanc
 var decision = freshness.Evaluate(claims, snap, org);
 switch (decision.Outcome)
 {
-    case Allow: currentUser.Bind(claims); await _next(ctx); return;
+    case Allow: currentUser.Bind(claims, snap); await _next(ctx); return;
     case Reject: await audit("Denied", decision.ReasonCode); await Problem401(ctx); return;
     case Unavailable: await audit("Unavailable", decision.ReasonCode); await Problem503(ctx); return;
 }
 ```
 
-`HttpCurrentUserContext` reads the new claims; `Roles` is the single role claim. `ProblemDetailsMiddleware` gains the 503 body: `{ type: "about:blank", title: "Service unavailable.", status: 503, errors: [{ code: "service.unavailable" }] }`.
+`HttpCurrentUserContext` binds verified snapshot identifiers under §3.3; Roles is the validated role claim. `ProblemDetailsMiddleware` gains the 503 body: `{ type: "about:blank", title: "Service unavailable.", status: 503, errors: [{ code: "service.unavailable" }] }`.
 
 ### 5.2 Endpoints
 
@@ -771,6 +843,7 @@ switch (decision.Outcome)
 | POST | `/api/auth/login` | Tenant or Platform | anonymous | `LoginRequest` → `AuthTokenResponse` | 401 identical for bad password / no membership / unknown host; 503 when tenant not Ready |
 | POST | `/api/auth/refresh` | same host as issuance | anonymous | `RefreshTokenRequest` → `AuthTokenResponse` | replay revokes family |
 | POST | `/api/auth/logout` | any | bearer | — → 204 | revokes session |
+| GET | `/api/bootstrap/context` | resolved host | anonymous | → `HostContextDto(HostMode)` | explicit Public/Platform/Tenant; unknown/suspended → generic 404; unavailable → 503 |
 | GET | `/api/organization/branding` | Tenant | anonymous | → `OrganizationBrandingDto` | 404 for Unknown/Public/Platform |
 | PUT | `/api/organization/branding` | Tenant | Admin | `UpdateBrandingRequest` → `OrganizationBrandingDto` | |
 | GET | `/api/organization/memberships` | Tenant | Admin | `PagedRequest` → `PagedResult<MembershipDto>` | own organization only |
@@ -798,7 +871,7 @@ Authorization policies: `PlatformAdmin` policy requires role claim `PlatformAdmi
 2. if Database:AutoMigrate: ControlPlaneDbContext.MigrateAsync()
 3. if Database:AutoMigrate: CarePathDbContext.MigrateAsync()
 4. PlatformAdminBootstrap.RunAsync()
-5. ControlPlaneBackfill.RunAsync()            (no-op when the default organization already exists)
+5. ControlPlaneBackfill.RunAsync()            (completed workflow verifies ownership; preserves service states)
 6. CarePathDbContextSeed.SeedAsync()          (Development only; now creates memberships for its five users)
 ```
 
@@ -824,14 +897,18 @@ New typed clients: `OrganizationClient` (`GetBrandingAsync`, `UpdateBrandingAsyn
 |---|---|---|---|
 | `Login.razor` | `/login` | Tenant | loads branding on init; shows maintenance/recovering state instead of the form when `ServiceState != Available`; support contact in footer |
 | `ServiceState.razor` | `/unavailable` | Tenant | Access changed (after 401 on a previously valid session), Service outage (503), Maintenance, Recovery — copy from the wireframe |
-| `MainLayout.razor` | — | Tenant | organization display name, monogram/logo, role badge; Sign out calls logout then clears session |
-| `Platform/Login.razor` | `/login` | Platform | operator sign-in; `token_kind = platform` |
+| `MainLayout.razor` | — | Tenant | organization display name, monogram, role badge; Sign out calls logout then clears session |
+| `Platform/OperatorLoginForm.razor` | embedded in `/login` | Platform | no route directive; operator sign-in |
 | `Platform/Organizations.razor` | `/platform/organizations` | Platform | table + tiles + New organization |
 | `Platform/OrganizationNew.razor` | `/platform/organizations/new` | Platform | create form with slug address preview |
 | `Platform/OrganizationDetail.razor` | `/platform/organizations/{id}` | Platform | readiness rows, Set maintenance / Suspend / End maintenance / Reactivate via `ConfirmDialog` |
-| `Settings/AgencySetup.razor` | `/settings/agency` | Tenant, Admin | display name, monogram, logo, theme, support; live preview; Save/Cancel |
+| `Settings/AgencySetup.razor` | `/settings/agency` | Tenant, Admin | display name, monogram, theme, support; live preview; Save/Cancel; logo deferred |
 
-The app decides tenant vs platform mode from `OrganizationBrandingDto` (404 on the platform host) at startup and shows the matching layout. `TokenAuthenticationStateProvider` adds claims for organization id, membership id, and token kind; `NavMenu` uses the onboarding sidebar while the organization has no caregivers (a `HasCaregivers` flag on the existing caregivers list response).
+The app calls anonymous GET /api/bootstrap/context on its own host. Server-owned PublicHosts/PlatformHosts and
+verified domain resolution return explicit Public, Platform or Tenant HostMode; unknown, suspended and offboarded
+hosts return identical generic 404, dependency failure returns 503. No directory, secret or authorization grant is
+returned. Branding 404 never selects platform mode. One /login route renders the appropriate host-specific form;
+platform and tenant forms must not declare duplicate Blazor routes. `TokenAuthenticationStateProvider` adds claims for organization id, membership id, and token kind; `NavMenu` uses the onboarding sidebar while the organization has no caregivers (a `HasCaregivers` flag on the existing caregivers list response).
 
 A 401 on any request after a successful sign-in clears the session and routes to `/unavailable?state=access-changed`; a 503 routes to `/unavailable?state=outage` without clearing the session.
 
@@ -848,7 +925,7 @@ A 401 on any request after a successful sign-in clears the session and routes to
 - `AuthorizationFreshnessServiceTests`: one test per reason code in §3.4, plus Allow for tenant and platform; snapshot null; readiness Maintenance → Unavailable.
 - `PlatformAuthServiceTests`: login at non-serving host, no membership, platform host without PlatformAdmin, refresh replay revokes family, logout revokes.
 - `OrganizationManagementServiceTests`: reserved slug, duplicate slug, confirm-slug mismatch, suspend revokes sessions and bumps versions, maintenance keeps sessions.
-- `MembershipServiceTests`: existing platform user reuse, tenant profile failure deactivates membership, last-active-admin guard, role change bumps version and mirrors `User.Role`.
+- `MembershipServiceTests`: existing platform user reuse, tenant profile failure leaves membership Provisioning, last-active-admin guard, role change bumps version and mirrors `User.Role`.
 - Validator tests for each validator; contract parity and DTO reflection guards extended to `Contracts/Platform`.
 - Architecture test: `Application` still references no Infrastructure; `Domain` has no reference to `Microsoft.AspNetCore.Identity`.
 
@@ -902,11 +979,15 @@ Login page renders branding and each service state; layout shows organization cu
 
 ## 10. Deployment Plan
 
-1. Provision the control-plane database (Azure SQL in the same elastic pool with reserved DTUs; PostgreSQL database `carepath_controlplane` in HomeLab) and set `ConnectionStrings:ControlPlane*Connection`, `ControlPlane:DefaultOrganization:*`, `ControlPlane:PlatformAdmin:*`, `ControlPlane:PlatformHosts`, `ForwardedHeaders:KnownProxies` in the environment (Pi env file / App Service settings).
+1. Provision the control-plane database (Azure SQL with capacity separate from tenant pools and sized against approved control-plane objectives; PostgreSQL database `carepath_controlplane` in HomeLab) and set `ConnectionStrings:ControlPlane*Connection`, `ControlPlane:DefaultOrganization:*`, `ControlPlane:PlatformAdmin:*`, `ControlPlane:PlatformHosts`, `ForwardedHeaders:KnownProxies` in the environment (Pi env file / App Service settings).
 2. DNS: `manage` and the default organization's host(s) point at the API; wildcard is an infrastructure task tracked in CP-06.
 3. Deploy with `Database:AutoMigrate=true` once; startup runs the §5.3 sequence and logs counts. Verify: one organization, memberships = active users, all seeded users log in.
 4. Web: publish per host (or one publish with runtime `Api:BaseAddress` = same origin).
-5. Rollback: application binaries can roll back to the previous release because the tenant migration is additive and the legacy Identity tables are intact; the control-plane database is left in place. No data rollback is required.
+5. Cutover is performed in maintenance after draining legacy instances and identity writers. Before the first
+   new-authority credential/membership/session mutation, old binaries may return only after verifying legacy state
+   remains authoritative and invalidating new tokens. After that cutoff use a forward fix. Legacy rollback requires
+   separately approved reconciliation of credentials, memberships, disablements and revocations, plus invalidation
+   of every session; intact legacy tables alone do not authorize rollback.
 6. Post-CP-06 cleanup migration drops the legacy Identity tables after a verified restore drill.
 
 ---
@@ -931,7 +1012,10 @@ No new NuGet packages. `Microsoft.AspNetCore.Identity.EntityFrameworkCore`, `Mic
 - [ ] **Data regions** — `US East`, `US West` are placeholders; the configured list should match the Azure regions actually provisioned.
 - [ ] **Maintenance duration** — stored as `MaintenanceExpectedEndUtc`; CP-04 does not auto-end maintenance. Confirm that ending is always manual.
 - [ ] **Seed users in Development** — the seed will create memberships for its five users in the default organization; confirm that Development also gets a second seeded organization for two-tenant manual testing (recommended: yes, `helpinghands.localhost`).
-- [ ] **Logo upload** — `LogoStorageKey` exists but upload uses `IFileStorageService`, which is disabled outside `Storage:EnableLocalPrivateStorage`; CP-04 ships monogram-only unless local private storage is enabled.
+- [x] **Logo scope** — CP-04 is monogram-only in every environment; LogoStorageKey and LogoUrl stay null.
+  No upload endpoint or client-supplied object key is accepted, even with local storage enabled. Wireframe logo
+  controls represent a future capability and are hidden in CP-04. CP-06 must approve upload validation, private
+  storage and public approved-logo delivery before enabling them.
 
 ---
 
@@ -946,5 +1030,24 @@ No new NuGet packages. `Microsoft.AspNetCore.Identity.EntityFrameworkCore`, `Mic
 
 | Version | Date | Author | Changes |
 |---------|------|--------|---------|
+| 1.2 | 2026-09-10 | CarePath Health | Resolved readiness review: identity binding, refresh baseline, lifecycle workflows, bootstrap completion, rollback cutoff, host-mode contract and monogram-only delivery |
 | 1.1 | 2026-09-10 | CarePath Health | Review fixes: membership Provisioning state and activate-last sequence; first Admin membership created without tenant profile until CP-06; Id PK with unique OrganizationId FK on one-to-one entities; backfill rewritten as an idempotent saga with failure matrix; CORS provider made authoritative; control-plane single-point-of-failure trade-off recorded |
 | 1.0 | 2026-09-08 | CarePath Health | Initial design from approved requirements v1.4 |
+
+
+## 15. Readiness Review Resolution (2026-09-10)
+
+Resolved contracts: distinct platform/tenant identity binding; persisted refresh issuance baseline and explicit expiry;
+access-blocked membership mutation workflows and all caregiver lifecycle paths; durable bootstrap completion;
+maintenance cutover and rollback cutoff; explicit host-mode discovery; monogram-only CP-04 scope.
+
+Required regression evidence: unequal identity IDs and mismatched session/member links; expired refresh and role,
+user-version/epoch invalidation; concurrent replay; failure at every lifecycle commit; caregiver termination across
+instances; concurrent last-admin changes; restart in maintenance/suspension/recovery; bootstrap lease loss; mismatched
+markers; refusal of unsafe post-cutover rollback; host-mode distinctions; no logo upload in CP-04. Transaction and
+concurrency tests run on real SQL Server and PostgreSQL; InMemory/Sqlite checks are supplemental only.
+
+Design remains Draft pending Product Owner/Technical Lead approval and Security/Compliance classification sign-off.
+Requirements approval is retained; these clarifications are included in the design approval package. Create and
+approve the CP-04 task specification after design approval and before implementation. No approval is inferred from
+this edit. Multi-tenant routing, recovery infrastructure and logo delivery remain CP-06 gates.

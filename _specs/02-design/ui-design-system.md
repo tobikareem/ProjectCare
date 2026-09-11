@@ -211,3 +211,12 @@ mention databases, tokens, routing or schema versions.
 - All controls reachable by keyboard in visual order; the disabled confirm button remains in
   the tab order with `aria-disabled` semantics via `disabled`.
 - Status is conveyed by text labels, never colour alone.
+
+
+## CP-04 Delivery Boundary (2026-09-10)
+
+The full journey remains the product wireframe. CP-04 agency setup implements display name, monogram, theme and
+support contact; logo upload/replace/remove and image previews are deferred to CP-06 after private storage and
+approved anonymous logo delivery are specified. CP-04 hides those controls and renders monograms in every environment.
+Use one /login route with host-specific forms chosen by /api/bootstrap/context; a failed branding lookup never
+selects the platform console. This scope clarification does not introduce new tokens or application code.

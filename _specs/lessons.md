@@ -122,3 +122,13 @@ This file captures recurring mistakes, corrections, and hard-won patterns discov
 - **Check lifecycle ordering across specs** - Registration must not create a tenant profile before CP-06 has created the tenant database. The requirements said "no tenant database yet" while the design's membership service assumed one existed. When a service is reused from a later phase, trace what exists at the earlier phase's call site.
 - **One key model per codebase** - Do not mix shared primary keys with `BaseEntity.Id`; one-to-one entities keep `Id` as PK and a unique FK.
 - **Requirement IDs must be unique** - A renumbering script left two FR-021 rows. After any renumber, grep the ID list for duplicates and re-check every cross-reference table.
+
+
+## CP-04 Readiness Contracts (2026-09-10)
+
+- **Keep identity keys explicit** — platform and tenant user IDs were treated as interchangeable because legacy provisioning made them equal. Define both, bind tenant UserId through a verified membership, and test unequal IDs.
+- **Persist the refresh authorization baseline** — refresh referred to stored claims absent from its model. Store issued epoch, versions and tenant linkage on the session; never reconstruct them from current state to validate an old token.
+- **Apply sagas to updates as well as creation** — role/status mirrors still crossed databases inside a single-store transaction. Block access with Updating, persist the intended mutation, reconcile the tenant projection and finalize; include caregiver lifecycle entry points.
+- **Separate bootstrap completion from service readiness** — a restart could rerun backfill during maintenance and reopen access. Use a durable completion record and lease, verify ownership and preserve operational states.
+- **Retained tables do not make auth rollback safe** — old binaries would read stale credentials and revocations after cutover. Define a cutoff and use forward repair thereafter unless an approved reconciliation invalidates all sessions.
+- **Resolve delivery scope explicitly** — branding 404 is not platform-host detection, and a logo placeholder is not an upload design. Specify a host-mode contract and a consistent monogram-only CP-04 boundary before task planning.

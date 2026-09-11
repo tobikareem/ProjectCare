@@ -3,7 +3,7 @@
 **Status**: Approved  
 **Author**: CarePath Health  
 **Created**: 2026-09-08  
-**Revised**: 2026-09-08 (v1.2: no in-app organization switching; organizations are reached only through their own domain)  
+**Revised**: 2026-09-10 (v1.6: implementation-readiness contracts; domain-only agency access retained)
 **Spec type**: Requirements  
 **Parent decision**: [ADR 0003 — Multi-Tenant SaaS Database Strategy](../decisions/0003-multi-tenant-saas-database-strategy.md) (Accepted 2026-09-08)  
 **UI source of truth**: `Documentation/Wireframes/carepath-wireframe.html`, "SaaS journey" tab (see §11 for the step-to-requirement map)  
@@ -258,7 +258,7 @@ Feature: Platform administration boundary (wireframe steps 2 to 5)
 
 | Case | Required behavior |
 |---|---|
-| Request host is not registered to any organization | Branding returns 404; everything else returns 401. Bodies are identical to the suspended case. |
+| Request host is not registered to any organization | Branding and bootstrap/context return 404; other endpoints return 401. Bodies are identical to the suspended case. |
 | Host name differs by case, trailing dot, or port | Hosts are normalized (lower-case, trailing dot removed, port stripped) before lookup. |
 | X-Forwarded-Host present | Honored only from configured known proxies via `ForwardedHeaders` with an explicit allowlist. Otherwise the raw Host header is used. |
 | Reserved host labels `manage`, `account`, `api`, `www`, `login`, `admin`, `platform`, `status` | Cannot be used as organization slugs. `manage` is the platform host resolved to no organization; tenant tokens are rejected there and platform tokens are rejected at tenant hosts. |
@@ -287,7 +287,7 @@ Feature: Platform administration boundary (wireframe steps 2 to 5)
 
 | ID | Requirement | Priority | User Role(s) | Service Line |
 |----|-------------|----------|--------------|--------------|
-| FR-001 | The system shall maintain a control-plane data store, physically separate from any tenant database, containing Organization, OrganizationDomain, OrganizationBranding, OrganizationMembership, OrganizationDataPlane, PlatformUser (ASP.NET Identity), PlatformSession, PlatformRefreshToken, PlatformSecurityState, and PlatformAuditEvent. | Critical | System | Both |
+| FR-001 | The system shall maintain a control-plane data store, physically separate from any tenant database, containing Organization, OrganizationDomain, OrganizationBranding, OrganizationMembership, OrganizationDataPlane, PlatformUser (ASP.NET Identity), PlatformSession, PlatformRefreshToken, PlatformSecurityState, PlatformAuditEvent, and ControlPlaneWorkflow. | Critical | System | Both |
 | FR-002 | The control plane shall hold no clinical, insurance, address, date-of-birth, or care data. Identity and membership records are classified per §3.5; a membership with role Client is treated as PHI-adjacent because it reveals a healthcare relationship. | Critical | System | Both |
 | FR-003 | The system shall resolve the organization for every request from the normalized request host by exact match against verified OrganizationDomain rows, before authentication, and store it in a scoped `IOrganizationContext`. | Critical | System | Both |
 | FR-004 | Host resolution shall fail closed. Unknown and suspended hosts produce identical anonymous responses; hosts whose organization is not Ready produce 503; none of them reach authentication or a tenant lookup. | Critical | System | Both |
@@ -298,11 +298,11 @@ Feature: Platform administration boundary (wireframe steps 2 to 5)
 | FR-009 | Access tokens shall carry `sub`, `email`, `organization_id`, `membership_id`, `session_id`, `membership_security_version`, `user_security_version`, `auth_epoch`, `token_kind` ∈ {tenant, platform}, and exactly one role. All values come from one consistent control-plane read at issuance. | Critical | System | Both |
 | FR-010 | On every protected request, after signature and lifetime validation, the system shall read current control-plane state and reject the request with 401 unless: the token's organization equals the resolved host's organization; the organization is Active; the membership is Active with the same SecurityVersion and role; the user is enabled with the same SecurityVersion; the session is not revoked; and the token's `auth_epoch` equals the current epoch. It shall reject with 503 if the organization is not Ready. This runs in middleware before controllers, covering list endpoints. | Critical | System | Both |
 | FR-011 | Security decisions in FR-010 shall never be served from a cache or a lagging replica. If the control-plane read fails or exceeds its timeout, the response is 503 and no operational query runs. | Critical | System | Both |
-| FR-012 | Refresh tokens shall be server-tracked, hashed, rotated on every use, bound to a session, and grouped in a family. Reuse of a rotated token revokes the family and the session. Rotation re-runs the FR-010 checks. | Critical | All tenant roles | Both |
+| FR-012 | Refresh tokens shall be server-tracked, hashed, rotated on every use, bound to a session, and grouped in a family. Reuse of a rotated token revokes the family and the session. Rotation rejects expired tokens and compares the persisted session issuance epoch, user/membership security versions, role and tenant-user binding with current authoritative state. It never replaces the issuance baseline with current values to bypass invalidation. Rotation re-runs FR-010; replay revocation commits even when returning 401. | Critical | All tenant roles | Both |
 | FR-013 | Role change, membership deactivation, and membership removal shall increment the membership SecurityVersion atomically with the change. User disable, credential reset, and global sign-out shall increment the user SecurityVersion. Deactivation and suspension shall revoke affected sessions. | Critical | Admin, PlatformAdmin | Both |
 | FR-014 | A single protected `PlatformSecurityState.AuthenticationEpoch` shall exist. Only a privileged operations procedure may increment it. Its value is embedded in every token and compared on every request. | High | PlatformAdmin | Both |
 | FR-015 | Sign-out shall revoke the current session and its refresh token family. | High | All | Both |
-| FR-016 | `ICurrentUserContext` shall expose `OrganizationId`, `MembershipId`, and `SessionId`. All are null for anonymous requests; `OrganizationId` and `MembershipId` are null for platform tokens. | Critical | System | Both |
+| FR-016 | `ICurrentUserContext` shall expose `PlatformUserId`, `OrganizationId`, `MembershipId`, and `SessionId`; its existing UserId remains the verified tenant User.Id and is null for platform sessions. Token subject identifies the platform user; validate the session/membership/user/organization links before binding the tenant identity. All are null for anonymous requests; `OrganizationId` and `MembershipId` are null for platform tokens. | Critical | System | Both |
 | FR-017 | PlatformAdmin shall be a control-plane role. Platform tokens are issued only at `manage.*` hosts, carry `token_kind = platform` and no organization, are rejected at tenant hosts, and are subject to the same session, version, and epoch checks. Tenant tokens are rejected at `manage.*`. | Critical | PlatformAdmin | Both |
 | FR-018 | PlatformAdmin shall be able to register, list, view, update, suspend, and reactivate organizations, set ReadinessState between Provisioning, Ready, and Maintenance, and manage their domains and branding. Recovering and Failed are set only by CP-06 provisioning and recovery workflows. | High | PlatformAdmin | Both |
 | FR-018a | Suspend, reactivate, set maintenance, and end maintenance shall each require a recorded reason, produce a PlatformAuditEvent, and be confirmed through the confirmation dialog pattern in the UI design system. Suspend additionally requires the operator to type the organization slug. Set maintenance carries a member-facing message of at most 200 characters returned by the branding endpoint's ServiceState. Reason text is never shown to members. | High | PlatformAdmin | Both |
@@ -327,10 +327,10 @@ Control-plane entities (all `Guid` keys, UTC timestamps; full shapes in the desi
 | `Organization` | Customer agency | `Slug` unique, immutable; `Status` ∈ {Pending, Active, Suspended, Offboarded}; `ReadinessState` ∈ {Provisioning, Ready, Maintenance, Recovering, Failed}; `DefaultTimeZone` IANA id; `DataRegion` |
 | `OrganizationDomain` | Host name mapping | `HostName` normalized, unique platform-wide; `IsPrimary`; `VerificationStatus` ∈ {Pending, Verified}; generated subdomains are Verified on creation |
 | `OrganizationBranding` | White-label fields | One row per organization; colors restricted to named design-system tokens |
-| `OrganizationMembership` | Authoritative role | `(OrganizationId, PlatformUserId)` unique; `OrganizationRole` ∈ the six tenant roles; `Status` ∈ {Provisioning, Active, Inactive}; only Active can sign in; `SecurityVersion` int, incremented with every role or status change; `TenantUserId` = tenant-side `User.Id`, null until the tenant profile exists |
+| `OrganizationMembership` | Authoritative role | `(OrganizationId, PlatformUserId)` unique; `OrganizationRole` ∈ the six tenant roles; `Status` ∈ {Provisioning, Active, Inactive, Updating}; only Active can sign in; `SecurityVersion` int, incremented with every role or status change; `TenantUserId` = tenant-side `User.Id`, null until the tenant profile exists |
 | `OrganizationDataPlane` | Database registry (ADR §9) | One per organization; `Provider`; `SecretReference` (never a connection string); `DatabaseDeploymentId`; `LocationRevision`; `SchemaVersion`; `RegisteredAtUtc` |
 | `PlatformUser` | ASP.NET Identity user | `IdentityUser<Guid>`; email unique; `SecurityVersion`; `IsPlatformAdmin`; no `DomainUserId` |
-| `PlatformSession` | One sign-in | `PlatformUserId`; `MembershipId` and `OrganizationId` (null for platform sessions); `TokenKind`; `CreatedAtUtc`; `LastRefreshedAtUtc`; `RevokedAtUtc`; `RevocationReason` |
+| `PlatformSession` | One sign-in | `PlatformUserId`; `MembershipId` and `OrganizationId` (null for platform sessions); `TokenKind`; `CreatedAtUtc`; `LastRefreshedAtUtc`; `RevokedAtUtc`; `RevocationReason`; immutable IssuedAuthenticationEpoch, IssuedUserSecurityVersion, IssuedMembershipSecurityVersion, IssuedMembershipRole and IssuedTenantUserId |
 | `PlatformRefreshToken` | Rotated refresh token | `SessionId`; `FamilyId`; `TokenHash`; `ExpiresAtUtc`; `UsedAtUtc`; `RevokedAtUtc` |
 | `PlatformSecurityState` | Single row | `AuthenticationEpoch` long; `UpdatedAtUtc`; `UpdatedBy` |
 | `PlatformAuditEvent` | Append-only platform audit | Insert-only; no update or delete path in code |
@@ -340,7 +340,7 @@ Tenant-side changes in CP-04:
 - `User` gains `PlatformUserId` (required after backfill) so a tenant profile traces to its platform identity without a cross-database FK.
 - New `TenantDeployment` metadata table in `CarePathDbContext` with exactly one row: `OrganizationId`, `DatabaseDeploymentId`, `SchemaVersion`. Written by backfill and by CP-06 provisioning only; the runtime principal has read access only. Verification at connection checkout is CP-06.
 - `ApplicationUser`, `ApplicationUserConfiguration`, and the Identity tables leave `CarePathDbContext` by migration. The migration is forward-only for Identity data: `Down` must not drop control-plane rows, and the old Identity tables are kept until a later cleanup migration after verification.
-- `User.Role` remains as a mirror (FR-007). `AdminUsersController` role and status changes are redirected to membership management.
+- `User.Role` remains as a mirror (FR-007). AdminUsersController and caregiver creation/termination/reactivation are redirected to membership coordination, preserving authorized Coordinator scope. No legacy path may independently mutate role/access state.
 
 Validation (FluentValidation in Application): slug format and reserved list; host name RFC 1123 and ≤ 253 characters; color tokens from an allowlist; email format; IANA time zone; membership role from the tenant role set.
 
@@ -390,7 +390,7 @@ The Security/Compliance Owner must confirm this table before the design spec is 
 ### 4.3 Reliability
 
 - Control-plane reads use a bounded timeout and a circuit breaker; on timeout or open circuit the API returns 503 and pauses nothing that has not started.
-- Backfill and PlatformAdmin bootstrap are idempotent and safe on every startup.
+- Backfill uses a durable completion workflow and ownership lease, not ReadinessState as a completion flag. Restart preserves maintenance, recovery, suspension and offboarding. Completed bootstrap verifies tenant organization/deployment/schema metadata before returning. PlatformAdmin bootstrap is idempotent; initial identity cutover drains legacy writers.
 - Control-plane migrations run before tenant migrations at startup when `Database:AutoMigrate` is true.
 - The authentication epoch lives in the control-plane database in CP-04; its durable out-of-band copy for recovery is defined with the control-plane restore procedure in CP-06.
 
@@ -498,7 +498,7 @@ The Security/Compliance Owner must confirm this table before the design spec is 
 | Host spoofing through X-Forwarded-Host | Medium | Critical | Forwarded headers honored only from configured known proxies; test with an unlisted source. |
 | Two DbContexts complicate membership creation and backfill | Medium | Medium | No distributed transaction. Memberships are created in a Provisioning state and activated only after the tenant profile is linked; backfill is an idempotent saga that inspects existing state on restart. Documented in design §3.4 and §4.6. |
 | Control-plane migrations diverge between providers | Medium | Medium | Both sets generated in the same task; CI intent check per ADR §8.1. |
-| `User.Role` and membership role drift | Low | Medium | All role writes go through the membership service, which mirrors to `User.Role` until CP-05 removes it. |
+| `User.Role` and membership role drift | Low | Medium | All role/status writers, including caregiver lifecycle services, use an idempotent workflow: commit Updating + version bump + revocation, reconcile the tenant projection, then finalize membership. Failure denies access until resumed; CP-05 removes User.Role. |
 | Epoch increment during an incident logs out every user | Low | Medium | Documented as a deliberate privileged action; audit event; runbook in CP-06 recovery procedure. |
 | Missing default organization configuration in a new environment | Medium | Low | Startup fails closed naming the configuration key. |
 
@@ -510,7 +510,7 @@ The Security/Compliance Owner must confirm this table before the design spec is 
 |-------------|------|--------|------|----------|
 | Tobi Kareem | Product Owner | Approved | 2026-09-08 | SaaS journey wireframe approved as UI source of truth |
 | Tobi Kareem | Tech Lead | Approved | 2026-09-08 | - |
-| TBD | Security/Compliance Owner | Pending | - | §3.5 classification to be confirmed before CP-04 implementation starts; does not block design |
+| TBD | Security/Compliance Owner | Pending | - | §3.5 classification approval required before final design approval and implementation |
 
 ---
 
@@ -548,7 +548,38 @@ The Security/Compliance Owner must confirm this table before the design spec is 
 |---------|------|--------|---------|
 | 1.0 | 2026-09-08 | CarePath Health | Initial draft from ADR 0003 decisions and 2026-09-08 code review |
 | 1.1 | 2026-09-08 | CarePath Health | Aligned to ADR §8.2 pipeline, §8.6 classification and no-cache rule, §9 registry fields, §10.1 sessions, security versions, epoch, refresh families; added service states, platform hosts, and wireframe step map |
+| 1.6 | 2026-09-10 | CarePath Health | Resolved readiness review contracts in §12; security sign-off gates aligned; CP-04 logo delivery explicitly deferred |
 | 1.5 | 2026-09-10 | CarePath Health | Design review: membership Provisioning state, first-admin activation deferred to CP-06, duplicate FR-021 fixed (branding is FR-022, later requirements renumbered) |
 | 1.4 | 2026-09-08 | CarePath Health | Approved by Product Owner and Tech Lead |
 | 1.3 | 2026-09-08 | CarePath Health | Wireframe rewritten as production-style screens with a platform sign-in, organizations list, new-organization form, and organization detail; step map is now nine steps |
 | 1.2 | 2026-09-08 | CarePath Health | Removed organization switcher and membership listing (FR-021 now forbids them); access to an organization is only through its own domain; step map reduced to seven steps |
+
+
+## 12. Implementation-Readiness Clarifications (2026-09-10)
+
+These normative clarifications resolve the design review without changing the selected tenancy architecture:
+
+- **Identity and refresh:** token sub is PlatformUserId; current-user UserId is the verified membership TenantUserId.
+  Session snapshots validate all ownership links. Refresh compares immutable issued security state and checks expiry.
+  Tests must use different platform and tenant IDs, not only legacy users where IDs happen to match.
+- **Lifecycle consistency:** Updating is an access-blocked intermediate membership state. ControlPlaneWorkflow stores
+  intended mutation, expected version, idempotency key, progress and lease; each database commits separately.
+  Every caregiver and administrator lifecycle path uses the coordinator. Failed projection writes remain blocked
+  and resume idempotently, without compensating reactivation. Serialize the last-administrator invariant.
+- **Tenant-one boundary:** CP-04 admits operational work only for the configured, verified default deployment.
+  Registering another agency cannot grant access to that database; new agencies remain Provisioning until CP-06.
+- **Recovery and rollout:** bootstrap completion is independent of service availability. Old binaries cannot resume
+  authentication after control-plane mutations without approved reconciliation and global session invalidation.
+  Use a forward fix after the cutover cutoff. Retained legacy tables are not proof rollback is safe.
+- **Explicit host mode:** anonymous /api/bootstrap/context returns only Public, Platform or Tenant for the current
+  verified host; unknown/suspended/offboarded hosts share a generic 404 and dependency failure returns 503.
+  This is not an organization directory or authorization decision. A branding 404 never selects platform UI.
+- **Branding scope:** CP-04 delivers display name, monogram, approved theme and support contact. LogoStorageKey and
+  LogoUrl are reserved null fields; upload/replace/remove are not exposed in CP-04, even in local-storage mode.
+  Wireframe logo controls describe the later CP-06 capability, pending storage and delivery approval.
+- **Approval gates:** classification sign-off is required before final design approval. Requirements approval remains
+  recorded; design and task approvals are not inferred. The absent task specification is created after design approval.
+
+Verification includes interruption at each workflow commit, concurrent admin mutations, wrong identity bindings,
+refresh expiry/replay/security changes, restart under maintenance, marker mismatch, and post-cutover rollback refusal.
+Concurrency/transaction behavior is verified against both supported database providers, not only in-memory substitutes.

@@ -621,6 +621,11 @@ Validation (FluentValidation, Application): slug `^[a-z0-9](?:[a-z0-9-]{1,38}[a-
 **Reason**: Pending hosts are not resolvable today, but once the verification workflow ships an unguarded host would be a takeover of another organization's subdomain or of the platform host itself.  
 **Trade-off**: `IPlatformDomainSettings` exposes the platform host set to the Application layer.
 
+### D-CP04-14 — Branding follows the API host; same-origin deployment is the target (slice 5 review, 2026-10-21)
+**Decision**: The public branding endpoint resolves the organization from the host the API request arrives at. `CarePath.Web` treats an empty `Api:BaseAddress` as same-origin, so a deployment that serves the app and the API from one organization host gets that organization's branding automatically. The three committed appsettings keep absolute API URLs; with them the branding shown is that of the API host (`localhost` → the default organization), which is correct for development and documented for HomeLab/production in TASK-099. The branding client carries no authorization handler, and the login page renders the neutral brand first and applies branding only when a well-formed response arrives (any transport, JSON or cancellation failure is swallowed without logging).  
+**Reason**: Reading the organization from `Origin`/`Referer` would let a browser choose the organization; the request host is the only server-controlled signal (FR-012).  
+**Trade-off**: Split-host deployments must register the API host as a domain of the organization, or move to same-origin (CP-06 routing work).
+
 ---
 
 ## Requirement Amendments (recorded here; applied to the requirements spec)
@@ -637,6 +642,7 @@ Validation (FluentValidation, Application): slug `^[a-z0-9](?:[a-z0-9-]{1,38}[a-
 10. Development seed adds `helpinghands` as a second Active organization sharing the dev database (dev-only).
 11. FR-016 membership create → temporary password always required; response never reveals identity existence (D-CP04-12).
 12. FR-014 domains → host assignment guards and primary-host rules (D-CP04-13).
+13. FR-012 branding → resolved from the API request host; same-origin is the deployment target (D-CP04-14).
 
 ---
 

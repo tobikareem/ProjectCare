@@ -3,7 +3,7 @@
 Status: Approved
 Parent spec: `_specs/sprints/sprint-08-control-plane-foundation.md`
 Feature specs: `_specs/01-requirements/cp-04-control-plane-foundation.md` · `_specs/02-design/cp-04-control-plane-foundation.md` · `_specs/03-tasks/cp-04-control-plane-foundation.md`
-Last updated: 2026-10-21 (slice 4 done)
+Last updated: 2026-10-21 (slice 5 done)
 
 Baseline: Sprints 1-6 complete; ADR 0003 accepted. The tenant API surface (clients, caregivers,
 shifts, billing, transitions, admin users) is FROZEN in route shape and DTOs except where a
@@ -80,8 +80,8 @@ This board is the normative implementation contract for Sprint 8. The per-task d
 | TASK-093 | PlatformOrganizationService with validators and platform audit | Claude | TASK-092, TASK-089 | Done 2026-10-21 — slice 4 commit; build 0 warnings; tests Domain 297 / Application 614 / Infrastructure 176 / Web 54; reviewer findings fixed (membership create enumeration-safe with control-plane-first ordering and scoped compensation, undefined role rejected, mirror revert on tenant failure, slug regex `\z`, host-takeover and primary-domain guards, branding read without write, storage-key/phone/IANA-timezone validation — D-CP04-12/13) |
 | TASK-094 | Membership admin surface with two-phase create | Claude | TASK-092, TASK-089 | Done 2026-10-21 — slice 4 commit; build 0 warnings; tests Domain 297 / Application 614 / Infrastructure 176 / Web 54; reviewer findings fixed (membership create enumeration-safe with control-plane-first ordering and scoped compensation, undefined role rejected, mirror revert on tenant failure, slug regex `\z`, host-takeover and primary-domain guards, branding read without write, storage-key/phone/IANA-timezone validation — D-CP04-12/13) |
 | TASK-095 | Platform and membership controllers, reflection tests | Claude | TASK-093, TASK-094 | Done 2026-10-21 — slice 4 commit; build 0 warnings; tests Domain 297 / Application 614 / Infrastructure 176 / Web 54; reviewer findings fixed (membership create enumeration-safe with control-plane-first ordering and scoped compensation, undefined role rejected, mirror revert on tenant failure, slug regex `\z`, host-takeover and primary-domain guards, branding read without write, storage-key/phone/IANA-timezone validation — D-CP04-12/13) |
-| TASK-096 | Typed clients and route alignment tests | Claude | TASK-095 | Not Started |
-| TASK-097 | Login branding and organization-aware auth state | Claude | TASK-096, TASK-090 | Not Started |
+| TASK-096 | Typed clients and route alignment tests | Claude | TASK-095 | Done 2026-10-21 — slice 5 commit; build 0 warnings; tests Domain 297 / Application 630 / Infrastructure 176 / Web 68; reviewer findings fixed (branding fetch swallows JSON/cancellation failures and never blocks the form, branding client has no auth handler, contrast-safe primary token, brand fallbacks in carepath-ui.css, body-less POST overload — D-CP04-14) |
+| TASK-097 | Login branding and organization-aware auth state | Claude | TASK-096, TASK-090 | Done 2026-10-21 — slice 5 commit; build 0 warnings; tests Domain 297 / Application 630 / Infrastructure 176 / Web 68; reviewer findings fixed (branding fetch swallows JSON/cancellation failures and never blocks the form, branding client has no auth handler, contrast-safe primary token, brand fallbacks in carepath-ui.css, body-less POST overload — D-CP04-14) |
 | TASK-098 | Two-organization integration suite | Claude | TASK-095 | Not Started |
 | TASK-099 | Configuration, documentation, HIPAA check, lessons, board close-out | Claude | TASK-098 | Not Started |
 | S8-TASK-003 | HomeLab verification: every existing account logs in after backfill (gate for CP-05 table drop) | Tobi | TASK-099 | Pending |

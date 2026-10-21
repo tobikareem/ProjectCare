@@ -1021,7 +1021,7 @@ h3 {
     height: 38px;
     place-items: center;
     color: var(--surface);
-    background: var(--teal-900);
+    background: var(--brand-primary);
     border-radius: 12px;
     font-weight: 900;
 }
@@ -1055,6 +1055,15 @@ h3 {
 
 .auth-alert {
     margin-top: 14px;
+}
+
+.auth-card .button-primary {
+    background: var(--brand-primary);
+}
+
+.auth-card .auth-input:focus-visible,
+.auth-card .button-primary:focus-visible {
+    outline-color: var(--brand-accent);
 }
 
 .auth-submit {

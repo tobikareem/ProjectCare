@@ -1046,6 +1046,9 @@ public class Sprint4OperationsServiceTests
         services.AddSingleton(Mock.Of<IBillingEligibilityQuery>());
         services.AddSingleton(Mock.Of<IInvoicePreviewTokenService>());
         services.AddSingleton(Mock.Of<IBillingReconciliationStore>());
+        services.AddSingleton(Mock.Of<CarePath.Application.Abstractions.Tenancy.IOrganizationContext>());
+        services.AddSingleton(Mock.Of<CarePath.Domain.Interfaces.Repositories.IControlPlaneUnitOfWork>());
+        services.AddSingleton(Mock.Of<CarePath.Application.Abstractions.Tenancy.IBrandingCache>());
 
         // Act
         using var provider = services.AddApplication().BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true, ValidateOnBuild = true });

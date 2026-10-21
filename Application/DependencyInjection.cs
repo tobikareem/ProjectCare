@@ -9,6 +9,7 @@ using CarePath.Application.Clients.Services;
 using CarePath.Application.Clients.Validators;
 using CarePath.Application.Identity.Services;
 using CarePath.Application.Identity.Validators;
+using CarePath.Application.Organization.Services;
 using CarePath.Application.Scheduling.Services;
 using CarePath.Application.Scheduling.Queries;
 using CarePath.Application.Scheduling.Validators;
@@ -45,6 +46,7 @@ public static class DependencyInjection
         services.AddScoped<IBillingReconciliationService, BillingReconciliationService>();
         services.AddScoped<ITransitionsService, TransitionsService>();
         services.AddScoped<IAdminUserManagementService, AdminUserManagementService>();
+        services.AddScoped<IOrganizationBrandingQuery, OrganizationBrandingQuery>();
 
         services.AddScoped<IValidator<CreateCaregiverRequest>, CreateCaregiverRequestValidator>();
         services.AddScoped<IValidator<CreateStaffUserRequest>, CreateStaffUserRequestValidator>();

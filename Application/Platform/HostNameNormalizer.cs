@@ -36,6 +36,13 @@ public static class HostNameNormalizer
         var portIndex = value.IndexOf(':');
         if (portIndex >= 0)
         {
+            // Only a single ":<1-5 digits>" suffix is a port; anything else is not a host.
+            var port = value[(portIndex + 1)..];
+            if (port.Length is 0 or > 5 || !port.All(char.IsAsciiDigit))
+            {
+                return null;
+            }
+
             value = value[..portIndex];
         }
 
@@ -44,12 +51,14 @@ public static class HostNameNormalizer
             value = value[..^1];
         }
 
-        value = value.ToLowerInvariant();
-
-        if (value.Length == 0 || value.Length > MaxLength)
+        // Validate the character set before lowercasing: invariant lowercasing can fold non-ASCII
+        // characters (e.g. the Kelvin sign) into ASCII and manufacture a different valid host.
+        if (value.Length == 0 || value.Length > MaxLength || !value.All(char.IsAscii))
         {
             return null;
         }
+
+        value = value.ToLowerInvariant();
 
         foreach (var label in value.Split('.'))
         {

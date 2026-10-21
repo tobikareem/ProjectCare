@@ -1,4 +1,7 @@
 using CarePath.Application.Abstractions.Audit;
+using CarePath.Application.Abstractions.Tenancy;
+using CarePath.Infrastructure.ControlPlane.Bootstrap;
+using CarePath.Infrastructure.ControlPlane.Resolution;
 using CarePath.Domain.Interfaces.Repositories;
 using CarePath.Infrastructure.ControlPlane.Audit;
 using CarePath.Infrastructure.ControlPlane.Identity;
@@ -124,7 +127,10 @@ public static class ControlPlaneServiceCollectionExtensions
         services.AddSingleton<HostDenialAuditThrottle>();
         services.AddScoped<IControlPlaneUnitOfWork, ControlPlaneUnitOfWork>();
         services.AddScoped<IPlatformAuditLogger, EfPlatformAuditLogger>();
+        services.AddScoped<IOrganizationHostResolver, EfOrganizationHostResolver>();
+        services.AddScoped<ControlPlaneBootstrapper>();
         services.AddMemoryCache();
+        services.AddSingleton<IBrandingCache, MemoryBrandingCache>();
 
         return services;
     }

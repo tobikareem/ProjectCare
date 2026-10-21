@@ -3,7 +3,7 @@
 Status: Approved
 Parent spec: `_specs/sprints/sprint-08-control-plane-foundation.md`
 Feature specs: `_specs/01-requirements/cp-04-control-plane-foundation.md` · `_specs/02-design/cp-04-control-plane-foundation.md` · `_specs/03-tasks/cp-04-control-plane-foundation.md`
-Last updated: 2026-10-21 (slice 1 done)
+Last updated: 2026-10-21 (slice 2 done)
 
 Baseline: Sprints 1-6 complete; ADR 0003 accepted. The tenant API surface (clients, caregivers,
 shifts, billing, transitions, admin users) is FROZEN in route shape and DTOs except where a
@@ -68,9 +68,9 @@ This board is the normative implementation contract for Sprint 8. The per-task d
 | TASK-081 | ControlPlaneDbContext, PlatformUser, configurations, unit of work | Claude | TASK-080 | Done 2026-10-21 — slice 1 commit; build 0 warnings; tests Domain 292 / Application 498 / Infrastructure 149 / Web 54; reviewer findings fixed (token-provider map, throttle race, append-only guard, isolated audit context, connection guards, filtered unique indexes, in-database FKs) |
 | TASK-082 | Control-plane DI, options, connection strings, audit logger, health check | Claude | TASK-081 | Done 2026-10-21 — slice 1 commit; build 0 warnings; tests Domain 292 / Application 498 / Infrastructure 149 / Web 54; reviewer findings fixed (token-provider map, throttle race, append-only guard, isolated audit context, connection guards, filtered unique indexes, in-database FKs) |
 | TASK-083 | Control-plane migrations (both providers) and shape tests | Claude | TASK-082 | Done 2026-10-21 — slice 1 commit; build 0 warnings; tests Domain 292 / Application 498 / Infrastructure 149 / Web 54; reviewer findings fixed (token-provider map, throttle race, append-only guard, isolated audit context, connection guards, filtered unique indexes, in-database FKs) |
-| TASK-084 | Default organization bootstrap | Claude | TASK-083 | Not Started |
-| TASK-085 | Host resolver, organization context, resolution middleware, forwarded headers, shared 401 writer | Claude | TASK-084 | Not Started |
-| TASK-086 | Anonymous branding endpoint with public cache | Claude | TASK-085 | Not Started |
+| TASK-084 | Default organization bootstrap | Claude | TASK-083 | Done 2026-10-21 — slice 2 commit; build 0 warnings; tests Domain 293 / Application 519 / Infrastructure 166 / Web 54; reviewer findings fixed (empty trust list now trusts nobody, normalizer validates before lowercasing + strict port, headers preserved on 401/503, full catch coverage, global audit cap, bootstrapper soft-delete/host-collision/race handling) |
+| TASK-085 | Host resolver, organization context, resolution middleware, forwarded headers, shared 401 writer | Claude | TASK-084 | Done 2026-10-21 — slice 2 commit; build 0 warnings; tests Domain 293 / Application 519 / Infrastructure 166 / Web 54; reviewer findings fixed (empty trust list now trusts nobody, normalizer validates before lowercasing + strict port, headers preserved on 401/503, full catch coverage, global audit cap, bootstrapper soft-delete/host-collision/race handling) |
+| TASK-086 | Anonymous branding endpoint with public cache | Claude | TASK-085 | Done 2026-10-21 — slice 2 commit; build 0 warnings; tests Domain 293 / Application 519 / Infrastructure 166 / Web 54; reviewer findings fixed (empty trust list now trusts nobody, normalizer validates before lowercasing + strict port, headers preserved on 401/503, full catch coverage, global audit cap, bootstrapper soft-delete/host-collision/race handling) |
 | TASK-087 | PlatformIdentityService and control-plane provisioning | Claude | TASK-083 | Not Started |
 | TASK-088 | Legacy identity copy, membership backfill, PlatformAdmin bootstrap | Claude | TASK-084, TASK-087 | Not Started |
 | TASK-089 | LoginService and membership core service | Claude | TASK-087, TASK-085 | Not Started |

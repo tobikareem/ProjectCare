@@ -1,7 +1,9 @@
 using CarePath.Application;
 using CarePath.Application.Abstractions.Auth;
 using CarePath.Infrastructure;
+using CarePath.Infrastructure.ControlPlane.Bootstrap;
 using CarePath.Infrastructure.ControlPlane.Persistence;
+using CarePath.WebApi.Tenancy;
 using CarePath.Infrastructure.Identity;
 using CarePath.Infrastructure.Persistence;
 using CarePath.WebApi.Diagnostics;
@@ -30,6 +32,7 @@ var builder = WebApplication.CreateBuilder(args);
 // Add services to the container.
 builder.Services.AddApplication();
 builder.Services.AddScoped<ICurrentUserContext, HttpCurrentUserContext>();
+builder.Services.AddOrganizationResolution();
 builder.Services.AddInfrastructure(builder.Configuration);
 builder.Services.AddCarePathAuthentication(builder.Configuration);
 
@@ -94,6 +97,10 @@ var app = builder.Build();
 
 app.UseCarePathProblemDetails();
 
+// Forwarded headers are honored only from ControlPlane:TrustedProxies; host resolution below
+// reads the resulting Request.Host.
+app.UseTrustedForwardedHeaders();
+
 // The WASM client calls the documented http://localhost:5240 dev endpoint; a 307 to https
 // breaks browser CORS preflights, so HTTPS is only forced outside Development.
 if (!app.Environment.IsDevelopment())
@@ -146,9 +153,18 @@ using (var scope = app.Services.CreateScope())
         await context.Database.MigrateAsync();
         await CarePathDbContextSeed.SeedAsync(context, userManager, roleManager, builder.Configuration, app.Environment);
     }
+
+    // Idempotent backfill of the existing deployment as tenant one (CP-04 FR-020). Runs on every
+    // startup regardless of AutoMigrate; fails closed when an empty control plane has no defaults.
+    var bootstrapper = scope.ServiceProvider.GetRequiredService<ControlPlaneBootstrapper>();
+    await bootstrapper.EnsureDefaultOrganizationAsync();
 }
 
 app.UseCors(webClientCorsPolicy);
+
+// Host -> organization before authentication, so a token can be checked against the host it was
+// presented at and an unknown host never reaches authentication or a tenant query.
+app.UseOrganizationResolution();
 
 app.UseAuthentication();
 app.UseAuthorization();

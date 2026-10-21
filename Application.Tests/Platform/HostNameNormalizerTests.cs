@@ -31,6 +31,11 @@ public sealed class HostNameNormalizerTests
     [InlineData("bright_care.test")]
     [InlineData("brightcäre.test")]
     [InlineData("[::1]:5240")]
+    [InlineData("good.test:abc")]
+    [InlineData("good.test:80:90")]
+    [InlineData("good.test:")]
+    [InlineData("good.test:123456")]
+    [InlineData("\u212Aeep.test")]
     public void Normalize_WhenHostIsMalformed_ReturnsNull(string? input)
     {
         // Act

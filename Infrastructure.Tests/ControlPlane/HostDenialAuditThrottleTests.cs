@@ -61,6 +61,24 @@ public sealed class HostDenialAuditThrottleTests
     }
 
     [Fact]
+    public void ShouldWrite_WhenHostsRotateBeyondTheGlobalBudget_RefusesTheRest()
+    {
+        // Arrange
+        var clock = new FakeTimeProvider();
+        var throttle = new HostDenialAuditThrottle(clock);
+
+        // Act
+        var allowed = Enumerable.Range(0, HostDenialAuditThrottle.MaxWritesPerWindow + 50)
+            .Count(index => throttle.ShouldWrite($"hash-{index}", Window));
+        clock.Advance(Window);
+        var afterWindow = throttle.ShouldWrite("hash-new", Window);
+
+        // Assert
+        allowed.Should().Be(HostDenialAuditThrottle.MaxWritesPerWindow);
+        afterWindow.Should().BeTrue();
+    }
+
+    [Fact]
     public void ShouldWrite_WhenWindowIsZero_AlwaysAllows()
     {
         // Arrange

@@ -1,4 +1,6 @@
 using FluentAssertions;
+using ContractBrandingColorToken = CarePath.Contracts.Enumerations.BrandingColorToken;
+using DomainBrandingColorToken = CarePath.Domain.Enumerations.BrandingColorToken;
 using ContractCertificationType = CarePath.Contracts.Enumerations.CertificationType;
 using ContractDischargeDocumentSourceType = CarePath.Contracts.Enumerations.DischargeDocumentSourceType;
 using ContractDischargeDocumentStatus = CarePath.Contracts.Enumerations.DischargeDocumentStatus;
@@ -63,6 +65,7 @@ public sealed class ContractEnumParityTests
         { typeof(DomainReminderStatus), typeof(ContractReminderStatus) },
         { typeof(DomainEscalationTriggerType), typeof(ContractEscalationTriggerType) },
         { typeof(DomainEscalationLevel), typeof(ContractEscalationLevel) },
+        { typeof(DomainBrandingColorToken), typeof(ContractBrandingColorToken) },
     };
 
     [Theory]

@@ -24,6 +24,15 @@ public static class AuthenticationServiceCollectionExtensions
             {
                 options.IncludeErrorDetails = false;
                 options.TokenValidationParameters = JwtTokenValidationParametersFactory.Create(configuration);
+                options.Events = new JwtBearerEvents
+                {
+                    // Same generic body as login failures and unresolved hosts (requirement §4.4).
+                    OnChallenge = async context =>
+                    {
+                        context.HandleResponse();
+                        await UnauthorizedResponseWriter.WriteAsync(context.HttpContext);
+                    },
+                };
             });
 
         services.AddAuthorization(options =>

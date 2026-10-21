@@ -1,7 +1,6 @@
 using CarePath.Application.Abstractions.Auth;
 using CarePath.Contracts.Auth;
-using CarePath.Contracts.Common;
-using CarePath.WebApi.Middleware;
+using CarePath.WebApi.Security;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using ContractUserRole = CarePath.Contracts.Enumerations.UserRole;
@@ -12,9 +11,6 @@ namespace CarePath.WebApi.Controllers;
 [Route("api/auth")]
 public sealed class AuthController : ControllerBase
 {
-    private const string InvalidCredentialsCode = "auth.invalid_credentials";
-    private const string InvalidCredentialsMessage = "Invalid credentials.";
-
     private readonly IIdentityService identityService;
     private readonly IJwtTokenService jwtTokenService;
 
@@ -106,18 +102,6 @@ public sealed class AuthController : ControllerBase
         return Enum.TryParse(user.Roles.Single(), ignoreCase: false, out role);
     }
 
-    private static UnauthorizedObjectResult InvalidCredentials()
-    {
-        return new UnauthorizedObjectResult(new ProblemDetailsResponse
-        {
-            Type = "about:blank",
-            Title = "Unauthorized.",
-            Status = StatusCodes.Status401Unauthorized,
-            Detail = null,
-            Instance = null,
-            TraceId = null,
-            ValidationErrors = [],
-            Errors = [new ApiError(InvalidCredentialsCode, InvalidCredentialsMessage)],
-        });
-    }
+    // One body for every failure mode, shared with host resolution and the bearer challenge.
+    private static ActionResult InvalidCredentials() => UnauthorizedResponseWriter.Result();
 }

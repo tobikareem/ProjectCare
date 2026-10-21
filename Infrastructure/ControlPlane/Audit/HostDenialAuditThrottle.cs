@@ -12,9 +12,15 @@ public sealed class HostDenialAuditThrottle
     private const int MaxTrackedHashes = 50_000;
     private const int PurgeSampleMask = 0x3FF;
 
+    /// <summary>Hard cap on audit rows written per window per instance, whatever the host mix.</summary>
+    public const int MaxWritesPerWindow = 300;
+
     private readonly ConcurrentDictionary<string, DateTimeOffset> _lastWritten = new(StringComparer.Ordinal);
     private readonly TimeProvider _timeProvider;
+    private readonly object _globalGate = new();
     private int _calls;
+    private DateTimeOffset _globalWindowStart;
+    private int _globalWrites;
 
     /// <summary>Initializes the throttle.</summary>
     /// <param name="timeProvider">Clock, injectable for tests.</param>
@@ -34,6 +40,12 @@ public sealed class HostDenialAuditThrottle
     {
         var now = _timeProvider.GetUtcNow();
         MaybePurge(now, window);
+
+        // Rotating host names defeats the per-hash key, so a global cap bounds the write rate too.
+        if (!TryConsumeGlobalBudget(now, window))
+        {
+            return false;
+        }
 
         while (true)
         {
@@ -61,6 +73,31 @@ public sealed class HostDenialAuditThrottle
             {
                 return true;
             }
+        }
+    }
+
+    private bool TryConsumeGlobalBudget(DateTimeOffset now, TimeSpan window)
+    {
+        if (window == TimeSpan.Zero)
+        {
+            return true;
+        }
+
+        lock (_globalGate)
+        {
+            if (now - _globalWindowStart >= window)
+            {
+                _globalWindowStart = now;
+                _globalWrites = 0;
+            }
+
+            if (_globalWrites >= MaxWritesPerWindow)
+            {
+                return false;
+            }
+
+            _globalWrites++;
+            return true;
         }
     }
 

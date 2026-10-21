@@ -65,20 +65,35 @@ CarePath.Domain/
 │   ├── Clinical/                         # CarePlan
 │   ├── Scheduling/                       # Shift, VisitNote, VisitPhoto
 │   └── Billing/                          # Invoice, InvoiceLineItem, Payment
-├── Enumerations/                         # UserRole, EmploymentType, ShiftStatus, etc.
-└── Interfaces/Repositories/              # IRepository<T>, IUnitOfWork
+│   └── Platform/                         # Organization, OrganizationDomain, OrganizationBranding, OrganizationMembership, OrganizationDataPlane, PlatformAuditEvent (CP-04, no PHI)
+├── Enumerations/                         # UserRole, EmploymentType, ShiftStatus, OrganizationStatus, MembershipStatus, etc.
+└── Interfaces/Repositories/              # IRepository<T>, IUnitOfWork, IControlPlaneUnitOfWork
 
-Infrastructure/                           # (CP-02 — EF Core, Repositories, Identity)
-├── Persistence/
-│   ├── CarePathDbContext.cs              # EF Core DbContext (IdentityDbContext<ApplicationUser>)
+Infrastructure/                           # (CP-02 — EF Core, Repositories; CP-04 — control plane)
+├── Persistence/                          # TENANT (PHI) context — one per organization
+│   ├── CarePathDbContext.cs              # EF Core DbContext (plain DbContext; Identity lives in the control plane)
 │   ├── Configurations/                   # Fluent API entity configurations (Identity/, Scheduling/, Billing/)
 │   ├── Interceptors/                     # AuditableEntityInterceptor (auto-set audit fields)
 │   ├── Converters/                       # UtcDateTimeConverter (preserve UTC on SQL Server round-trip)
-│   ├── Repositories/Repository.cs        # Generic Repository<T> : IRepository<T>
-│   ├── UnitOfWork.cs                     # UnitOfWork : IUnitOfWork
-│   └── Migrations/                       # EF Core auto-generated migrations
-├── Identity/ApplicationUser.cs           # IdentityUser<Guid> linked to domain User via DomainUserId
-└── DependencyInjection.cs                # AddInfrastructure() service registration
+│   ├── Repositories/                     # Repository<T>, UnitOfWork, EfUnitOfWorkBase (shared with the control plane)
+│   └── Migrations/                       # Tenant migrations (SQL Server; PostgreSQL in Infrastructure.Migrations.PostgreSql)
+├── ControlPlane/                         # NON-PHI control plane (ADR 0003, CP-04)
+│   ├── Persistence/ControlPlaneDbContext.cs  # IdentityUserContext<PlatformUser, Guid>; append-only PlatformAuditEvents
+│   ├── Persistence/Configurations/       # Organization, OrganizationDomain, OrganizationBranding, OrganizationMembership, OrganizationDataPlane, PlatformAuditEvent, PlatformRefreshToken
+│   ├── Identity/                         # PlatformUser (IdentityUser<Guid>, Id == tenant User.Id), PlatformRefreshToken
+│   ├── Auth/                             # PlatformIdentityService, PlatformIdentityProvisioningService, PlatformUserDirectory
+│   ├── Audit/                            # EfPlatformAuditLogger (isolated context), HostDenialAuditThrottle
+│   ├── Bootstrap/ControlPlaneBootstrapper.cs # Legacy identity copy, default organization, membership backfill, PlatformAdmin
+│   ├── Resolution/                       # EfOrganizationHostResolver, MemoryBrandingCache (public branding only)
+│   ├── Migrations/                       # Control-plane migrations (SQL Server)
+│   ├── ControlPlaneOptions.cs            # ControlPlane:* configuration (PlatformHostNames, DefaultOrganization, PlatformAdmin, TrustedProxies)
+│   └── ControlPlaneServiceCollectionExtensions.cs  # AddControlPlane(); connection string ControlPlane{Provider}Connection, never the tenant string
+└── DependencyInjection.cs                # AddInfrastructure() service registration (calls AddControlPlane)
+
+WebApi/
+├── Tenancy/                              # OrganizationContext, OrganizationResolutionMiddleware (host -> organization before authentication)
+├── Security/                             # JWT setup with token<->host binding, UnauthorizedResponseWriter (one generic 401 body), HttpCurrentUserContext
+└── Controllers/                          # PlatformOrganizationsController (PlatformAdmin policy), OrganizationMembershipsController (Admin), OrganizationBrandingController (anonymous)
 
 _specs/
 ├── 01-requirements/                      # Problem statement, Gherkin user stories
@@ -131,6 +146,16 @@ _specs/
 - **Audit interceptor**: `SaveChangesInterceptor` auto-sets `CreatedAt`, `CreatedBy`, `UpdatedAt`, `UpdatedBy` — never set these manually in service code
 - **ASP.NET Core Identity**: Pattern A (Separate Tables) — `ApplicationUser : IdentityUser<Guid>` with `DomainUserId` FK to domain `User`
 - **Connection strings**: Must include `Encrypt=True` for HIPAA compliance
+
+### Control Plane Conventions (CP-04 — ADR 0003)
+
+- **Two contexts, two databases**: `ControlPlaneDbContext` (organizations, hosts, branding, memberships, platform identity, audit — never PHI) and `CarePathDbContext` (tenant/PHI). Every `dotnet ef` command needs `--context`. The control-plane connection string is `ConnectionStrings:ControlPlane{Provider}Connection` (fallback `ControlPlaneConnection`); it never falls back to the tenant string and may not equal it.
+- **Identity lives in the control plane**: `PlatformUser.Id == tenant User.Id` (D-CP04-02). `User.Role` / `User.IsActive` are read-only mirrors of `OrganizationMembership`; only `OrganizationMembershipService` (and the bootstrap backfill) writes them (D-CP04-09).
+- **Host → organization is resolved before authentication** and read authoritatively per request (no security cache; only public branding is cached 60 s). Unresolved hosts, missing memberships and bad credentials share one byte-identical 401 body (`UnauthorizedResponseWriter`).
+- **Tokens are organization-bound**: claims `organization_id`, `membership_id`, `token_kind`; checked in `OnTokenValidated` against the resolved host. Tenant policies require `token_kind=tenant`; the `PlatformAdmin` policy requires `token_kind=platform` at a configured platform host. The organization for tenant endpoints comes from `IOrganizationContext` / `ICurrentUserContext.OrganizationId`, never from a route or body.
+- **Platform audit is append-only** through `IPlatformAuditLogger` only: actor id, organization id, action, entity type/id, correlation id, host *hash* — never an email, host string, or PHI value.
+- **Platform host names come from configuration** (`ControlPlane:PlatformHostNames`), never from `OrganizationDomain`. Reserved slugs: `platform, admin, api, www, login`.
+- **Secrets**: `ControlPlane:PlatformAdmin:Password` comes from user secrets / environment only (first-run bootstrap of the platform operator); never commit it.
 
 
 ---
@@ -363,6 +388,8 @@ The `dotnet-code-reviewer` subagent (`.claude/agents/dotnet-code-reviewer.md`) i
 
 ## Common Mistakes to Avoid
 
+- **Control-plane rows holding PHI** — `Organization*`, `PlatformUser`, `PlatformAuditEvent` carry organization and staff-directory data only; `ControlPlaneEntityClassificationTests` and `ControlPlaneContractTests` enforce the denylist
+- **Membership create that reveals whether an email exists** — the temporary password is always required and the response is built from the request (D-CP04-12)
 - **`DateTime.Now`** — always use `DateTime.UtcNow`
 - **`int` primary keys** — always `Guid`
 - **Hard deletes** — always set `IsDeleted = true`

@@ -65,8 +65,35 @@ CarePath.Domain/
 │   ├── Clinical/                         # CarePlan
 │   ├── Scheduling/                       # Shift, VisitNote, VisitPhoto
 │   └── Billing/                          # Invoice, InvoiceLineItem, Payment
-├── Enumerations/                         # UserRole, EmploymentType, ShiftStatus, etc.
-└── Interfaces/Repositories/              # IRepository<T>, IUnitOfWork
+│   └── Platform/                         # Organization, OrganizationDomain, OrganizationBranding, OrganizationMembership, OrganizationDataPlane, PlatformAuditEvent (CP-04, no PHI)
+├── Enumerations/                         # UserRole, EmploymentType, ShiftStatus, OrganizationStatus, MembershipStatus, etc.
+└── Interfaces/Repositories/              # IRepository<T>, IUnitOfWork, IControlPlaneUnitOfWork
+
+Infrastructure/                           # (CP-02 — EF Core, Repositories; CP-04 — control plane)
+├── Persistence/                          # TENANT (PHI) context — one per organization
+│   ├── CarePathDbContext.cs              # EF Core DbContext (plain DbContext; Identity lives in the control plane)
+│   ├── Configurations/                   # Fluent API entity configurations (Identity/, Scheduling/, Billing/)
+│   ├── Interceptors/                     # AuditableEntityInterceptor (auto-set audit fields)
+│   ├── Converters/                       # UtcDateTimeConverter (preserve UTC on SQL Server round-trip)
+│   ├── Repositories/                     # Repository<T>, UnitOfWork, EfUnitOfWorkBase (shared with the control plane)
+│   └── Migrations/                       # Tenant migrations (SQL Server; PostgreSQL in Infrastructure.Migrations.PostgreSql)
+├── ControlPlane/                         # NON-PHI control plane (ADR 0003, CP-04)
+│   ├── Persistence/ControlPlaneDbContext.cs  # IdentityUserContext<PlatformUser, Guid>; append-only PlatformAuditEvents
+│   ├── Persistence/Configurations/       # Organization, OrganizationDomain, OrganizationBranding, OrganizationMembership, OrganizationDataPlane, PlatformAuditEvent, PlatformRefreshToken
+│   ├── Identity/                         # PlatformUser (IdentityUser<Guid>, Id == tenant User.Id), PlatformRefreshToken
+│   ├── Auth/                             # PlatformIdentityService, PlatformIdentityProvisioningService, PlatformUserDirectory
+│   ├── Audit/                            # EfPlatformAuditLogger (isolated context), HostDenialAuditThrottle
+│   ├── Bootstrap/ControlPlaneBootstrapper.cs # Legacy identity copy, default organization, membership backfill, PlatformAdmin
+│   ├── Resolution/                       # EfOrganizationHostResolver, MemoryBrandingCache (public branding only)
+│   ├── Migrations/                       # Control-plane migrations (SQL Server)
+│   ├── ControlPlaneOptions.cs            # ControlPlane:* configuration (PlatformHostNames, DefaultOrganization, PlatformAdmin, TrustedProxies)
+│   └── ControlPlaneServiceCollectionExtensions.cs  # AddControlPlane(); connection string ControlPlane{Provider}Connection, never the tenant string
+└── DependencyInjection.cs                # AddInfrastructure() service registration (calls AddControlPlane)
+
+WebApi/
+├── Tenancy/                              # OrganizationContext, OrganizationResolutionMiddleware (host -> organization before authentication)
+├── Security/                             # JWT setup with token<->host binding, UnauthorizedResponseWriter (one generic 401 body), HttpCurrentUserContext
+└── Controllers/                          # PlatformOrganizationsController (PlatformAdmin policy), OrganizationMembershipsController (Admin), OrganizationBrandingController (anonymous)
 
 _specs/
 ├── 01-requirements/                      # Problem statement, Gherkin user stories

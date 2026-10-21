@@ -41,6 +41,13 @@ public sealed class HostDenialAuditThrottle
         var now = _timeProvider.GetUtcNow();
         MaybePurge(now, window);
 
+        // Per-hash first: a flood of one repeated host must not consume the global budget and
+        // silence denials from every other host for the rest of the window.
+        if (_lastWritten.TryGetValue(hostHash, out var recent) && now - recent < window)
+        {
+            return false;
+        }
+
         // Rotating host names defeats the per-hash key, so a global cap bounds the write rate too.
         if (!TryConsumeGlobalBudget(now, window))
         {

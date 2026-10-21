@@ -172,6 +172,22 @@ public sealed class LoginServiceTests
     }
 
     [Fact]
+    public async Task Refresh_WhenTheMembershipsTenantUserIsInactive_FailsLikeLogin()
+    {
+        // Arrange — same admissibility rule on both paths: the data plane decides who is active.
+        var membership = Membership(UserRole.Clinician, MembershipStatus.Active);
+        var harness = new Harness(OrganizationResolutionKind.Tenant, membership, rotationOrganizationId: OrganizationId);
+        harness.TenantUser.IsActive = false;
+
+        // Act
+        var result = await harness.Service.RefreshAsync("refresh", null);
+
+        // Assert
+        result.Succeeded.Should().BeFalse();
+        harness.Audit.Entries.Should().Contain(entry => entry.Action == PlatformAuditAction.LoginDeniedInactiveMembership);
+    }
+
+    [Fact]
     public async Task Refresh_WhenRotationSucceedsAtTheIssuingOrganization_IssuesANewTenantSession()
     {
         // Arrange

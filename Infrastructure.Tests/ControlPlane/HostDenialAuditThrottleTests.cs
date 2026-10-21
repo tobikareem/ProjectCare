@@ -79,6 +79,24 @@ public sealed class HostDenialAuditThrottleTests
     }
 
     [Fact]
+    public void ShouldWrite_WhenOneHostFloods_DoesNotConsumeTheGlobalBudgetForOtherHosts()
+    {
+        // Arrange
+        var clock = new FakeTimeProvider();
+        var throttle = new HostDenialAuditThrottle(clock);
+        throttle.ShouldWrite("flooding-host", Window).Should().BeTrue();
+
+        // Act — repeats of the same hash are refused by the per-hash check before any budget is spent.
+        var repeats = Enumerable.Range(0, HostDenialAuditThrottle.MaxWritesPerWindow * 2)
+            .Count(_ => throttle.ShouldWrite("flooding-host", Window));
+        var otherHost = throttle.ShouldWrite("other-host", Window);
+
+        // Assert
+        repeats.Should().Be(0);
+        otherHost.Should().BeTrue();
+    }
+
+    [Fact]
     public void ShouldWrite_WhenWindowIsZero_AlwaysAllows()
     {
         // Arrange

@@ -240,7 +240,8 @@ public sealed class ControlPlaneBootstrapper
         if (existing is not null)
         {
             throw new InvalidOperationException(
-                $"'{PlatformAdminKey}:Email' already belongs to a non-administrator identity; the bootstrap never elevates an existing account.");
+                $"'{PlatformAdminKey}:Email' already belongs to a non-administrator identity; the bootstrap never elevates an existing account. "
+                + "Change the configured email to an unused address (or promote the account through a reviewed data change) before starting again.");
         }
 
         var user = new PlatformUser
@@ -306,7 +307,7 @@ public sealed class ControlPlaneBootstrapper
             throw new InvalidOperationException($"'{DefaultOrganizationKey}:DefaultTimeZone' is not a known IANA time zone id.");
         }
 
-        var hosts = NormalizeHosts(defaults.HostNames);
+        var hosts = NormalizeHosts(defaults.HostNames, _options.PlatformHostNames);
 
         // IgnoreQueryFilters: a soft-deleted organization still owns the unique slug, and the
         // backfill must say so instead of failing on a unique-index violation.
@@ -399,18 +400,27 @@ public sealed class ControlPlaneBootstrapper
         return organization.Id;
     }
 
-    private static List<string> NormalizeHosts(string[] configured)
+    private static List<string> NormalizeHosts(string[] configured, string[] platformHostNames)
     {
         if (configured.Length == 0)
         {
             throw new InvalidOperationException($"'{DefaultOrganizationKey}:HostNames' must list at least one host name.");
         }
 
+        // The middleware checks platform hosts first, so an organization host equal to one would
+        // silently become the platform surface: refuse it at startup.
+        var platformHosts = platformHostNames.Select(HostNameNormalizer.Normalize).OfType<string>().ToHashSet(StringComparer.Ordinal);
+
         var hosts = new List<string>();
         foreach (var raw in configured)
         {
             var normalized = HostNameNormalizer.Normalize(raw)
                 ?? throw new InvalidOperationException($"'{DefaultOrganizationKey}:HostNames' contains an entry that is not a valid host name.");
+            if (platformHosts.Contains(normalized))
+            {
+                throw new InvalidOperationException($"'{DefaultOrganizationKey}:HostNames' contains a host that is also listed in 'ControlPlane:PlatformHostNames'.");
+            }
+
             if (!hosts.Contains(normalized, StringComparer.Ordinal))
             {
                 hosts.Add(normalized);

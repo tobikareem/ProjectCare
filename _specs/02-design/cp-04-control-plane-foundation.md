@@ -643,6 +643,7 @@ Validation (FluentValidation, Application): slug `^[a-z0-9](?:[a-z0-9-]{1,38}[a-
 11. FR-016 membership create → temporary password always required; response never reveals identity existence (D-CP04-12).
 12. FR-014 domains → host assignment guards and primary-host rules (D-CP04-13).
 13. FR-012 branding → resolved from the API request host; same-origin is the deployment target (D-CP04-14).
+14. Final-review hardening (2026-10-21): refresh applies the same admissibility rule as login (inactive tenant profile cannot refresh); `Repository.UpdateAsync` leaves tracked entities to change tracking so a login's `LastLoginAt` write cannot overwrite a concurrent deactivation; unknown-email logins burn a password hash (no timing oracle); the host-denial throttle checks the per-hash window before the global budget; a default-organization host equal to a platform host fails startup. Deferred to CP-05 (listed on the Sprint 8 board): absolute refresh lifetime, legacy-copy marker, membership concurrency token, relational rotation test.
 
 ---
 

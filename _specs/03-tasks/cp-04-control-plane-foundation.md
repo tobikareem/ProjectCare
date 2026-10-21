@@ -386,7 +386,7 @@
 
 | Task | Status | Notes |
 |---|---|---|
-| TASK-079 … TASK-099 | Not Started | Tracked per row in `_specs/sprints/sprint-08-tasks.md` |
+| TASK-079 … TASK-099 | Done 2026-10-21 | Evidence per row in `_specs/sprints/sprint-08-tasks.md`; TASK-100 (legacy table drop) deferred to CP-05 after S8-TASK-003 |
 
 ## Global Compliance Acceptance
 

@@ -76,18 +76,8 @@ public sealed class LoginService : ILoginService
             return LoginResult.Failed;
         }
 
-        if (!membership.IsActive)
-        {
-            await AuditAsync(PlatformAuditAction.LoginDeniedInactiveMembership, user.UserId.Value, organizationId, correlationId, cancellationToken);
-            return LoginResult.Failed;
-        }
-
-        // A membership whose tenant profile no longer exists (a rolled-back provisioning, a removed
-        // user) must not log in: the data plane is the authority on whether the person is active there.
-        var tenantUser = membership.TenantUserId is null
-            ? null
-            : await _tenant.Users.GetByIdAsync(membership.TenantUserId.Value, cancellationToken);
-        if (membership.TenantUserId is not null && (tenantUser is null || !tenantUser.IsActive))
+        var (admissible, tenantUser) = await IsAdmissibleAsync(membership, cancellationToken);
+        if (!admissible)
         {
             await AuditAsync(PlatformAuditAction.LoginDeniedInactiveMembership, user.UserId.Value, organizationId, correlationId, cancellationToken);
             return LoginResult.Failed;
@@ -129,8 +119,16 @@ public sealed class LoginService : ILoginService
         }
 
         var membership = await _controlPlane.Memberships.GetByIdAsync(rotation.MembershipId.Value, cancellationToken);
-        if (membership is null || !membership.IsActive || membership.OrganizationId != binding.OrganizationId)
+        if (membership is null || membership.OrganizationId != binding.OrganizationId)
         {
+            return LoginResult.Failed;
+        }
+
+        // Same admissibility rule as login: an inactive membership or tenant profile cannot refresh.
+        var (admissible, _) = await IsAdmissibleAsync(membership, cancellationToken);
+        if (!admissible)
+        {
+            await AuditAsync(PlatformAuditAction.LoginDeniedInactiveMembership, rotation.User.UserId.Value, membership.OrganizationId, correlationId, cancellationToken);
             return LoginResult.Failed;
         }
 
@@ -143,6 +141,25 @@ public sealed class LoginService : ILoginService
             membership => membership.OrganizationId == organizationId && membership.PlatformUserId == platformUserId,
             cancellationToken);
         return rows.FirstOrDefault();
+    }
+
+    // A membership whose tenant profile no longer exists (a rolled-back provisioning, a removed
+    // user) or is inactive must not log in or refresh: the data plane is the authority on whether
+    // the person is active there.
+    private async Task<(bool Admissible, User? TenantUser)> IsAdmissibleAsync(OrganizationMembership membership, CancellationToken cancellationToken)
+    {
+        if (!membership.IsActive)
+        {
+            return (false, null);
+        }
+
+        if (membership.TenantUserId is null)
+        {
+            return (true, null);
+        }
+
+        var tenantUser = await _tenant.Users.GetByIdAsync(membership.TenantUserId.Value, cancellationToken);
+        return tenantUser is { IsActive: true } ? (true, tenantUser) : (false, null);
     }
 
     private async Task RecordLoginAsync(OrganizationMembership membership, User? tenantUser, CancellationToken cancellationToken)

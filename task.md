@@ -1,7 +1,7 @@
 # CarePath Sprint Execution Tracker
 
 Last updated: 2026-07-06
-Status: Sprint 6 complete - Sprint 8 (CP-04 Control Plane Foundation) approved 2026-10-21 and in progress; Sprint 7 not started
+Status: Sprint 6 complete - Sprint 8 (CP-04 Control Plane Foundation) implemented 2026-10-21, awaiting Tobi sign-offs (S8-TASK-002/003); Sprint 7 not started
 
 This tracker is the working checklist for moving CarePath from a Domain-only foundation into a usable backend, Blazor web app, and MAUI Blazor Hybrid mobile app. The detailed sprint specs live in `_specs/sprints/`.
 
@@ -23,7 +23,7 @@ Build one shared healthcare operations backbone for:
 | Sprint 5 | CarePath Transitions Backend MVP | [x] Complete | `_specs/sprints/sprint-05-transitions-backend-mvp.md` |
 | Sprint 6 | Blazor Web App MVP | [x] Complete (board `_specs/sprints/sprint-06-tasks.md`, all S6 tasks Done) | `_specs/sprints/sprint-06-blazor-web-mvp.md` |
 | Sprint 7 | MAUI Mobile MVP, Notifications, AI & Hardening | [ ] Not Started | `_specs/sprints/sprint-07-mobile-notifications-ai-hardening.md` |
-| Sprint 8 | Control Plane Foundation (CP-04) | [ ] In Progress (approved 2026-10-21) | `_specs/sprints/sprint-08-control-plane-foundation.md` |
+| Sprint 8 | Control Plane Foundation (CP-04) | [x] Implemented 2026-10-21 (Tobi sign-offs S8-TASK-002/003 open) | `_specs/sprints/sprint-08-control-plane-foundation.md` |
 
 ## Cross-Sprint Acceptance Gates
 

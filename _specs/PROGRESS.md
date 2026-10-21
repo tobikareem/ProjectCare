@@ -89,11 +89,11 @@ PM agent still owns sprint board/spec close-out. Do not mark Sprint 5 complete h
 
 ## CP-04 - Control Plane Foundation (Sprint 8)
 
-**Status**: Specs approved 2026-10-21; implementation in progress on `claude/friendly-brown-v1nolz`
+**Status**: Implemented 2026-10-21 on `claude/friendly-brown-v1nolz` (six slices, TASK-079..099); awaiting Tobi's classification sign-off (S8-TASK-002) and HomeLab login verification (S8-TASK-003), which gates the CP-05 legacy Identity table drop
 
 Separate non-PHI control plane (organizations, host mapping, branding, memberships, data-plane locator, platform identity, append-only audit), host-based organization resolution before authentication, organization-bound tokens, PlatformAdmin and membership endpoints, backfill of the existing deployment as tenant one. Specs: `_specs/01-requirements/cp-04-control-plane-foundation.md`, `_specs/02-design/cp-04-control-plane-foundation.md` (D-CP04-01..11), `_specs/03-tasks/cp-04-control-plane-foundation.md` (TASK-079..099). Board: `_specs/sprints/sprint-08-tasks.md`.
 
-Slices: 1 persistence -> 2 host resolution -> 3 identity move -> 4 admin APIs -> 5 client/web -> 6 two-organization verification. Status per slice is recorded on the Sprint 8 board.
+Slices: 1 persistence -> 2 host resolution -> 3 identity move -> 4 admin APIs -> 5 client/web -> 6 two-organization verification — all done; evidence per row on the Sprint 8 board. Final: build 0 warnings; tests Domain 297 / Application 646 / Infrastructure 177 / Web 68; `TwoOrganizationIntegrationTests` proves distinct tokens per host, cross-host 401 without a controller invocation, byte-identical 401s, immediate suspension, refresh binding, membership isolation and per-host branding in-process. Design decisions D-CP04-01..14.
 
 ---
 

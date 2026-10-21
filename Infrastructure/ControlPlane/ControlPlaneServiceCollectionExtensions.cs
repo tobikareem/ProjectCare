@@ -58,6 +58,53 @@ public static class ControlPlaneServiceCollectionExtensions
         DatabaseProvider provider,
         IConfiguration optionsSection)
     {
+        var sqlServerMigrationsAssembly = typeof(ControlPlaneDbContext).Assembly.GetName().Name;
+
+        return services.AddControlPlane(
+            options =>
+            {
+                switch (provider)
+                {
+                    case DatabaseProvider.PostgreSql:
+                        options.UseNpgsql(connectionString, npgsqlOptions =>
+                        {
+                            npgsqlOptions.MigrationsAssembly(PostgreSqlMigrationsAssembly);
+                            npgsqlOptions.EnableRetryOnFailure(
+                                maxRetryCount: 3,
+                                maxRetryDelay: TimeSpan.FromSeconds(5),
+                                errorCodesToAdd: null);
+                        });
+                        break;
+
+                    case DatabaseProvider.SqlServer:
+                    default:
+                        options.UseSqlServer(connectionString, sqlOptions =>
+                        {
+                            sqlOptions.MigrationsAssembly(sqlServerMigrationsAssembly);
+                            sqlOptions.EnableRetryOnFailure(
+                                maxRetryCount: 3,
+                                maxRetryDelay: TimeSpan.FromSeconds(5),
+                                errorNumbersToAdd: null);
+                        });
+                        break;
+                }
+            },
+            optionsSection);
+    }
+
+    /// <summary>
+    /// Adds control-plane services over a caller-configured context (the production overloads
+    /// above, or an in-memory provider in the integration suite).
+    /// </summary>
+    /// <param name="services">Service collection.</param>
+    /// <param name="configureContext">Configures the <see cref="ControlPlaneDbContext"/> provider.</param>
+    /// <param name="optionsSection">The <c>ControlPlane</c> configuration section; may be empty.</param>
+    /// <returns>The same service collection for chaining.</returns>
+    public static IServiceCollection AddControlPlane(
+        this IServiceCollection services,
+        Action<DbContextOptionsBuilder> configureContext,
+        IConfiguration optionsSection)
+    {
         services.AddOptions<ControlPlaneOptions>()
             .Bind(optionsSection)
             .Validate(
@@ -65,41 +112,10 @@ public static class ControlPlaneServiceCollectionExtensions
                 "ControlPlane:BrandingCacheSeconds and ControlPlane:HostDenialAuditWindowSeconds must be non-negative.")
             .ValidateOnStart();
 
-        var sqlServerMigrationsAssembly = typeof(ControlPlaneDbContext).Assembly.GetName().Name;
-
         // The scoped context serves the unit of work; the scoped factory gives the audit logger a
         // context of its own so an audit row never joins (or is lost with) a business transaction.
-        services.AddDbContext<ControlPlaneDbContext>(ConfigureProvider);
-        services.AddDbContextFactory<ControlPlaneDbContext>(ConfigureProvider, ServiceLifetime.Scoped);
-
-        void ConfigureProvider(DbContextOptionsBuilder options)
-        {
-            switch (provider)
-            {
-                case DatabaseProvider.PostgreSql:
-                    options.UseNpgsql(connectionString, npgsqlOptions =>
-                    {
-                        npgsqlOptions.MigrationsAssembly(PostgreSqlMigrationsAssembly);
-                        npgsqlOptions.EnableRetryOnFailure(
-                            maxRetryCount: 3,
-                            maxRetryDelay: TimeSpan.FromSeconds(5),
-                            errorCodesToAdd: null);
-                    });
-                    break;
-
-                case DatabaseProvider.SqlServer:
-                default:
-                    options.UseSqlServer(connectionString, sqlOptions =>
-                    {
-                        sqlOptions.MigrationsAssembly(sqlServerMigrationsAssembly);
-                        sqlOptions.EnableRetryOnFailure(
-                            maxRetryCount: 3,
-                            maxRetryDelay: TimeSpan.FromSeconds(5),
-                            errorNumbersToAdd: null);
-                    });
-                    break;
-            }
-        }
+        services.AddDbContext<ControlPlaneDbContext>(configureContext);
+        services.AddDbContextFactory<ControlPlaneDbContext>(configureContext, ServiceLifetime.Scoped);
 
         // Identity core only: no roles (D-CP04-04), no SignInManager (no cookie scheme dependency).
         services

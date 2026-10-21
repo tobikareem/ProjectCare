@@ -23,9 +23,15 @@ public sealed class PlatformIdentityService : IIdentityService
     private static readonly TimeSpan RefreshTokenLifetime = TimeSpan.FromDays(7);
 
     // A client that retries a dropped refresh response, or two tabs refreshing together, presents
-    // the spent token again within seconds. That is not theft; only reuse after the grace window
-    // revokes the family.
+    // the spent token again within seconds. That is not treated as theft: inside the window the
+    // replay simply fails (the caller still gets the generic 401 and must sign in again) without
+    // revoking the whole family; reuse after the window revokes every token of the family.
     private static readonly TimeSpan ReuseGraceWindow = TimeSpan.FromSeconds(30);
+
+    // Hashed once per process so an unknown email costs the same password-hash work as a wrong
+    // password: response bodies are already identical, this removes the timing oracle.
+    private static readonly PlatformUser TimingDecoy = new() { UserName = "decoy", Email = "decoy" };
+    private static string? _decoyHash;
 
     private readonly ControlPlaneDbContext _context;
     private readonly UserManager<PlatformUser> _userManager;
@@ -45,6 +51,12 @@ public sealed class PlatformIdentityService : IIdentityService
         _timeProvider = timeProvider;
     }
 
+    private void BurnPasswordHash(string password)
+    {
+        _decoyHash ??= _userManager.PasswordHasher.HashPassword(TimingDecoy, Guid.NewGuid().ToString("N"));
+        _userManager.PasswordHasher.VerifyHashedPassword(TimingDecoy, _decoyHash, password);
+    }
+
     /// <inheritdoc />
     public async Task<IdentityUserResult> ValidateCredentialsAsync(string email, string password, CancellationToken cancellationToken = default)
     {
@@ -56,6 +68,7 @@ public sealed class PlatformIdentityService : IIdentityService
         var user = await _userManager.FindByEmailAsync(email.Trim());
         if (user is null)
         {
+            BurnPasswordHash(password);
             return IdentityUserResult.Failed(InvalidCredentials);
         }
 

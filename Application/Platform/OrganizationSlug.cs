@@ -26,6 +26,7 @@ public static partial class OrganizationSlug
         && !slug.Contains("--", StringComparison.Ordinal)
         && !Reserved.Contains(slug);
 
-    [GeneratedRegex("^[a-z0-9](?:[a-z0-9-]{1,38}[a-z0-9])$")]
+    // \z (not $) so a trailing newline can never pass.
+    [GeneratedRegex(@"^[a-z0-9](?:[a-z0-9-]{1,38}[a-z0-9])\z")]
     private static partial Regex SlugPattern();
 }

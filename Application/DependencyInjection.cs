@@ -11,6 +11,11 @@ using CarePath.Application.Clients.Validators;
 using CarePath.Application.Identity.Services;
 using CarePath.Application.Identity.Validators;
 using CarePath.Application.Organization.Services;
+using CarePath.Application.Organization.Validators;
+using CarePath.Application.Platform.Services;
+using CarePath.Application.Platform.Validators;
+using CarePath.Contracts.Organization;
+using CarePath.Contracts.Platform;
 using CarePath.Application.Scheduling.Services;
 using CarePath.Application.Scheduling.Queries;
 using CarePath.Application.Scheduling.Validators;
@@ -50,6 +55,14 @@ public static class DependencyInjection
         services.AddScoped<IOrganizationBrandingQuery, OrganizationBrandingQuery>();
         services.AddScoped<IOrganizationMembershipService, OrganizationMembershipService>();
         services.AddScoped<ILoginService, LoginService>();
+        services.AddScoped<IPlatformOrganizationService, PlatformOrganizationService>();
+        services.AddScoped<IValidator<RegisterOrganizationRequest>, RegisterOrganizationRequestValidator>();
+        services.AddScoped<IValidator<UpdateOrganizationRequest>, UpdateOrganizationRequestValidator>();
+        services.AddScoped<IValidator<SuspendOrganizationRequest>, SuspendOrganizationRequestValidator>();
+        services.AddScoped<IValidator<AddOrganizationDomainRequest>, AddOrganizationDomainRequestValidator>();
+        services.AddScoped<IValidator<UpdateOrganizationBrandingRequest>, UpdateOrganizationBrandingRequestValidator>();
+        services.AddScoped<IValidator<CreateMembershipRequest>, CreateMembershipRequestValidator>();
+        services.AddScoped<IValidator<UpdateMembershipRoleRequest>, UpdateMembershipRoleRequestValidator>();
 
         services.AddScoped<IValidator<CreateCaregiverRequest>, CreateCaregiverRequestValidator>();
         services.AddScoped<IValidator<CreateStaffUserRequest>, CreateStaffUserRequestValidator>();

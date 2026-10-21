@@ -466,7 +466,7 @@ Refresh (`RotateRefreshTokenAsync`): hash → lookup; require not expired, not r
 |---|---|
 | `ILoginService` / `LoginService` | Login and refresh as above. `AuthController` becomes a thin adapter. |
 | `IOrganizationMembershipService` / `OrganizationMembershipService` | `ListAsync` (paged, own organization only), `CreateAsync` (existing platform identity → link; new email → provision `PlatformUser` with temporary password, then tenant `User` with `Id = PlatformUser.Id` when the organization is the backfilled one, `TenantUserId` set; compensating soft delete of the membership if the tenant write fails — documented two-phase write, no distributed transaction), `ChangeRoleAsync`, `SetStatusAsync`. Last-active-Admin guard on role change and deactivation (409 `membership.last_active_admin`). Every change: `SecurityVersion++`, platform audit, and mirror to tenant `User.Role` / `User.IsActive` while CP-04 keeps those columns (D-CP04-09). Organization always comes from `ICurrentUserContext.OrganizationId`, never from the request. |
-| `IPlatformOrganizationService` / `PlatformOrganizationService` | `RegisterAsync` (→ `Pending`/`Registered`; primary domain `{slug}.{ControlPlane:PlatformBaseDomain}` Verified; default branding; audit), `ListAsync`, `GetAsync`, `UpdateAsync` (names, time zone, region), `SuspendAsync(reason)`, `ReactivateAsync` (only `Suspended → Active`, and only when `Provisioned`; Pending organizations cannot be activated in CP-04 — FR-015), `AddDomainAsync` (system subdomains Verified; other hosts Pending — verification workflow is a later spec), `RemoveDomainAsync` (soft; never the last Verified domain), `GetBrandingAsync`, `UpdateBrandingAsync`. |
+| `IPlatformOrganizationService` / `PlatformOrganizationService` | `RegisterAsync` (→ `Pending`/`Registered`; primary domain `{slug}.{ControlPlane:PlatformBaseDomain}` Verified; default branding; audit), `ListAsync`, `GetAsync`, `UpdateAsync` (names, time zone, region), `SuspendAsync(reason)`, `ReactivateAsync` (only `Suspended → Active`, and only when `Provisioned`; Pending organizations cannot be activated in CP-04 — FR-015), `AddDomainAsync` (system subdomains Verified; other hosts Pending — verification workflow is a later spec; platform/base-domain/IP hosts rejected and only Verified hosts may be primary, D-CP04-13), `RemoveDomainAsync` (soft; never the last Verified domain nor the primary host), `GetBrandingAsync`, `UpdateBrandingAsync`. |
 | `IOrganizationBrandingQuery` | Anonymous branding read for the resolved tenant through `IBrandingCache` (60 s, invalidated on `UpdateBrandingAsync`/`UpdateAsync`/`SuspendAsync`). |
 | `AdminUserManagementService` (existing) | `CreateStaffUserAsync` → `IOrganizationMembershipService.CreateAsync`; `UpdateRoleAsync` → `ChangeRoleAsync`; `UpdateStatusAsync` → `SetStatusAsync`. Routes and DTOs unchanged. `IIdentityRoleManagementService` deleted. |
 
@@ -611,6 +611,16 @@ Validation (FluentValidation, Application): slug `^[a-z0-9](?:[a-z0-9-]{1,38}[a-
 **Reason**: Adding `PlatformAdmin` to the Contracts `UserRole` would break Domain parity and leak a control-plane role into tenant checks.  
 **Trade-off**: Two Web files handle the nullable role.
 
+### D-CP04-12 — Membership create never reveals whether an identity exists (slice 4 review, 2026-10-21)
+**Decision**: `CreateMembershipRequest.TemporaryPassword` is always required (8–128) and ignored when the email already belongs to a platform identity; the response DTO is built from the request (never from the directory); the write order is control plane first (identity when new, then membership) and tenant profile second, with compensating soft delete of the membership (`CompensateAsync` for a provisioned identity) so the filtered unique indexes let a retry succeed.  
+**Reason**: With the original "password required only for new emails" rule an organization Admin could enumerate every email registered anywhere on the platform (400 vs 201) and read another organization's display name.  
+**Trade-off**: Linking an existing identity into an organization still happens without that person's consent; an invitation/acceptance flow is deferred to CP-05 and recorded there.
+
+### D-CP04-13 — Host assignment guards (slice 4 review, 2026-10-21)
+**Decision**: `AddDomainAsync` rejects (generic 400) any host that is a configured platform host, the platform base domain, any label under the base domain other than the organization's own `{slug}.{base}`, or an IP literal; only a Verified host may be marked primary (409 `organization.domain_unverified`); `RemoveDomainAsync` refuses the primary host (409 `organization.primary_domain`) in addition to the last Verified host. Branding reads never write (defaults are returned until the first update). `LogoStorageKey` must be a relative, traversal-free key; `DefaultTimeZone` must be an IANA id (`Area/Location` or `UTC`).  
+**Reason**: Pending hosts are not resolvable today, but once the verification workflow ships an unguarded host would be a takeover of another organization's subdomain or of the platform host itself.  
+**Trade-off**: `IPlatformDomainSettings` exposes the platform host set to the Application layer.
+
 ---
 
 ## Requirement Amendments (recorded here; applied to the requirements spec)
@@ -625,6 +635,8 @@ Validation (FluentValidation, Application): slug `^[a-z0-9](?:[a-z0-9-]{1,38}[a-
 8. `AuthTokenResponse` shape (D-CP04-11).
 9. `OrganizationMembership` gains `SecurityVersion` (D-CP04-05).
 10. Development seed adds `helpinghands` as a second Active organization sharing the dev database (dev-only).
+11. FR-016 membership create → temporary password always required; response never reveals identity existence (D-CP04-12).
+12. FR-014 domains → host assignment guards and primary-host rules (D-CP04-13).
 
 ---
 

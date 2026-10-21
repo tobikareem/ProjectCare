@@ -1,3 +1,5 @@
+using CarePath.Contracts.Common;
+using CarePath.Contracts.Organization;
 using CarePath.Domain.Enumerations;
 
 namespace CarePath.Application.Organization.Services;
@@ -22,4 +24,21 @@ public interface IOrganizationMembershipService
     /// <param name="active">True to activate, false to deactivate.</param>
     /// <param name="cancellationToken">Token to cancel the asynchronous operation.</param>
     Task SetStatusForTenantUserAsync(Guid tenantUserId, bool active, CancellationToken cancellationToken = default);
+
+    /// <summary>Lists the current organization's memberships.</summary>
+    Task<PagedResult<MembershipDto>> ListAsync(PagedRequest paging, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Creates a membership in the current organization: links an existing platform identity or
+    /// creates a new one, then creates the tenant profile with the same id when none exists.
+    /// Control plane first, tenant second, with compensating soft delete of the membership; no
+    /// distributed transaction. The response never reveals whether the identity pre-existed.
+    /// </summary>
+    Task<MembershipDto> CreateAsync(CreateMembershipRequest request, CancellationToken cancellationToken = default);
+
+    /// <summary>Changes a membership's role by membership id (scoped to the current organization) and mirrors the tenant profile.</summary>
+    Task<MembershipDto> ChangeRoleAsync(Guid membershipId, UpdateMembershipRoleRequest request, CancellationToken cancellationToken = default);
+
+    /// <summary>Activates or deactivates a membership by id (scoped to the current organization) and mirrors the tenant profile.</summary>
+    Task<MembershipDto> SetStatusAsync(Guid membershipId, UpdateMembershipStatusRequest request, CancellationToken cancellationToken = default);
 }

@@ -1041,6 +1041,8 @@ public class Sprint4OperationsServiceTests
         services.AddSingleton(Mock.Of<IIdentityService>());
         services.AddSingleton(Mock.Of<IJwtTokenService>());
         services.AddSingleton(Mock.Of<IPlatformAuditLogger>());
+        services.AddSingleton(Mock.Of<IPlatformUserDirectory>());
+        services.AddSingleton(Mock.Of<CarePath.Application.Abstractions.Tenancy.IPlatformDomainSettings>());
         services.AddSingleton(Mock.Of<IClientAccessEvaluator>());
         services.AddSingleton(Mock.Of<IObjectAuthorizationService>());
         services.AddSingleton(Mock.Of<IPhiAuditLogger>());

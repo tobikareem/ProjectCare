@@ -128,6 +128,8 @@ public static class ControlPlaneServiceCollectionExtensions
         services.AddScoped<IOrganizationHostResolver, EfOrganizationHostResolver>();
         services.AddScoped<IIdentityService, PlatformIdentityService>();
         services.AddScoped<IIdentityProvisioningService, PlatformIdentityProvisioningService>();
+        services.AddScoped<IPlatformUserDirectory, PlatformUserDirectory>();
+        services.AddSingleton<IPlatformDomainSettings, PlatformDomainSettings>();
         services.AddScoped<ControlPlaneBootstrapper>();
         services.AddMemoryCache();
         services.AddSingleton<IBrandingCache, MemoryBrandingCache>();

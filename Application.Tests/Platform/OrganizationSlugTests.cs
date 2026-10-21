@@ -26,6 +26,8 @@ public sealed class OrganizationSlugTests
     [InlineData("bright--care")]
     [InlineData("bright care")]
     [InlineData("bright.care")]
+    [InlineData("brightcare\n")]
+    [InlineData("brightcare ")]
     public void IsValid_WhenSlugIsMalformed_ReturnsFalse(string? slug)
     {
         OrganizationSlug.IsValid(slug).Should().BeFalse();

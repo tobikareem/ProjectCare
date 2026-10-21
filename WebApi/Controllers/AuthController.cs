@@ -1,9 +1,8 @@
-using CarePath.Application.Abstractions.Auth;
+using CarePath.Application.Auth.Services;
 using CarePath.Contracts.Auth;
 using CarePath.WebApi.Security;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using ContractUserRole = CarePath.Contracts.Enumerations.UserRole;
 
 namespace CarePath.WebApi.Controllers;
 
@@ -11,13 +10,11 @@ namespace CarePath.WebApi.Controllers;
 [Route("api/auth")]
 public sealed class AuthController : ControllerBase
 {
-    private readonly IIdentityService identityService;
-    private readonly IJwtTokenService jwtTokenService;
+    private readonly ILoginService loginService;
 
-    public AuthController(IIdentityService identityService, IJwtTokenService jwtTokenService)
+    public AuthController(ILoginService loginService)
     {
-        this.identityService = identityService;
-        this.jwtTokenService = jwtTokenService;
+        this.loginService = loginService;
     }
 
     [HttpPost("login")]
@@ -26,23 +23,8 @@ public sealed class AuthController : ControllerBase
         [FromBody] LoginRequest request,
         CancellationToken cancellationToken)
     {
-        var user = await identityService.ValidateCredentialsAsync(
-            request.Email,
-            request.Password,
-            cancellationToken);
-
-        if (!user.Succeeded)
-        {
-            return InvalidCredentials();
-        }
-
-        if (!TryGetRole(user, out var role))
-        {
-            return InvalidCredentials();
-        }
-
-        var refreshToken = await identityService.IssueRefreshTokenAsync(user.UserId!.Value, cancellationToken);
-        return Ok(await CreateTokenResponseAsync(user, refreshToken, role, cancellationToken));
+        var result = await loginService.LoginAsync(request.Email, request.Password, HttpContext.TraceIdentifier, cancellationToken);
+        return result.Succeeded ? Ok(result.Token) : InvalidCredentials();
     }
 
     [HttpPost("refresh")]
@@ -51,55 +33,8 @@ public sealed class AuthController : ControllerBase
         [FromBody] RefreshTokenRequest request,
         CancellationToken cancellationToken)
     {
-        var rotation = await identityService.RotateRefreshTokenAsync(request.RefreshToken, cancellationToken);
-
-        if (!rotation.Succeeded || rotation.User is null || rotation.RefreshToken is null)
-        {
-            return InvalidCredentials();
-        }
-
-        if (!TryGetRole(rotation.User, out var role))
-        {
-            return InvalidCredentials();
-        }
-
-        return Ok(await CreateTokenResponseAsync(rotation.User, rotation.RefreshToken, role, cancellationToken));
-    }
-
-    private async Task<AuthTokenResponse> CreateTokenResponseAsync(
-        IdentityUserResult user,
-        string refreshToken,
-        ContractUserRole role,
-        CancellationToken cancellationToken)
-    {
-        var jwt = await jwtTokenService.CreateTokenAsync(
-            new JwtTokenRequest(
-                user.UserId!.Value,
-                user.Email ?? string.Empty,
-                user.Roles,
-                HttpContext.TraceIdentifier),
-            cancellationToken);
-
-        return new AuthTokenResponse
-        {
-            AccessToken = jwt.AccessToken,
-            ExpiresAtUtc = jwt.ExpiresAtUtc,
-            RefreshToken = refreshToken,
-            Role = role,
-            DisplayName = user.DisplayName ?? string.Empty,
-        };
-    }
-
-    private static bool TryGetRole(IdentityUserResult user, out ContractUserRole role)
-    {
-        role = default;
-
-        if (user.UserId is null || string.IsNullOrWhiteSpace(user.Email) || user.Roles.Count != 1)
-        {
-            return false;
-        }
-
-        return Enum.TryParse(user.Roles.Single(), ignoreCase: false, out role);
+        var result = await loginService.RefreshAsync(request.RefreshToken, HttpContext.TraceIdentifier, cancellationToken);
+        return result.Succeeded ? Ok(result.Token) : InvalidCredentials();
     }
 
     // One body for every failure mode, shared with host resolution and the bearer challenge.

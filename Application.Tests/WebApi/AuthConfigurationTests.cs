@@ -52,7 +52,25 @@ public sealed class AuthConfigurationTests
                     rolesRequirement.AllowedRoles.Contains(role, StringComparer.Ordinal))
                 .Should()
                 .BeTrue($"role policy {role} must require the matching role");
+            policy.Requirements
+                .Any(requirement =>
+                    requirement is ClaimsAuthorizationRequirement claims &&
+                    claims.ClaimType == CarePathClaimTypes.TokenKind &&
+                    claims.AllowedValues!.Contains(CarePathClaimTypes.TenantTokenKind))
+                .Should()
+                .BeTrue($"role policy {role} must require a tenant-kind token");
         }
+
+        authorizationOptions.DefaultPolicy.Requirements.OfType<ClaimsAuthorizationRequirement>()
+            .Should().ContainSingle(claims => claims.ClaimType == CarePathClaimTypes.TokenKind && claims.AllowedValues!.Contains(CarePathClaimTypes.TenantTokenKind));
+
+        var platformPolicy = authorizationOptions.GetPolicy(CarePathAuthorizationPolicies.PlatformAdmin);
+        platformPolicy.Should().NotBeNull();
+        platformPolicy!.Requirements.OfType<RolesAuthorizationRequirement>()
+            .Should().ContainSingle(roles => roles.AllowedRoles.Contains(ApplicationRoles.PlatformAdmin));
+        platformPolicy.Requirements.OfType<ClaimsAuthorizationRequirement>()
+            .Should().ContainSingle(claims => claims.ClaimType == CarePathClaimTypes.TokenKind && claims.AllowedValues!.Contains(CarePathClaimTypes.PlatformTokenKind));
+        jwtOptions.Events?.OnTokenValidated.Should().NotBeNull("token/host binding must be enforced at validation time");
     }
 
     private static IConfiguration CreateJwtConfiguration()

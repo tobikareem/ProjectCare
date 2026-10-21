@@ -4,7 +4,7 @@ using CarePath.Infrastructure;
 using CarePath.Infrastructure.ControlPlane.Bootstrap;
 using CarePath.Infrastructure.ControlPlane.Persistence;
 using CarePath.WebApi.Tenancy;
-using CarePath.Infrastructure.Identity;
+using CarePath.Infrastructure.ControlPlane.Identity;
 using CarePath.Infrastructure.Persistence;
 using CarePath.WebApi.Diagnostics;
 using CarePath.WebApi.Middleware;
@@ -141,23 +141,37 @@ using (var scope = app.Services.CreateScope())
         context.Database.ProviderName,
         canConnect ? "SUCCEEDED" : "FAILED");
 
-    // Each provider now has its own migrations assembly, so this is configuration-driven only.
-    // The control plane migrates first: host resolution and (from CP-04 slice 3) identity depend
-    // on it before any tenant table is touched.
-    if (app.Configuration.GetValue<bool>("Database:AutoMigrate"))
-    {
-        var userManager = scope.ServiceProvider.GetRequiredService<UserManager<ApplicationUser>>();
-        var roleManager = scope.ServiceProvider.GetRequiredService<RoleManager<IdentityRole<Guid>>>();
+    // CP-04 startup sequence (design spec, "Startup Sequence"): the control plane migrates
+    // first, legacy identities are copied before the tenant migration drops them from the model,
+    // and the idempotent backfill steps run on every startup regardless of AutoMigrate.
+    var autoMigrate = app.Configuration.GetValue<bool>("Database:AutoMigrate");
+    var bootstrapper = scope.ServiceProvider.GetRequiredService<ControlPlaneBootstrapper>();
 
+    if (autoMigrate)
+    {
         await controlPlane.Database.MigrateAsync();
-        await context.Database.MigrateAsync();
-        await CarePathDbContextSeed.SeedAsync(context, userManager, roleManager, builder.Configuration, app.Environment);
     }
 
-    // Idempotent backfill of the existing deployment as tenant one (CP-04 FR-020). Runs on every
-    // startup regardless of AutoMigrate; fails closed when an empty control plane has no defaults.
-    var bootstrapper = scope.ServiceProvider.GetRequiredService<ControlPlaneBootstrapper>();
-    await bootstrapper.EnsureDefaultOrganizationAsync();
+    await bootstrapper.CopyLegacyIdentityAsync();
+
+    if (autoMigrate)
+    {
+        await context.Database.MigrateAsync();
+    }
+
+    var defaultOrganizationId = await bootstrapper.EnsureDefaultOrganizationAsync();
+    if (defaultOrganizationId is not null)
+    {
+        await bootstrapper.EnsureMembershipsAsync(defaultOrganizationId.Value);
+    }
+
+    await bootstrapper.EnsurePlatformAdminAsync();
+
+    if (autoMigrate)
+    {
+        var userManager = scope.ServiceProvider.GetRequiredService<UserManager<PlatformUser>>();
+        await CarePathDbContextSeed.SeedAsync(context, controlPlane, userManager, builder.Configuration, app.Environment);
+    }
 }
 
 app.UseCors(webClientCorsPolicy);

@@ -102,37 +102,48 @@ public sealed class ClientOperationsService : IClientOperationsService
             EstimatedWeeklyHours = request.EstimatedWeeklyHours,
         };
 
-        await unitOfWork.ExecuteInTransactionAsync(
-            async token =>
-            {
-                if (isNewUser)
+        try
+        {
+            await unitOfWork.ExecuteInTransactionAsync(
+                async token =>
                 {
-                    await unitOfWork.Users.AddAsync(domainUser, token);
-                }
-                else
-                {
-                    await unitOfWork.Users.UpdateAsync(domainUser, token);
-                }
-                await unitOfWork.Clients.AddAsync(client, token);
-                await unitOfWork.SaveChangesAsync(token);
-
-                var provisioningResult = await identityProvisioning.ProvisionUserAsync(
-                    new IdentityProvisioningRequest(
-                        domainUser.Id,
-                        domainUser.Email,
-                        domainUser.PhoneNumber,
-                        request.TemporaryPassword!,
-                        ApplicationRoles.Client),
-                    token);
-
-                if (!provisioningResult.Succeeded)
-                {
-                    throw new ValidationException("The account could not be provisioned.");
-                }
-
-                await AuditAsync(ProtectedResourceType.Client, client.Id, AuditAction.Create, token);
-            },
-            cancellationToken);
+                    if (isNewUser)
+                    {
+                        await unitOfWork.Users.AddAsync(domainUser, token);
+                    }
+                    else
+                    {
+                        await unitOfWork.Users.UpdateAsync(domainUser, token);
+                    }
+                    await unitOfWork.Clients.AddAsync(client, token);
+                    await unitOfWork.SaveChangesAsync(token);
+    
+                    var provisioningResult = await identityProvisioning.ProvisionUserAsync(
+                        new IdentityProvisioningRequest(
+                            domainUser.Id,
+                            domainUser.Email,
+                            domainUser.PhoneNumber,
+                            domainUser.FullName,
+                            request.TemporaryPassword!,
+                            ApplicationRoles.Client),
+                        token);
+    
+                    if (!provisioningResult.Succeeded)
+                    {
+                        throw new ValidationException("The account could not be provisioned.");
+                    }
+    
+                    await AuditAsync(ProtectedResourceType.Client, client.Id, AuditAction.Create, token);
+                },
+                cancellationToken);
+        }
+        catch
+        {
+            // The tenant transaction rolled back after identity provisioning committed to the control
+            // plane; deactivate the membership so no login outlives the tenant user (D-CP04-02).
+            await identityProvisioning.CompensateAsync(domainUser.Id, cancellationToken);
+            throw;
+        }
 
         return client.ToDetailDto(includeOperationalFields: HasOperationalClientDetailAccess());
     }

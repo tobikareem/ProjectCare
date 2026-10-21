@@ -1,8 +1,12 @@
+using System.Data.Common;
 using CarePath.Application.Abstractions.Audit;
 using CarePath.Application.Platform;
 using CarePath.Domain.Entities.Platform;
 using CarePath.Domain.Enumerations;
+using CarePath.Infrastructure.ControlPlane.Identity;
 using CarePath.Infrastructure.ControlPlane.Persistence;
+using CarePath.Infrastructure.Persistence;
+using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
@@ -17,8 +21,12 @@ namespace CarePath.Infrastructure.ControlPlane.Bootstrap;
 public sealed class ControlPlaneBootstrapper
 {
     private const string DefaultOrganizationKey = "ControlPlane:DefaultOrganization";
+    private const string PlatformAdminKey = "ControlPlane:PlatformAdmin";
+    private const string LegacyIdentityTable = "AspNetUsers";
 
     private readonly ControlPlaneDbContext _context;
+    private readonly CarePathDbContext _tenant;
+    private readonly UserManager<PlatformUser> _userManager;
     private readonly ControlPlaneOptions _options;
     private readonly IPlatformAuditLogger _auditLogger;
     private readonly TimeProvider _timeProvider;
@@ -26,22 +34,236 @@ public sealed class ControlPlaneBootstrapper
 
     /// <summary>Initializes the bootstrapper.</summary>
     /// <param name="context">Control-plane context.</param>
+    /// <param name="tenant">Tenant (operational) context of the existing deployment.</param>
+    /// <param name="userManager">Platform identity manager, used only for the platform administrator bootstrap.</param>
     /// <param name="options">Control-plane options.</param>
     /// <param name="auditLogger">Platform audit logger.</param>
     /// <param name="timeProvider">Clock.</param>
     /// <param name="logger">Logger; emits slugs and counts only.</param>
     public ControlPlaneBootstrapper(
         ControlPlaneDbContext context,
+        CarePathDbContext tenant,
+        UserManager<PlatformUser> userManager,
         IOptions<ControlPlaneOptions> options,
         IPlatformAuditLogger auditLogger,
         TimeProvider timeProvider,
         ILogger<ControlPlaneBootstrapper> logger)
     {
         _context = context;
+        _tenant = tenant;
+        _userManager = userManager;
         _options = options.Value;
         _auditLogger = auditLogger;
         _timeProvider = timeProvider;
         _logger = logger;
+    }
+
+    /// <summary>
+    /// Copies every row of the legacy tenant <c>AspNetUsers</c> table into the control plane
+    /// verbatim (password hash, security and concurrency stamps, lockout state), so existing
+    /// credentials keep working. No-op when the legacy table is absent or every row is present.
+    /// Fails closed when a legacy row violates the platform-user/tenant-user id invariant.
+    /// </summary>
+    /// <param name="cancellationToken">Token to cancel the asynchronous operation.</param>
+    /// <returns>The number of identities copied.</returns>
+    public async Task<int> CopyLegacyIdentityAsync(CancellationToken cancellationToken = default)
+    {
+        if (!await _tenant.Database.CanConnectAsync(cancellationToken) || !await LegacyTableExistsAsync(cancellationToken))
+        {
+            return 0;
+        }
+
+        var legacyRows = await ReadLegacyRowsAsync(cancellationToken);
+        if (legacyRows.Count == 0)
+        {
+            return 0;
+        }
+
+        var existingIds = (await _context.Users.Select(user => user.Id).ToListAsync(cancellationToken)).ToHashSet();
+        var displayNames = await _tenant.DomainUsers
+            .IgnoreQueryFilters()
+            .Select(user => new { user.Id, user.FirstName, user.LastName })
+            .ToDictionaryAsync(user => user.Id, user => $"{user.FirstName} {user.LastName}".Trim(), cancellationToken);
+
+        var copied = 0;
+        foreach (var row in legacyRows)
+        {
+            if (row.Id != row.DomainUserId)
+            {
+                throw new InvalidOperationException(
+                    "A legacy identity row does not share its id with its tenant user; the backfill cannot continue (D-CP04-02).");
+            }
+
+            if (existingIds.Contains(row.Id))
+            {
+                continue;
+            }
+
+            _context.Users.Add(new PlatformUser
+            {
+                Id = row.Id,
+                UserName = row.UserName,
+                NormalizedUserName = row.NormalizedUserName,
+                Email = row.Email,
+                NormalizedEmail = row.NormalizedEmail,
+                EmailConfirmed = row.EmailConfirmed,
+                PasswordHash = row.PasswordHash,
+                SecurityStamp = row.SecurityStamp,
+                ConcurrencyStamp = row.ConcurrencyStamp,
+                PhoneNumber = row.PhoneNumber,
+                PhoneNumberConfirmed = row.PhoneNumberConfirmed,
+                TwoFactorEnabled = row.TwoFactorEnabled,
+                LockoutEnd = row.LockoutEnd,
+                LockoutEnabled = row.LockoutEnabled,
+                AccessFailedCount = row.AccessFailedCount,
+                DisplayName = displayNames.TryGetValue(row.Id, out var name) && name.Length > 0 ? name : row.Email ?? string.Empty,
+                IsPlatformAdmin = false
+            });
+            copied++;
+        }
+
+        if (copied > 0)
+        {
+            await _context.SaveChangesAsync(cancellationToken);
+        }
+
+        _logger.LogInformation("Legacy identity copy: {Copied} identit(ies) copied, {Skipped} already present.", copied, legacyRows.Count - copied);
+        return copied;
+    }
+
+    /// <summary>
+    /// Creates one membership in <paramref name="organizationId"/> for every non-deleted tenant
+    /// user that has a platform identity and no membership yet, using the user's current
+    /// <c>User.Role</c> and <c>User.IsActive</c> (inactive users get an Inactive membership so an
+    /// administrator can reactivate them later), and records <c>User.PlatformUserId</c>. Idempotent.
+    /// </summary>
+    /// <param name="organizationId">The default organization.</param>
+    /// <param name="cancellationToken">Token to cancel the asynchronous operation.</param>
+    /// <returns>The number of memberships created.</returns>
+    public async Task<int> EnsureMembershipsAsync(Guid organizationId, CancellationToken cancellationToken = default)
+    {
+        if (!await _tenant.Database.CanConnectAsync(cancellationToken))
+        {
+            return 0;
+        }
+
+        var users = await _tenant.DomainUsers.ToListAsync(cancellationToken);
+        if (users.Count == 0)
+        {
+            return 0;
+        }
+
+        var platformUserIds = (await _context.Users.Select(user => user.Id).ToListAsync(cancellationToken)).ToHashSet();
+        var memberIds = (await _context.OrganizationMemberships
+            .Where(membership => membership.OrganizationId == organizationId)
+            .Select(membership => membership.PlatformUserId)
+            .ToListAsync(cancellationToken)).ToHashSet();
+
+        var created = 0;
+        var withoutIdentity = 0;
+        var tenantChanged = false;
+        foreach (var user in users)
+        {
+            if (!platformUserIds.Contains(user.Id))
+            {
+                withoutIdentity++;
+                continue;
+            }
+
+            if (user.PlatformUserId != user.Id)
+            {
+                user.PlatformUserId = user.Id;
+                tenantChanged = true;
+            }
+
+            if (memberIds.Contains(user.Id))
+            {
+                continue;
+            }
+
+            _context.OrganizationMemberships.Add(new OrganizationMembership
+            {
+                OrganizationId = organizationId,
+                PlatformUserId = user.Id,
+                TenantUserId = user.Id,
+                Role = user.Role,
+                Status = user.IsActive ? MembershipStatus.Active : MembershipStatus.Inactive
+            });
+            created++;
+        }
+
+        if (created > 0)
+        {
+            await _context.SaveChangesAsync(cancellationToken);
+            await _auditLogger.LogAsync(
+                new PlatformAuditEntry(null, organizationId, PlatformAuditAction.BackfillMembershipsCreated, nameof(OrganizationMembership), null, null),
+                cancellationToken);
+        }
+
+        if (tenantChanged)
+        {
+            await _tenant.SaveChangesAsync(cancellationToken);
+        }
+
+        _logger.LogInformation("Membership backfill: {Created} created, {WithoutIdentity} user(s) have no platform identity.", created, withoutIdentity);
+        return created;
+    }
+
+    /// <summary>
+    /// Creates the first platform administrator from <c>ControlPlane:PlatformAdmin</c> when none
+    /// exists. The password must come from user secrets or environment; a missing password fails
+    /// closed, and an existing non-administrator with the configured email is never elevated.
+    /// </summary>
+    /// <param name="cancellationToken">Token to cancel the asynchronous operation.</param>
+    /// <returns>True when an administrator was created.</returns>
+    public async Task<bool> EnsurePlatformAdminAsync(CancellationToken cancellationToken = default)
+    {
+        if (await _context.Users.AnyAsync(user => user.IsPlatformAdmin, cancellationToken))
+        {
+            return false;
+        }
+
+        var admin = _options.PlatformAdmin;
+        if (admin is null)
+        {
+            _logger.LogWarning("No platform administrator exists and '{Key}' is not configured; platform endpoints stay unusable.", PlatformAdminKey);
+            return false;
+        }
+
+        if (string.IsNullOrWhiteSpace(admin.Email) || string.IsNullOrWhiteSpace(admin.Password))
+        {
+            throw new InvalidOperationException(
+                $"'{PlatformAdminKey}:Email' and '{PlatformAdminKey}:Password' must be set (password via user secrets or environment) to bootstrap the first platform administrator.");
+        }
+
+        var existing = await _userManager.FindByEmailAsync(admin.Email);
+        if (existing is not null)
+        {
+            throw new InvalidOperationException(
+                $"'{PlatformAdminKey}:Email' already belongs to a non-administrator identity; the bootstrap never elevates an existing account.");
+        }
+
+        var user = new PlatformUser
+        {
+            UserName = admin.Email,
+            Email = admin.Email,
+            EmailConfirmed = true,
+            DisplayName = string.IsNullOrWhiteSpace(admin.DisplayName) ? "Platform Operator" : admin.DisplayName,
+            IsPlatformAdmin = true
+        };
+
+        var result = await _userManager.CreateAsync(user, admin.Password);
+        if (!result.Succeeded)
+        {
+            throw new InvalidOperationException(
+                $"The platform administrator could not be created: {string.Join("; ", result.Errors.Select(error => error.Code))}.");
+        }
+
+        await _auditLogger.LogAsync(
+            new PlatformAuditEntry(user.Id, null, PlatformAuditAction.PlatformAdminBootstrapped, nameof(PlatformUser), user.Id, null),
+            cancellationToken);
+        _logger.LogInformation("Platform administrator bootstrapped.");
+        return true;
     }
 
     /// <summary>
@@ -197,4 +419,143 @@ public sealed class ControlPlaneBootstrapper
 
         return hosts;
     }
+
+    private async Task<bool> LegacyTableExistsAsync(CancellationToken cancellationToken)
+    {
+        var providerName = _tenant.Database.ProviderName ?? string.Empty;
+        var connection = _tenant.Database.GetDbConnection();
+        await using var command = connection.CreateCommand();
+        command.CommandText = providerName switch
+        {
+            _ when providerName.Contains("Sqlite", StringComparison.Ordinal) =>
+                "SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = 'AspNetUsers'",
+            _ when providerName.Contains("Npgsql", StringComparison.Ordinal) =>
+                "SELECT COUNT(*) FROM information_schema.tables WHERE table_name = 'AspNetUsers' AND table_schema = current_schema()",
+            _ =>
+                "SELECT COUNT(*) FROM information_schema.tables WHERE table_name = 'AspNetUsers' AND table_schema = SCHEMA_NAME()"
+        };
+
+        var opened = await OpenIfNeededAsync(connection, cancellationToken);
+        try
+        {
+            var count = Convert.ToInt64(await command.ExecuteScalarAsync(cancellationToken), System.Globalization.CultureInfo.InvariantCulture);
+            return count > 0;
+        }
+        finally
+        {
+            if (opened)
+            {
+                await connection.CloseAsync();
+            }
+        }
+    }
+
+    private async Task<List<LegacyIdentityRow>> ReadLegacyRowsAsync(CancellationToken cancellationToken)
+    {
+        var dialect = SqlDialect.For(_tenant.Database.ProviderName);
+        var columns = new[]
+        {
+            "Id", "DomainUserId", "UserName", "NormalizedUserName", "Email", "NormalizedEmail", "EmailConfirmed",
+            "PasswordHash", "SecurityStamp", "ConcurrencyStamp", "PhoneNumber", "PhoneNumberConfirmed",
+            "TwoFactorEnabled", "LockoutEnd", "LockoutEnabled", "AccessFailedCount"
+        };
+
+        var connection = _tenant.Database.GetDbConnection();
+        await using var command = connection.CreateCommand();
+        command.CommandText = $"SELECT {string.Join(", ", columns.Select(dialect.Quote))} FROM {dialect.Quote(LegacyIdentityTable)}";
+
+        var opened = await OpenIfNeededAsync(connection, cancellationToken);
+        var rows = new List<LegacyIdentityRow>();
+        try
+        {
+            await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+            while (await reader.ReadAsync(cancellationToken))
+            {
+                rows.Add(new LegacyIdentityRow(
+                    ReadGuid(reader, 0),
+                    ReadGuid(reader, 1),
+                    ReadString(reader, 2),
+                    ReadString(reader, 3),
+                    ReadString(reader, 4),
+                    ReadString(reader, 5),
+                    ReadBool(reader, 6),
+                    ReadString(reader, 7),
+                    ReadString(reader, 8),
+                    ReadString(reader, 9),
+                    ReadString(reader, 10),
+                    ReadBool(reader, 11),
+                    ReadBool(reader, 12),
+                    ReadDateTimeOffset(reader, 13),
+                    ReadBool(reader, 14),
+                ReadInt(reader, 15)));
+            }
+        }
+        finally
+        {
+            if (opened)
+            {
+                await connection.CloseAsync();
+            }
+        }
+
+        return rows;
+    }
+
+    private static async Task<bool> OpenIfNeededAsync(DbConnection connection, CancellationToken cancellationToken)
+    {
+        if (connection.State == System.Data.ConnectionState.Open)
+        {
+            return false;
+        }
+
+        await connection.OpenAsync(cancellationToken);
+        return true;
+    }
+
+    private static Guid ReadGuid(DbDataReader reader, int ordinal) =>
+        reader.GetValue(ordinal) switch
+        {
+            Guid guid => guid,
+            string text => Guid.Parse(text),
+            byte[] bytes => new Guid(bytes),
+            var other => throw new InvalidOperationException($"Unexpected legacy identity value type {other.GetType().Name}.")
+        };
+
+    private static string? ReadString(DbDataReader reader, int ordinal) =>
+        reader.IsDBNull(ordinal) ? null : Convert.ToString(reader.GetValue(ordinal), System.Globalization.CultureInfo.InvariantCulture);
+
+    private static bool ReadBool(DbDataReader reader, int ordinal) =>
+        !reader.IsDBNull(ordinal) && Convert.ToBoolean(reader.GetValue(ordinal), System.Globalization.CultureInfo.InvariantCulture);
+
+    private static int ReadInt(DbDataReader reader, int ordinal) =>
+        reader.IsDBNull(ordinal) ? 0 : Convert.ToInt32(reader.GetValue(ordinal), System.Globalization.CultureInfo.InvariantCulture);
+
+    private static DateTimeOffset? ReadDateTimeOffset(DbDataReader reader, int ordinal) =>
+        reader.IsDBNull(ordinal)
+            ? null
+            : reader.GetValue(ordinal) switch
+            {
+                DateTimeOffset offset => offset,
+                DateTime dateTime => new DateTimeOffset(DateTime.SpecifyKind(dateTime, DateTimeKind.Utc)),
+                string text => DateTimeOffset.Parse(text, System.Globalization.CultureInfo.InvariantCulture),
+                var other => throw new InvalidOperationException($"Unexpected legacy lockout value type {other.GetType().Name}.")
+            };
+
+    private sealed record LegacyIdentityRow(
+        Guid Id,
+        Guid DomainUserId,
+        string? UserName,
+        string? NormalizedUserName,
+        string? Email,
+        string? NormalizedEmail,
+        bool EmailConfirmed,
+        string? PasswordHash,
+        string? SecurityStamp,
+        string? ConcurrencyStamp,
+        string? PhoneNumber,
+        bool PhoneNumberConfirmed,
+        bool TwoFactorEnabled,
+        DateTimeOffset? LockoutEnd,
+        bool LockoutEnabled,
+        int AccessFailedCount);
 }

@@ -3,21 +3,19 @@ using CarePath.Domain.Entities.Clinical;
 using CarePath.Domain.Entities.Identity;
 using CarePath.Domain.Entities.Scheduling;
 using CarePath.Domain.Entities.Transitions;
-using CarePath.Infrastructure.Identity;
 using CarePath.Infrastructure.Persistence.Configurations.Billing;
 using CarePath.Infrastructure.Persistence.Configurations.Identity;
 using CarePath.Infrastructure.Persistence.Interceptors;
-using Microsoft.AspNetCore.Identity;
-using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
 
 namespace CarePath.Infrastructure.Persistence;
 
 /// <summary>
-/// EF Core database context for CarePath persistence and ASP.NET Core Identity tables.
+/// EF Core database context for CarePath operational (tenant) persistence. Identity lives in the
+/// control plane since CP-04; the legacy <c>AspNet*</c> tables are left unmanaged until CP-05.
 /// </summary>
-public class CarePathDbContext : IdentityDbContext<ApplicationUser, IdentityRole<Guid>, Guid>
+public class CarePathDbContext : DbContext
 {
     private const string TenantConfigurationNamespace = "CarePath.Infrastructure.Persistence.Configurations";
     private readonly AuditableEntityInterceptor _auditableEntityInterceptor;
@@ -117,7 +115,7 @@ public class CarePathDbContext : IdentityDbContext<ApplicationUser, IdentityRole
         // Configurations that emit provider-specific SQL take a dialect instead, so they have
         // no parameterless constructor and are excluded from the scan above.
         var dialect = SqlDialect.For(Database.ProviderName);
-        builder.ApplyConfiguration(new ApplicationUserConfiguration(dialect));
+        builder.ApplyConfiguration(new UserConfiguration(dialect));
         builder.ApplyConfiguration(new InvoiceConfiguration(dialect));
         builder.ApplyConfiguration(new InvoiceLineItemConfiguration(dialect));
 

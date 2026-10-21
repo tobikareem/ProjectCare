@@ -5,9 +5,9 @@ using CarePath.Application.Abstractions.Audit;
 using CarePath.Infrastructure;
 using CarePath.Infrastructure.ControlPlane;
 using CarePath.Infrastructure.ControlPlane.Audit;
+using CarePath.Infrastructure.ControlPlane.Auth;
 using CarePath.Infrastructure.ControlPlane.Identity;
 using CarePath.Infrastructure.ControlPlane.Persistence;
-using CarePath.Infrastructure.Identity;
 using CarePath.Infrastructure.Persistence;
 using CarePath.Infrastructure.Persistence.Interceptors;
 using FluentAssertions;
@@ -18,6 +18,7 @@ using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
+using Moq;
 
 namespace CarePath.Infrastructure.Tests.Persistence;
 
@@ -58,7 +59,7 @@ public class DependencyInjectionTests
 
         // Assert
         scope.ServiceProvider.GetRequiredService<IClientAccessEvaluator>().Should().NotBeNull();
-        scope.ServiceProvider.GetRequiredService<IIdentityProvisioningService>().Should().NotBeNull();
+        scope.ServiceProvider.GetService<IIdentityProvisioningService>().Should().BeNull("identity provisioning lives in the control plane registration");
     }
     [Fact]
     public void AddInfrastructure_WhenConnectionStringMissing_ThrowsInvalidOperationException()
@@ -119,8 +120,10 @@ public class DependencyInjectionTests
         options.Password.RequireUppercase.Should().BeTrue();
         options.Password.RequireNonAlphanumeric.Should().BeFalse();
         options.User.RequireUniqueEmail.Should().BeTrue();
-        scope.ServiceProvider.GetRequiredService<UserManager<ApplicationUser>>().Should().NotBeNull();
-        scope.ServiceProvider.GetRequiredService<RoleManager<IdentityRole<Guid>>>().Should().NotBeNull();
+        scope.ServiceProvider.GetRequiredService<UserManager<PlatformUser>>().Should().NotBeNull();
+        scope.ServiceProvider.GetService<RoleManager<IdentityRole<Guid>>>().Should().BeNull("the control plane has no Identity roles (D-CP04-04)");
+        scope.ServiceProvider.GetRequiredService<IIdentityService>().Should().BeOfType<PlatformIdentityService>();
+        scope.ServiceProvider.GetRequiredService<IIdentityProvisioningService>().Should().BeOfType<PlatformIdentityProvisioningService>();
     }
 
     [Fact]
@@ -140,13 +143,12 @@ public class DependencyInjectionTests
         scope.ServiceProvider.GetRequiredService<IControlPlaneUnitOfWork>().Should().NotBeNull();
         scope.ServiceProvider.GetRequiredService<IPlatformAuditLogger>().Should().BeOfType<EfPlatformAuditLogger>();
         scope.ServiceProvider.GetRequiredService<UserManager<PlatformUser>>().Should().NotBeNull();
-        scope.ServiceProvider.GetService<RoleManager<IdentityRole<Guid>>>().Should().NotBeNull("the legacy tenant Identity registration still exists in slice 1");
         serviceProvider.GetRequiredService<HostDenialAuditThrottle>().Should().NotBeNull();
         serviceProvider.GetRequiredService<IOptions<ControlPlaneOptions>>().Value.BrandingCacheSeconds.Should().Be(60);
     }
 
     [Fact]
-    public void AddInfrastructure_WhenBothIdentitiesAreRegistered_KeepsTenantTokenProvidersIntact()
+    public void AddInfrastructure_WhenRegistered_RegistersPlatformUserTokenProvidersOnly()
     {
         // Arrange
         var services = new ServiceCollection();
@@ -157,11 +159,10 @@ public class DependencyInjectionTests
         using var serviceProvider = BuildValidatedProvider(services);
         var identityOptions = serviceProvider.GetRequiredService<IOptions<IdentityOptions>>().Value;
 
-        // Assert — IdentityOptions.Tokens.ProviderMap is global; the control-plane registration must
-        // not replace the tenant providers until slice 3 removes tenant Identity (D-CP04-04 note).
+        // Assert — with tenant Identity gone, the global provider map belongs to PlatformUser.
         identityOptions.Tokens.ProviderMap.Should().ContainKey(TokenOptions.DefaultProvider);
         identityOptions.Tokens.ProviderMap[TokenOptions.DefaultProvider].ProviderType
-            .Should().Be(typeof(DataProtectorTokenProvider<ApplicationUser>));
+            .Should().Be(typeof(DataProtectorTokenProvider<PlatformUser>));
     }
 
     [Fact]
@@ -279,6 +280,10 @@ public class DependencyInjectionTests
 
     private static ServiceProvider BuildValidatedProvider(IServiceCollection services)
     {
+        // Per-request contexts are registered by WebApi, not Infrastructure; stub them so
+        // ValidateOnBuild can construct the control-plane services that depend on them.
+        services.AddScoped(_ => Mock.Of<CarePath.Application.Abstractions.Tenancy.IOrganizationContext>());
+        services.AddScoped(_ => Mock.Of<ICurrentUserContext>());
         return services.BuildServiceProvider(new ServiceProviderOptions
         {
             ValidateScopes = true,

@@ -577,5 +577,9 @@ public sealed class Sprint6BillingPlatformTests
         public bool IsAuthenticated => UserId.HasValue;
 
         public string? CorrelationId => "test-correlation";
+
+        public Guid? OrganizationId => null;
+
+        public Guid? MembershipId => null;
     }
 }

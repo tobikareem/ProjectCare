@@ -1037,7 +1037,10 @@ public class Sprint4OperationsServiceTests
         services.AddSingleton(CreateUnitOfWork().Mock.Object);
         services.AddSingleton<ICurrentUserContext>(new TestCurrentUserContext(Guid.NewGuid(), new HashSet<string>(StringComparer.Ordinal) { ApplicationRoles.Admin }));
         services.AddSingleton(Mock.Of<IIdentityProvisioningService>());
-        services.AddSingleton(Mock.Of<IIdentityRoleManagementService>());
+        services.AddSingleton(Mock.Of<CarePath.Application.Organization.Services.IOrganizationMembershipService>());
+        services.AddSingleton(Mock.Of<IIdentityService>());
+        services.AddSingleton(Mock.Of<IJwtTokenService>());
+        services.AddSingleton(Mock.Of<IPlatformAuditLogger>());
         services.AddSingleton(Mock.Of<IClientAccessEvaluator>());
         services.AddSingleton(Mock.Of<IObjectAuthorizationService>());
         services.AddSingleton(Mock.Of<IPhiAuditLogger>());
@@ -1137,6 +1140,10 @@ public class Sprint4OperationsServiceTests
         public bool IsAuthenticated => UserId.HasValue;
 
         public string? CorrelationId => "test-correlation";
+
+        public Guid? OrganizationId => null;
+
+        public Guid? MembershipId => null;
     }
 
     private sealed class MockUnitOfWork : IUnitOfWork

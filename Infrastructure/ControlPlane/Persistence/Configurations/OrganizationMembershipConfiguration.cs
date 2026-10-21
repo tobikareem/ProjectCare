@@ -26,8 +26,9 @@ public sealed class OrganizationMembershipConfiguration : IEntityTypeConfigurati
 
         builder.Property(membership => membership.Role).HasConversion<string>().HasMaxLength(32).IsRequired();
         builder.Property(membership => membership.Status).HasConversion<string>().HasMaxLength(32).IsRequired();
-        // Incremented with a set-based ExecuteUpdate (SecurityVersion + 1) so concurrent changes
-        // never lose an increment; a concurrency token is deliberately not used.
+        // Bumped on every role/status change (D-CP04-05). CP-04 does not read it per request, so a
+        // lost increment under concurrent admin edits has no effect yet; CP-05 adds the atomic
+        // increment together with per-request validation.
         builder.Property(membership => membership.SecurityVersion).IsRequired();
         builder.Property(membership => membership.CreatedBy).HasMaxLength(256);
         builder.Property(membership => membership.UpdatedBy).HasMaxLength(256);

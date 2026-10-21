@@ -1,4 +1,6 @@
 using CarePath.Application.Abstractions.Audit;
+using CarePath.Application.Abstractions.Auth;
+using CarePath.Infrastructure.ControlPlane.Auth;
 using CarePath.Application.Abstractions.Tenancy;
 using CarePath.Infrastructure.ControlPlane.Bootstrap;
 using CarePath.Infrastructure.ControlPlane.Resolution;
@@ -100,11 +102,6 @@ public static class ControlPlaneServiceCollectionExtensions
         }
 
         // Identity core only: no roles (D-CP04-04), no SignInManager (no cookie scheme dependency).
-        // IdentityOptions is a single global instance shared with the legacy tenant registration
-        // until slice 3 removes it, so these lambdas must stay identical to the tenant ones and no
-        // token providers are registered here: AddDefaultTokenProviders() would overwrite the
-        // shared Tokens.ProviderMap with PlatformUser providers that UserManager<ApplicationUser>
-        // cannot use. Slice 3 (TASK-091) adds the providers once the tenant registration is gone.
         services
             .AddIdentityCore<PlatformUser>(options =>
             {
@@ -121,13 +118,16 @@ public static class ControlPlaneServiceCollectionExtensions
                 options.User.RequireUniqueEmail = true;
                 options.SignIn.RequireConfirmedEmail = false;
             })
-            .AddEntityFrameworkStores<ControlPlaneDbContext>();
+            .AddEntityFrameworkStores<ControlPlaneDbContext>()
+            .AddDefaultTokenProviders();
 
         services.TryAddSingleton(TimeProvider.System);
         services.AddSingleton<HostDenialAuditThrottle>();
         services.AddScoped<IControlPlaneUnitOfWork, ControlPlaneUnitOfWork>();
         services.AddScoped<IPlatformAuditLogger, EfPlatformAuditLogger>();
         services.AddScoped<IOrganizationHostResolver, EfOrganizationHostResolver>();
+        services.AddScoped<IIdentityService, PlatformIdentityService>();
+        services.AddScoped<IIdentityProvisioningService, PlatformIdentityProvisioningService>();
         services.AddScoped<ControlPlaneBootstrapper>();
         services.AddMemoryCache();
         services.AddSingleton<IBrandingCache, MemoryBrandingCache>();

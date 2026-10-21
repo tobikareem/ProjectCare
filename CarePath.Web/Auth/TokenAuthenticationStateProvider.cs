@@ -14,6 +14,18 @@ public sealed class TokenAuthenticationStateProvider : AuthenticationStateProvid
 {
     private const string AuthenticationType = "CarePathJwt";
 
+    /// <summary>Claim carrying the session's organization id (CP-04).</summary>
+    public const string OrganizationIdClaim = "organization_id";
+
+    /// <summary>Claim carrying the session's organization display name (CP-04).</summary>
+    public const string OrganizationNameClaim = "organization_name";
+
+    /// <summary>Claim carrying the session's membership id (CP-04).</summary>
+    public const string MembershipIdClaim = "membership_id";
+
+    /// <summary>Claim carrying the session kind (Tenant or Platform).</summary>
+    public const string TokenKindClaim = "token_kind";
+
     private readonly InMemoryAccessTokenProvider _tokens;
 
     /// <summary>Creates the provider.</summary>
@@ -30,12 +42,7 @@ public sealed class TokenAuthenticationStateProvider : AuthenticationStateProvid
     {
         var session = _tokens.CurrentSession;
         var identity = IsActive(session) && session is not null
-            ? new ClaimsIdentity(
-                [
-                    new Claim(ClaimTypes.Name, session.DisplayName),
-                    new Claim(ClaimTypes.Role, session.Role.ToString())
-                ],
-                AuthenticationType)
+            ? new ClaimsIdentity(BuildClaims(session), AuthenticationType)
             : new ClaimsIdentity();
 
         return Task.FromResult(new AuthenticationState(new ClaimsPrincipal(identity)));
@@ -54,6 +61,38 @@ public sealed class TokenAuthenticationStateProvider : AuthenticationStateProvid
     {
         _tokens.ClearSession();
         NotifyAuthenticationStateChanged(GetAuthenticationStateAsync());
+    }
+
+    private static List<Claim> BuildClaims(AuthTokenResponse session)
+    {
+        var claims = new List<Claim>
+        {
+            new(ClaimTypes.Name, session.DisplayName),
+            new(TokenKindClaim, session.TokenKind.ToString()),
+        };
+
+        // Platform sessions carry no tenant role; never synthesize one.
+        if (session.Role is not null)
+        {
+            claims.Add(new Claim(ClaimTypes.Role, session.Role.Value.ToString()));
+        }
+
+        if (session.OrganizationId is not null)
+        {
+            claims.Add(new Claim(OrganizationIdClaim, session.OrganizationId.Value.ToString()));
+        }
+
+        if (!string.IsNullOrEmpty(session.OrganizationDisplayName))
+        {
+            claims.Add(new Claim(OrganizationNameClaim, session.OrganizationDisplayName));
+        }
+
+        if (session.MembershipId is not null)
+        {
+            claims.Add(new Claim(MembershipIdClaim, session.MembershipId.Value.ToString()));
+        }
+
+        return claims;
     }
 
     private static bool IsActive(AuthTokenResponse? session) =>

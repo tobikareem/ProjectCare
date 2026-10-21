@@ -9,6 +9,15 @@ namespace CarePath.Infrastructure.Persistence.Configurations.Identity;
 /// </summary>
 public sealed class UserConfiguration : IEntityTypeConfiguration<User>
 {
+    private readonly SqlDialect _dialect;
+
+    /// <summary>Initializes the configuration with the active provider's SQL dialect.</summary>
+    /// <param name="dialect">Dialect used to build provider-valid filtered index expressions.</param>
+    public UserConfiguration(SqlDialect dialect)
+    {
+        _dialect = dialect;
+    }
+
     /// <inheritdoc />
     public void Configure(EntityTypeBuilder<User> builder)
     {
@@ -29,14 +38,16 @@ public sealed class UserConfiguration : IEntityTypeConfiguration<User>
 
         builder.Ignore(user => user.FullName);
 
-        // CP-04 slice 3 (TASK-091) maps this column together with the Identity removal migration;
-        // until then it stays out of the tenant model so no provider carries pending changes.
-        builder.Ignore(user => user.PlatformUserId);
-
         builder.HasIndex(user => user.Email).IsUnique();
         builder.HasIndex(user => user.Role);
         builder.HasIndex(user => user.IsActive);
         builder.HasIndex(user => user.IsDeleted);
         builder.HasIndex(user => user.CreatedAt);
+
+        // CP-04: link to the platform identity (equal to Id by construction). Nullable until the
+        // CP-05 tightening migration (D-CP04-07); unique among the rows that carry it.
+        builder.HasIndex(user => user.PlatformUserId)
+            .IsUnique()
+            .HasFilter(_dialect.IsNotNull(nameof(User.PlatformUserId)));
     }
 }

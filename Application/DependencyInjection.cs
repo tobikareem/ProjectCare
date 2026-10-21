@@ -3,6 +3,7 @@ using CarePath.Application.Abstractions.Billing;
 using CarePath.Application.Admin.Services;
 using CarePath.Application.Admin.Validators;
 using CarePath.Application.Auth;
+using CarePath.Application.Auth.Services;
 using CarePath.Application.Billing.Services;
 using CarePath.Application.Billing.Validators;
 using CarePath.Application.Clients.Services;
@@ -47,6 +48,8 @@ public static class DependencyInjection
         services.AddScoped<ITransitionsService, TransitionsService>();
         services.AddScoped<IAdminUserManagementService, AdminUserManagementService>();
         services.AddScoped<IOrganizationBrandingQuery, OrganizationBrandingQuery>();
+        services.AddScoped<IOrganizationMembershipService, OrganizationMembershipService>();
+        services.AddScoped<ILoginService, LoginService>();
 
         services.AddScoped<IValidator<CreateCaregiverRequest>, CreateCaregiverRequestValidator>();
         services.AddScoped<IValidator<CreateStaffUserRequest>, CreateStaffUserRequestValidator>();

@@ -7,6 +7,7 @@ using CarePath.Domain.Interfaces.Repositories;
 using CarePath.Infrastructure.Audit;
 using CarePath.Infrastructure.Auth;
 using CarePath.Infrastructure.Billing;
+using CarePath.Infrastructure.ControlPlane;
 using CarePath.Infrastructure.Identity;
 using CarePath.Infrastructure.Persistence;
 using CarePath.Infrastructure.Persistence.Interceptors;
@@ -54,6 +55,7 @@ public static class DependencyInjection
         var connectionString = ResolveConnectionString(configuration, provider);
 
         services.AddInfrastructure(connectionString, provider);
+        services.AddControlPlane(configuration, provider);
         services.AddSingleton(configuration);
         if (configuration.GetValue<bool>("Storage:EnableLocalPrivateStorage"))
         {
@@ -132,6 +134,9 @@ public static class DependencyInjection
             .AddEntityFrameworkStores<CarePathDbContext>()
             .AddDefaultTokenProviders();
 
+        // Open-generic repositories bind to the tenant context only. Control-plane entities are
+        // reached through IControlPlaneUnitOfWork; injecting IRepository<Organization> directly
+        // would resolve against the wrong context.
         services.AddScoped(typeof(IRepository<>), typeof(Repository<>));
         services.AddScoped<IUnitOfWork, UnitOfWork>();
         services.AddScoped<IClientAccessEvaluator, ClientAccessEvaluator>();

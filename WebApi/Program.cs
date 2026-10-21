@@ -1,6 +1,7 @@
 using CarePath.Application;
 using CarePath.Application.Abstractions.Auth;
 using CarePath.Infrastructure;
+using CarePath.Infrastructure.ControlPlane.Persistence;
 using CarePath.Infrastructure.Identity;
 using CarePath.Infrastructure.Persistence;
 using CarePath.WebApi.Diagnostics;
@@ -36,7 +37,8 @@ builder.Services.AddCarePathAuthentication(builder.Configuration);
 // select different subsets of the same registry.
 builder.Services
     .AddHealthChecks()
-    .AddCheck<DatabaseHealthCheck>("database", tags: ["ready"]);
+    .AddCheck<DatabaseHealthCheck>("database", tags: ["ready"])
+    .AddCheck<ControlPlaneHealthCheck>("control-plane", tags: ["ready"]);
 
 // Application-layer validators require DateTimeKind.Utc; normalize every DateTime at the
 // HTTP boundary (JSON bodies via the converter, query/route values via the binder) so
@@ -122,6 +124,7 @@ if (app.Environment.IsDevelopment())
 using (var scope = app.Services.CreateScope())
 {
     var context = scope.ServiceProvider.GetRequiredService<CarePathDbContext>();
+    var controlPlane = scope.ServiceProvider.GetRequiredService<ControlPlaneDbContext>();
     var startupLogger = scope.ServiceProvider.GetRequiredService<ILoggerFactory>().CreateLogger("CarePath.Startup");
 
     // Connection-only probe: opens a connection and closes it. Creates and alters nothing.
@@ -132,11 +135,14 @@ using (var scope = app.Services.CreateScope())
         canConnect ? "SUCCEEDED" : "FAILED");
 
     // Each provider now has its own migrations assembly, so this is configuration-driven only.
+    // The control plane migrates first: host resolution and (from CP-04 slice 3) identity depend
+    // on it before any tenant table is touched.
     if (app.Configuration.GetValue<bool>("Database:AutoMigrate"))
     {
         var userManager = scope.ServiceProvider.GetRequiredService<UserManager<ApplicationUser>>();
         var roleManager = scope.ServiceProvider.GetRequiredService<RoleManager<IdentityRole<Guid>>>();
 
+        await controlPlane.Database.MigrateAsync();
         await context.Database.MigrateAsync();
         await CarePathDbContextSeed.SeedAsync(context, userManager, roleManager, builder.Configuration, app.Environment);
     }

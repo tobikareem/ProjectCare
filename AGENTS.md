@@ -25,9 +25,16 @@ dotnet test --filter "FullyQualifiedName~TestClassName.TestMethodName"
 # Test — with coverage
 dotnet test --collect:"XPlat Code Coverage"
 
-# EF Core migrations
-dotnet ef migrations add <Name> --project Infrastructure --startup-project WebApi
-dotnet ef database update --startup-project WebApi
+# EF Core migrations — two DbContexts, so --context is required on every command
+# Tenant (PHI) context, SQL Server:
+dotnet ef migrations add <Name> --project Infrastructure --startup-project WebApi --context CarePathDbContext
+dotnet ef database update --startup-project WebApi --context CarePathDbContext
+# Tenant context, PostgreSQL:
+Database__Provider=PostgreSql dotnet ef migrations add <Name> --project Infrastructure.Migrations.PostgreSql --startup-project WebApi --context CarePathDbContext
+# Control-plane context (CP-04), SQL Server:
+dotnet ef migrations add <Name> --project Infrastructure --startup-project WebApi --context ControlPlaneDbContext --output-dir ControlPlane/Migrations
+# Control-plane context, PostgreSQL:
+Database__Provider=PostgreSql dotnet ef migrations add <Name> --project Infrastructure.Migrations.PostgreSql --startup-project WebApi --context ControlPlaneDbContext --output-dir Migrations/ControlPlane
 
 # New spec
 bash _specs/scripts/new-spec.sh CP-XX "Feature Name"

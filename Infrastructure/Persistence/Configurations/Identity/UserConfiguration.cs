@@ -29,6 +29,10 @@ public sealed class UserConfiguration : IEntityTypeConfiguration<User>
 
         builder.Ignore(user => user.FullName);
 
+        // CP-04 slice 3 (TASK-091) maps this column together with the Identity removal migration;
+        // until then it stays out of the tenant model so no provider carries pending changes.
+        builder.Ignore(user => user.PlatformUserId);
+
         builder.HasIndex(user => user.Email).IsUnique();
         builder.HasIndex(user => user.Role);
         builder.HasIndex(user => user.IsActive);

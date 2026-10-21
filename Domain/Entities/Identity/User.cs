@@ -56,6 +56,13 @@ public class User : BaseEntity
     /// </summary>
     public DateTime? LastLoginAt { get; set; }
 
+    /// <summary>
+    /// Control-plane platform identity this tenant profile belongs to (CP-04). Equal to
+    /// <see cref="BaseEntity.Id"/> by construction; stored for traceability without a
+    /// cross-database foreign key. Nullable until the CP-05 tightening migration.
+    /// </summary>
+    public Guid? PlatformUserId { get; set; }
+
     // Computed Properties
 
     /// <summary>Full display name composed of <see cref="FirstName"/> and <see cref="LastName"/>.</summary>

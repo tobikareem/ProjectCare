@@ -13,9 +13,19 @@ public class Repository<T> : IRepository<T> where T : BaseEntity
 {
     private readonly DbSet<T> _dbSet;
 
-    /// <summary>Initializes a new repository over the given context.</summary>
+    /// <summary>Initializes a new repository over the tenant (operational) context.</summary>
     /// <param name="context">CarePath database context.</param>
     public Repository(CarePathDbContext context)
+        : this((DbContext)context)
+    {
+    }
+
+    /// <summary>
+    /// Initializes a new repository over any CarePath context. Kept non-public so open-generic DI
+    /// resolution keeps binding the tenant context; the control-plane unit of work calls this.
+    /// </summary>
+    /// <param name="context">Database context that owns <typeparamref name="T"/>.</param>
+    protected internal Repository(DbContext context)
     {
         _dbSet = context.Set<T>();
     }

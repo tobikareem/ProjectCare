@@ -104,6 +104,25 @@ public sealed class OrganizationResolutionMiddlewareTests
     }
 
     [Fact]
+    public async Task Invoke_WhenHostIsMalformed_AuditsASentinelHashSoTheThrottleApplies()
+    {
+        // Arrange — D-CP04-06: a flood of unparseable Host headers must not bypass the audit budget.
+        var audit = new RecordingAuditLogger();
+        using var host = CreateHost(new FakeResolver(), audit);
+        var client = host.GetTestClient();
+        client.DefaultRequestHeaders.Host = "[::1]";
+
+        // Act
+        var response = await client.GetAsync("/api/clients");
+
+        // Assert
+        response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
+        var entry = audit.Entries.Should().ContainSingle().Which;
+        entry.Action.Should().Be(PlatformAuditAction.HostResolutionDenied);
+        entry.HostHash.Should().HaveLength(64).And.NotContain("::1");
+    }
+
+    [Fact]
     public async Task Invoke_WhenHostDoesNotResolve_AuditsAHostHashAndNeverTheHost()
     {
         // Arrange

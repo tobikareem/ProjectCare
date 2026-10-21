@@ -18,6 +18,7 @@ public sealed class OrganizationResolutionMiddleware
 {
     private const string HealthPathPrefix = "/health";
     private const string BrandingPath = "/api/organization/branding";
+    private const string MalformedHostSentinel = "<malformed-host>";
 
     private static readonly System.Text.Json.JsonSerializerOptions ServiceUnavailableJsonOptions =
         new(System.Text.Json.JsonSerializerDefaults.Web)
@@ -133,7 +134,9 @@ public sealed class OrganizationResolutionMiddleware
                     EntityType: "Host",
                     EntityId: null,
                     CorrelationId: context.TraceIdentifier,
-                    HostHash: normalizedHost is null ? null : HostHash.Compute(normalizedHost)),
+                    // A malformed header has no host to hash; the sentinel keeps those denials
+                    // inside the per-hash window and global budget (D-CP04-06) instead of bypassing them.
+                    HostHash: HostHash.Compute(normalizedHost ?? MalformedHostSentinel)),
                 context.RequestAborted);
         }
         catch (Exception exception) when (exception is not OperationCanceledException || !context.RequestAborted.IsCancellationRequested)

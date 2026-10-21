@@ -1,6 +1,6 @@
 # CarePath Health - Project Progress
 
-Last updated: 2026-07-06
+Last updated: 2026-10-21
 
 ---
 
@@ -84,6 +84,16 @@ Verification from S5-TASK-060:
 - HIPAA spot check completed: sensitive Transitions payload fields are not present in logs, exception messages, or validation error messages; binary intake is rejected with a stable code; patient/care-team DTO exposure guards pass; Transitions PHI 404 missing-vs-denied bodies are byte-identical and omit `traceId`; safety tests cover inactive-plan reminder blocking, records-only escalation, stub output requiring clinician review, and the exact +30-day UTC window boundary.
 
 PM agent still owns sprint board/spec close-out. Do not mark Sprint 5 complete here.
+
+---
+
+## CP-04 - Control Plane Foundation (Sprint 8)
+
+**Status**: Specs approved 2026-10-21; implementation in progress on `claude/friendly-brown-v1nolz`
+
+Separate non-PHI control plane (organizations, host mapping, branding, memberships, data-plane locator, platform identity, append-only audit), host-based organization resolution before authentication, organization-bound tokens, PlatformAdmin and membership endpoints, backfill of the existing deployment as tenant one. Specs: `_specs/01-requirements/cp-04-control-plane-foundation.md`, `_specs/02-design/cp-04-control-plane-foundation.md` (D-CP04-01..11), `_specs/03-tasks/cp-04-control-plane-foundation.md` (TASK-079..099). Board: `_specs/sprints/sprint-08-tasks.md`.
+
+Slices: 1 persistence -> 2 host resolution -> 3 identity move -> 4 admin APIs -> 5 client/web -> 6 two-organization verification. Status per slice is recorded on the Sprint 8 board.
 
 ---
 

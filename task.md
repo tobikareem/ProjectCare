@@ -1,7 +1,7 @@
 # CarePath Sprint Execution Tracker
 
 Last updated: 2026-07-06
-Status: Sprint 5 complete - ready for Sprint 6
+Status: Sprint 6 complete - Sprint 8 (CP-04 Control Plane Foundation) approved 2026-10-21 and in progress; Sprint 7 not started
 
 This tracker is the working checklist for moving CarePath from a Domain-only foundation into a usable backend, Blazor web app, and MAUI Blazor Hybrid mobile app. The detailed sprint specs live in `_specs/sprints/`.
 
@@ -21,8 +21,9 @@ Build one shared healthcare operations backbone for:
 | Sprint 3 | Application, Auth & Shared Contracts | [x] Complete | `_specs/sprints/sprint-03-application-auth-contracts.md` |
 | Sprint 4 | Core Operations Backend | [x] Complete | `_specs/sprints/sprint-04-core-operations-backend.md` |
 | Sprint 5 | CarePath Transitions Backend MVP | [x] Complete | `_specs/sprints/sprint-05-transitions-backend-mvp.md` |
-| Sprint 6 | Blazor Web App MVP | [ ] Not Started | `_specs/sprints/sprint-06-blazor-web-mvp.md` |
+| Sprint 6 | Blazor Web App MVP | [x] Complete (board `_specs/sprints/sprint-06-tasks.md`, all S6 tasks Done) | `_specs/sprints/sprint-06-blazor-web-mvp.md` |
 | Sprint 7 | MAUI Mobile MVP, Notifications, AI & Hardening | [ ] Not Started | `_specs/sprints/sprint-07-mobile-notifications-ai-hardening.md` |
+| Sprint 8 | Control Plane Foundation (CP-04) | [ ] In Progress (approved 2026-10-21) | `_specs/sprints/sprint-08-control-plane-foundation.md` |
 
 ## Cross-Sprint Acceptance Gates
 
@@ -56,7 +57,4 @@ Build one shared healthcare operations backbone for:
 
 ## Immediate Next Step
 
-Commit the Sprint 5 closure docs + Sprint 6 board draft, and push `main` to origin. Sprint 6 board is drafted at `_specs/sprints/sprint-06-tasks.md` (decisions D-S6-1..7) — awaiting Tobi approval (S6-TASK-001). Two backend gaps it closes by explicit authorization: an `AuthController` (no login endpoint exists yet) and an org-wide coordinator escalation-queue endpoint. Everything else consumes the frozen contract surface: CarePath.Contracts, typed clients, Client.UI primitives; no Domain binding, no other new endpoints.
-
-
-
+Implement CP-04 Control Plane Foundation per `_specs/sprints/sprint-08-tasks.md` (TASK-079..099, six slices) on branch `claude/friendly-brown-v1nolz`. Specs approved 2026-10-21: `_specs/01-requirements/cp-04-control-plane-foundation.md`, `_specs/02-design/cp-04-control-plane-foundation.md`, `_specs/03-tasks/cp-04-control-plane-foundation.md`. Open for Tobi: Security/Compliance acceptance of the control-plane identity record classification (S8-TASK-002) and HomeLab login verification after backfill (S8-TASK-003), which gates the CP-05 legacy Identity table drop.

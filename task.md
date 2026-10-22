@@ -1,7 +1,7 @@
 # CarePath Sprint Execution Tracker
 
 Last updated: 2026-07-06
-Status: Sprint 6 complete - Sprint 8 (CP-04 Control Plane Foundation) implemented 2026-10-21, awaiting Tobi sign-offs (S8-TASK-002/003); Sprint 7 not started
+Status: Sprint 6 complete - Sprint 8 (CP-04) implemented 2026-10-21; second-opinion review 2026-10-22 recorded and its quick fixes landed; CP-05/CP-06/CP-07 requirement drafts await approval (CP-07 blocked on product decisions D1-D8); Sprint 7 not started
 
 This tracker is the working checklist for moving CarePath from a Domain-only foundation into a usable backend, Blazor web app, and MAUI Blazor Hybrid mobile app. The detailed sprint specs live in `_specs/sprints/`.
 

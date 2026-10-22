@@ -106,3 +106,8 @@ Slices: 1 persistence -> 2 host resolution -> 3 identity move -> 4 admin APIs ->
 | `_specs/lessons.md` | Recurring implementation lessons and corrections |
 | `_specs/PROGRESS.md` | This file - project status and next actions |
 | `Documentation/Architecture.md` | Full system architecture with layer diagrams |
+
+## Second-opinion review and successor drafts (2026-10-22)
+
+Independent review recorded at `_specs/reviews/2026-10-22-second-opinion-review.md` (verdict: NOT READY for production patient data in either market; code PASS WITH WARNINGS). Same-day fixes on `claude/friendly-brown-v1nolz`: clinician care-plan writes (H6), idempotent payments (H5), canonical connection guard (M6), column lengths (L1), interim single-active-organization guard (C1). Remaining findings are folded into three **Draft** requirement specs that must be approved before any implementation: `_specs/01-requirements/cp-05-tenant-aware-authorization.md`, `cp-06-tenant-data-plane-routing.md`, `cp-07-nigeria-market-adaptation.md` (blocked on product decisions D1–D8). Action plan: `CODE_REVIEW_TODO.md`.
+

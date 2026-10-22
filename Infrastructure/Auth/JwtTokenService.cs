@@ -48,6 +48,19 @@ public sealed class JwtTokenService : IJwtTokenService
             claims.Add(new Claim("correlation_id", request.CorrelationId));
         }
 
+        // Organization binding (CP-04): the bearer middleware rejects any token whose kind and
+        // organization do not match the host it is presented at.
+        claims.Add(new Claim(CarePathClaimTypes.TokenKind, request.TokenKind));
+        if (request.OrganizationId is not null)
+        {
+            claims.Add(new Claim(CarePathClaimTypes.OrganizationId, request.OrganizationId.Value.ToString()));
+        }
+
+        if (request.MembershipId is not null)
+        {
+            claims.Add(new Claim(CarePathClaimTypes.MembershipId, request.MembershipId.Value.ToString()));
+        }
+
         foreach (var role in request.Roles.OrderBy(role => role, StringComparer.Ordinal))
         {
             claims.Add(new Claim(ClaimTypes.Role, role));

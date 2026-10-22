@@ -5,6 +5,47 @@ add a dated section per review rather than rewriting history.
 
 ---
 
+## Second-opinion review action plan — 2026-10-22
+
+Source: `_specs/reviews/2026-10-22-second-opinion-review.md` (independent reviewer; PASS WITH
+WARNINGS on code, NOT READY for either market). Findings are referenced by that report's ids.
+
+Fixed on `claude/friendly-brown-v1nolz` the same day:
+
+- [x] H6 clinician care-plan write denied by the service helper (also §1 below).
+- [x] H5 duplicate settled payments on retried `RecordPayment` — reference is idempotent per
+      invoice, backed by `UX_Payments_InvoiceId_ReferenceNumber` (filtered unique).
+- [x] M6 control-plane/tenant connection guard compared text — now compares parsed server + catalog.
+- [x] L1 column lengths — `Users.Address` 500; audit actor columns 256; `InvoiceNumber` stays 50
+      (the generated format is 21 chars; CLAUDE.md corrected).
+- [x] C1 (interim) startup refuses a second Active organization outside Development until CP-06.
+
+Carried into the CP-05 draft spec (`_specs/01-requirements/cp-05-tenant-aware-authorization.md`):
+
+- [ ] H1 issued tokens survive membership deactivation/role change (SecurityVersion + session epoch).
+- [ ] H2 PHI audit is `ILogger` only; guard audits before the operation commits (durable sink, outcome model).
+- [ ] H3 control-plane identity + Client membership is health-identifying (classification decision).
+- [ ] H4 shift overlap check runs before the write transaction (serialize per caregiver).
+- [ ] M4 memberships attach existing identities without acceptance (invitation flow).
+- [ ] M5 last-active-Admin guard is count-then-write (concurrency token / serializable).
+- [ ] M8 refresh rotation: session family, absolute lifetime, atomic revoke+insert.
+
+Carried into the CP-06 draft spec (`_specs/01-requirements/cp-06-tenant-data-plane-routing.md`):
+
+- [ ] C1 organization-scoped data-plane routing and admission probes.
+- [ ] M7 same-origin API routing per verified agency host.
+- [ ] H8 region/retention/legal-hold policy per organization.
+
+Carried into the Nigeria product draft (`_specs/01-requirements/cp-07-nigeria-market-adaptation.md`):
+
+- [ ] H9 currency on invoices/payments/rate snapshots; M1 organization time zone for entry;
+      M3 jurisdiction-aware credentials/employment/address/phone; M2 offline caregiver protocol.
+
+Operational (not code): H7 TLS edge and database ingress on HomeLab; M9 Transitions delivery
+remains a staffed queue; M10 reconcile Sprint 6 completion rows.
+
+---
+
 ## Architecture assessment action plan — 2026-07-17
 
 Source: Claude's whole-codebase assessment after the S6-TASK-036/038/039 and D-S6-14
@@ -20,11 +61,11 @@ hand-written `EnsureCan*` methods inside each Application service. Both recent
 authorization bugs lived in exactly this duplication. Make the per-service checks
 delegate to the single `IObjectAuthorizationService` so each rule can only exist once.
 
-- [ ] Fix `EnsureCanWriteClientClinicalRecordAsync` denying Clinicians that the
-      controller + IDOR guard authorize on care-plan create/update
-      (`Application/Clients/Services/ClientOperationsService.cs` ~line 475; also
-      ticketed as a spawned task 2026-07-17) — add missing
-      `CreateCarePlanAsync`/`UpdateCarePlanAsync` tests while there.
+- [x] Fix `EnsureCanWriteClientClinicalRecordAsync` denying Clinicians that the
+      controller + IDOR guard authorize on care-plan create/update — done 2026-10-22:
+      the helper delegates to `IObjectAuthorizationService` (fallback
+      `Sprint4ObjectAuthorizationService`); `CreateCarePlanAsync_WhenClinicianHasRelationship_*`
+      and `CreateCarePlanAsync_WhenTheObjectRuleDenies_*` added. Update-path tests still owed.
 - [ ] Remove the dead caregiver self-access branch in
       `Sprint4ObjectAuthorizationService.AuthorizeCaregiverAsync` (~lines 237-248) —
       unreachable since the S6-TASK-039 re-gate, and a latent trap if a route ever

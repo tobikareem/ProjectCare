@@ -1,4 +1,14 @@
 using FluentAssertions;
+using ContractBrandingColorToken = CarePath.Contracts.Enumerations.BrandingColorToken;
+using ContractDomainVerificationStatus = CarePath.Contracts.Enumerations.DomainVerificationStatus;
+using ContractMembershipStatus = CarePath.Contracts.Enumerations.MembershipStatus;
+using ContractOrganizationStatus = CarePath.Contracts.Enumerations.OrganizationStatus;
+using ContractProvisioningState = CarePath.Contracts.Enumerations.ProvisioningState;
+using DomainDomainVerificationStatus = CarePath.Domain.Enumerations.DomainVerificationStatus;
+using DomainMembershipStatus = CarePath.Domain.Enumerations.MembershipStatus;
+using DomainOrganizationStatus = CarePath.Domain.Enumerations.OrganizationStatus;
+using DomainProvisioningState = CarePath.Domain.Enumerations.ProvisioningState;
+using DomainBrandingColorToken = CarePath.Domain.Enumerations.BrandingColorToken;
 using ContractCertificationType = CarePath.Contracts.Enumerations.CertificationType;
 using ContractDischargeDocumentSourceType = CarePath.Contracts.Enumerations.DischargeDocumentSourceType;
 using ContractDischargeDocumentStatus = CarePath.Contracts.Enumerations.DischargeDocumentStatus;
@@ -63,6 +73,11 @@ public sealed class ContractEnumParityTests
         { typeof(DomainReminderStatus), typeof(ContractReminderStatus) },
         { typeof(DomainEscalationTriggerType), typeof(ContractEscalationTriggerType) },
         { typeof(DomainEscalationLevel), typeof(ContractEscalationLevel) },
+        { typeof(DomainBrandingColorToken), typeof(ContractBrandingColorToken) },
+        { typeof(DomainOrganizationStatus), typeof(ContractOrganizationStatus) },
+        { typeof(DomainProvisioningState), typeof(ContractProvisioningState) },
+        { typeof(DomainDomainVerificationStatus), typeof(ContractDomainVerificationStatus) },
+        { typeof(DomainMembershipStatus), typeof(ContractMembershipStatus) },
     };
 
     [Theory]

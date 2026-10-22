@@ -134,5 +134,9 @@ public sealed class IdorGuardTests
         public IReadOnlySet<string> Roles { get; }
 
         public string? CorrelationId { get; }
+
+        public Guid? OrganizationId => null;
+
+        public Guid? MembershipId => null;
     }
 }

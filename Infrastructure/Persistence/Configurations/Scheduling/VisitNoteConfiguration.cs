@@ -24,8 +24,8 @@ public sealed class VisitNoteConfiguration : IEntityTypeConfiguration<VisitNote>
         builder.Property(note => note.Temperature).HasPrecision(5, 2);
         builder.Property(note => note.CaregiverSignatureUrl).HasMaxLength(500);
         builder.Property(note => note.ClientOrFamilySignatureUrl).HasMaxLength(500);
-        builder.Property(note => note.CreatedBy).HasMaxLength(100);
-        builder.Property(note => note.UpdatedBy).HasMaxLength(100);
+        builder.Property(note => note.CreatedBy).HasMaxLength(256);
+        builder.Property(note => note.UpdatedBy).HasMaxLength(256);
 
         builder
             .HasOne(note => note.Shift)

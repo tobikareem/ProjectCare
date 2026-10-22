@@ -1,9 +1,11 @@
-using CarePath.Domain.Entities.Identity;
+using CarePath.Domain.Entities.Platform;
 using CarePath.Domain.Enumerations;
-using CarePath.Infrastructure.Identity;
+using CarePath.Infrastructure.ControlPlane.Identity;
+using CarePath.Infrastructure.ControlPlane.Persistence;
 using CarePath.Infrastructure.Persistence;
 using CarePath.Infrastructure.Persistence.Interceptors;
 using FluentAssertions;
+using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
@@ -22,19 +24,15 @@ public class CarePathDbContextSeedTests
         // Arrange
         using var serviceProvider = CreateServiceProvider();
         using var scope = serviceProvider.CreateScope();
-        var context = scope.ServiceProvider.GetRequiredService<CarePathDbContext>();
-        var userManager = scope.ServiceProvider.GetRequiredService<UserManager<ApplicationUser>>();
-        var roleManager = scope.ServiceProvider.GetRequiredService<RoleManager<IdentityRole<Guid>>>();
-        var configuration = CreateConfiguration(seedPassword: null);
+        var (context, controlPlane, userManager) = Resolve(scope);
         var environment = new TestHostEnvironment { EnvironmentName = Environments.Production };
 
         // Act
-        await CarePathDbContextSeed.SeedAsync(context, userManager, roleManager, configuration, environment);
+        await CarePathDbContextSeed.SeedAsync(context, controlPlane, userManager, CreateConfiguration(seedPassword: null), environment);
 
         // Assert
         (await context.DomainUsers.CountAsync()).Should().Be(0);
-        (await context.Set<ApplicationUser>().CountAsync()).Should().Be(0);
-        (await roleManager.Roles.CountAsync()).Should().Be(0);
+        (await controlPlane.Users.CountAsync()).Should().Be(0);
     }
 
     [Fact]
@@ -43,14 +41,11 @@ public class CarePathDbContextSeedTests
         // Arrange
         using var serviceProvider = CreateServiceProvider();
         using var scope = serviceProvider.CreateScope();
-        var context = scope.ServiceProvider.GetRequiredService<CarePathDbContext>();
-        var userManager = scope.ServiceProvider.GetRequiredService<UserManager<ApplicationUser>>();
-        var roleManager = scope.ServiceProvider.GetRequiredService<RoleManager<IdentityRole<Guid>>>();
-        var configuration = CreateConfiguration(seedPassword: null);
+        var (context, controlPlane, userManager) = Resolve(scope);
         var environment = new TestHostEnvironment { EnvironmentName = Environments.Development };
 
         // Act
-        var act = async () => await CarePathDbContextSeed.SeedAsync(context, userManager, roleManager, configuration, environment);
+        var act = async () => await CarePathDbContextSeed.SeedAsync(context, controlPlane, userManager, CreateConfiguration(seedPassword: null), environment);
 
         // Assert
         await act.Should()
@@ -59,45 +54,63 @@ public class CarePathDbContextSeedTests
     }
 
     [Fact]
-    public async Task SeedAsync_WhenEnvironmentIsDevelopment_SeedsSyntheticDataIdempotently()
+    public async Task SeedAsync_WhenDefaultOrganizationIsMissing_Throws()
     {
         // Arrange
         using var serviceProvider = CreateServiceProvider();
         using var scope = serviceProvider.CreateScope();
-        var context = scope.ServiceProvider.GetRequiredService<CarePathDbContext>();
-        var userManager = scope.ServiceProvider.GetRequiredService<UserManager<ApplicationUser>>();
-        var roleManager = scope.ServiceProvider.GetRequiredService<RoleManager<IdentityRole<Guid>>>();
+        var (context, controlPlane, userManager) = Resolve(scope);
+        var environment = new TestHostEnvironment { EnvironmentName = Environments.Development };
+
+        // Act
+        var act = async () => await CarePathDbContextSeed.SeedAsync(context, controlPlane, userManager, CreateConfiguration("TestsOnly!2026"), environment);
+
+        // Assert
+        await act.Should().ThrowAsync<InvalidOperationException>().WithMessage("*default organization*");
+    }
+
+    [Fact]
+    public async Task SeedAsync_WhenEnvironmentIsDevelopment_SeedsIdentitiesMembershipsAndSecondOrganizationIdempotently()
+    {
+        // Arrange
+        using var serviceProvider = CreateServiceProvider();
+        using var scope = serviceProvider.CreateScope();
+        var (context, controlPlane, userManager) = Resolve(scope);
+        var defaultOrganization = await AddDefaultOrganizationAsync(controlPlane);
         var configuration = CreateConfiguration("TestsOnly!2026");
         var environment = new TestHostEnvironment { EnvironmentName = Environments.Development };
 
         // Act
-        await CarePathDbContextSeed.SeedAsync(context, userManager, roleManager, configuration, environment);
-        await CarePathDbContextSeed.SeedAsync(context, userManager, roleManager, configuration, environment);
+        await CarePathDbContextSeed.SeedAsync(context, controlPlane, userManager, configuration, environment);
+        await CarePathDbContextSeed.SeedAsync(context, controlPlane, userManager, configuration, environment);
 
         // Assert
         (await context.DomainUsers.IgnoreQueryFilters().CountAsync()).Should().Be(5);
-        (await context.Set<ApplicationUser>().IgnoreQueryFilters().CountAsync()).Should().Be(5);
-        (await roleManager.Roles.CountAsync()).Should().Be(Enum.GetNames<UserRole>().Length);
+        (await context.DomainUsers.CountAsync(user => user.PlatformUserId == user.Id)).Should().Be(5);
+        (await controlPlane.Users.CountAsync()).Should().Be(5);
         (await context.Caregivers.IgnoreQueryFilters().CountAsync()).Should().Be(1);
         (await context.Clients.IgnoreQueryFilters().CountAsync()).Should().Be(1);
 
-        var adminIdentity = await userManager.FindByEmailAsync("admin@carepath.local");
-        adminIdentity.Should().NotBeNull();
-        (await userManager.IsInRoleAsync(adminIdentity!, UserRole.Admin.ToString())).Should().BeTrue();
+        var coordinator = await userManager.FindByEmailAsync("coordinator@carepath.local");
+        coordinator.Should().NotBeNull();
+        coordinator!.Id.Should().Be(Guid.Parse("66666666-6666-6666-6666-666666666666"));
+        coordinator.IsPlatformAdmin.Should().BeFalse();
+        (await userManager.CheckPasswordAsync(coordinator, "TestsOnly!2026")).Should().BeTrue();
 
-        var coordinatorIdentity = await userManager.FindByEmailAsync("coordinator@carepath.local");
-        coordinatorIdentity.Should().NotBeNull();
-        coordinatorIdentity!.Id.Should().Be(Guid.Parse("66666666-6666-6666-6666-666666666666"));
-        (await userManager.IsInRoleAsync(coordinatorIdentity, UserRole.Coordinator.ToString())).Should().BeTrue();
+        var defaultMemberships = await controlPlane.OrganizationMemberships.Where(membership => membership.OrganizationId == defaultOrganization.Id).ToListAsync();
+        defaultMemberships.Should().HaveCount(5);
+        defaultMemberships.Single(membership => membership.PlatformUserId == coordinator.Id).Role.Should().Be(UserRole.Coordinator);
 
-        var clinicianIdentity = await userManager.FindByEmailAsync("clinician@carepath.local");
-        clinicianIdentity.Should().NotBeNull();
-        clinicianIdentity!.Id.Should().Be(Guid.Parse("77777777-7777-7777-7777-777777777777"));
-        (await userManager.IsInRoleAsync(clinicianIdentity, UserRole.Clinician.ToString())).Should().BeTrue();
+        var second = await controlPlane.Organizations.SingleAsync(organization => organization.Slug == CarePathDbContextSeed.SecondOrganizationSlug);
+        second.IsAdmissible.Should().BeTrue();
+        (await controlPlane.OrganizationDomains.Where(domain => domain.OrganizationId == second.Id).Select(domain => domain.HostName).ToListAsync())
+            .Should().Equal("helpinghands.localhost");
+        (await controlPlane.OrganizationMemberships.CountAsync(membership => membership.OrganizationId == second.Id)).Should().Be(1);
+        (await controlPlane.OrganizationDataPlanes.SingleAsync(dataPlane => dataPlane.OrganizationId == second.Id)).SecretReference
+            .Should().Be("ConnectionStrings:DefaultConnection");
 
         var client = await context.Clients.IgnoreQueryFilters().SingleAsync();
         client.MedicalConditions.Should().StartWith("Synthetic demo condition only");
-        client.Allergies.Should().StartWith("Synthetic demo allergy only");
     }
 
     [Fact]
@@ -106,13 +119,12 @@ public class CarePathDbContextSeedTests
         // Arrange
         using var serviceProvider = CreateServiceProvider();
         using var scope = serviceProvider.CreateScope();
-        var context = scope.ServiceProvider.GetRequiredService<CarePathDbContext>();
-        var userManager = scope.ServiceProvider.GetRequiredService<UserManager<ApplicationUser>>();
-        var roleManager = scope.ServiceProvider.GetRequiredService<RoleManager<IdentityRole<Guid>>>();
+        var (context, controlPlane, userManager) = Resolve(scope);
+        await AddDefaultOrganizationAsync(controlPlane);
         var configuration = CreateConfiguration("TestsOnly!2026");
         var environment = new TestHostEnvironment { EnvironmentName = Environments.Development };
 
-        await CarePathDbContextSeed.SeedAsync(context, userManager, roleManager, configuration, environment);
+        await CarePathDbContextSeed.SeedAsync(context, controlPlane, userManager, configuration, environment);
 
         var admin = await context.DomainUsers.SingleAsync(user => user.Email == "admin@carepath.local");
         var caregiver = await context.Caregivers.SingleAsync();
@@ -123,11 +135,11 @@ public class CarePathDbContextSeedTests
         await context.SaveChangesAsync();
 
         // Act
-        await CarePathDbContextSeed.SeedAsync(context, userManager, roleManager, configuration, environment);
+        await CarePathDbContextSeed.SeedAsync(context, controlPlane, userManager, configuration, environment);
 
         // Assert
         (await context.DomainUsers.IgnoreQueryFilters().CountAsync()).Should().Be(5);
-        (await context.Set<ApplicationUser>().IgnoreQueryFilters().CountAsync()).Should().Be(5);
+        (await controlPlane.Users.CountAsync()).Should().Be(5);
         (await context.Caregivers.IgnoreQueryFilters().CountAsync()).Should().Be(1);
         (await context.Clients.IgnoreQueryFilters().CountAsync()).Should().Be(1);
         (await context.DomainUsers.CountAsync()).Should().Be(5);
@@ -135,18 +147,48 @@ public class CarePathDbContextSeedTests
         (await context.Clients.CountAsync()).Should().Be(1);
     }
 
+    private static async Task<Organization> AddDefaultOrganizationAsync(ControlPlaneDbContext controlPlane)
+    {
+        var organization = new Organization
+        {
+            LegalName = "CarePath Health LLC",
+            DisplayName = "CarePath Health",
+            Slug = "carepath",
+            Status = OrganizationStatus.Active,
+            ProvisioningState = ProvisioningState.Provisioned,
+        };
+        controlPlane.Organizations.Add(organization);
+        controlPlane.OrganizationDataPlanes.Add(new OrganizationDataPlane
+        {
+            OrganizationId = organization.Id,
+            Provider = DataPlaneProvider.SqlServer,
+            SecretReference = "ConnectionStrings:DefaultConnection",
+            RegisteredAtUtc = DateTime.UtcNow,
+        });
+        await controlPlane.SaveChangesAsync();
+        return organization;
+    }
+
+    private static (CarePathDbContext, ControlPlaneDbContext, UserManager<PlatformUser>) Resolve(IServiceScope scope) =>
+        (scope.ServiceProvider.GetRequiredService<CarePathDbContext>(),
+         scope.ServiceProvider.GetRequiredService<ControlPlaneDbContext>(),
+         scope.ServiceProvider.GetRequiredService<UserManager<PlatformUser>>());
+
     private static ServiceProvider CreateServiceProvider()
     {
         var services = new ServiceCollection();
 
         services.AddLogging();
         services.AddHttpContextAccessor();
+        services.AddDataProtection();
         services.AddScoped<AuditableEntityInterceptor>();
         services.AddDbContext<CarePathDbContext>(options =>
             options.UseInMemoryDatabase(Guid.NewGuid().ToString()));
+        services.AddDbContext<ControlPlaneDbContext>(options =>
+            options.UseInMemoryDatabase(Guid.NewGuid().ToString()));
         services
-            .AddIdentity<ApplicationUser, IdentityRole<Guid>>()
-            .AddEntityFrameworkStores<CarePathDbContext>()
+            .AddIdentityCore<PlatformUser>()
+            .AddEntityFrameworkStores<ControlPlaneDbContext>()
             .AddDefaultTokenProviders();
 
         return services.BuildServiceProvider(new ServiceProviderOptions
@@ -158,7 +200,10 @@ public class CarePathDbContextSeedTests
 
     private static IConfiguration CreateConfiguration(string? seedPassword)
     {
-        var values = new Dictionary<string, string?>();
+        var values = new Dictionary<string, string?>
+        {
+            ["ControlPlane:DefaultOrganization:Slug"] = "carepath",
+        };
 
         if (seedPassword is not null)
         {

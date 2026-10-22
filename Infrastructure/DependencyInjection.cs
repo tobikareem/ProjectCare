@@ -7,7 +7,7 @@ using CarePath.Domain.Interfaces.Repositories;
 using CarePath.Infrastructure.Audit;
 using CarePath.Infrastructure.Auth;
 using CarePath.Infrastructure.Billing;
-using CarePath.Infrastructure.Identity;
+using CarePath.Infrastructure.ControlPlane;
 using CarePath.Infrastructure.Persistence;
 using CarePath.Infrastructure.Persistence.Interceptors;
 using CarePath.Infrastructure.Persistence.Repositories;
@@ -16,7 +16,6 @@ using CarePath.Infrastructure.Scheduling;
 using CarePath.Application.Scheduling.Queries;
 using CarePath.Infrastructure.Transitions.Services;
 using Microsoft.AspNetCore.DataProtection;
-using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -54,6 +53,7 @@ public static class DependencyInjection
         var connectionString = ResolveConnectionString(configuration, provider);
 
         services.AddInfrastructure(connectionString, provider);
+        services.AddControlPlane(configuration, provider);
         services.AddSingleton(configuration);
         if (configuration.GetValue<bool>("Storage:EnableLocalPrivateStorage"))
         {
@@ -61,7 +61,6 @@ public static class DependencyInjection
         }
 
         services.AddScoped<IJwtTokenService, JwtTokenService>();
-        services.AddScoped<IIdentityService, IdentityService>();
 
         return services;
     }
@@ -113,30 +112,12 @@ public static class DependencyInjection
             }
         });
 
-        services
-            .AddIdentity<ApplicationUser, IdentityRole<Guid>>(options =>
-            {
-                options.Password.RequiredLength = 8;
-                options.Password.RequireDigit = true;
-                options.Password.RequireLowercase = true;
-                options.Password.RequireUppercase = true;
-                options.Password.RequireNonAlphanumeric = false;
-
-                options.Lockout.DefaultLockoutTimeSpan = TimeSpan.FromMinutes(15);
-                options.Lockout.MaxFailedAccessAttempts = 5;
-                options.Lockout.AllowedForNewUsers = true;
-
-                options.User.RequireUniqueEmail = true;
-                options.SignIn.RequireConfirmedEmail = false;
-            })
-            .AddEntityFrameworkStores<CarePathDbContext>()
-            .AddDefaultTokenProviders();
-
+        // Open-generic repositories bind to the tenant context only. Control-plane entities are
+        // reached through IControlPlaneUnitOfWork; injecting IRepository<Organization> directly
+        // would resolve against the wrong context.
         services.AddScoped(typeof(IRepository<>), typeof(Repository<>));
         services.AddScoped<IUnitOfWork, UnitOfWork>();
         services.AddScoped<IClientAccessEvaluator, ClientAccessEvaluator>();
-        services.AddScoped<IIdentityProvisioningService, IdentityProvisioningService>();
-        services.AddScoped<IIdentityRoleManagementService, IdentityRoleManagementService>();
         services.AddScoped<IPhiAuditLogger, LoggingPhiAuditLogger>();
         services.AddScoped<IFileStorageService, DisabledFileStorageService>();
         services.AddScoped<IShiftBillingQuery, ShiftBillingQuery>();

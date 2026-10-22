@@ -715,6 +715,101 @@ public class Sprint4OperationsServiceTests
     }
 
     [Fact]
+    public async Task CreateCarePlanAsync_WhenClinicianHasRelationship_CreatesThePlanThroughTheSharedObjectRule()
+    {
+        // Arrange — review finding H6 / CODE_REVIEW_TODO §1: the controller, the IDOR guard and the
+        // service must agree; the service now delegates to the same object rule (no mock here).
+        var client = new DomainClient { Id = Guid.NewGuid(), UserId = Guid.NewGuid(), DateOfBirth = new DateTime(1950, 1, 1, 0, 0, 0, DateTimeKind.Utc) };
+        var unitOfWork = CreateUnitOfWork();
+        unitOfWork.Clients.Setup(repository => repository.GetByIdAsync(client.Id, It.IsAny<CancellationToken>())).ReturnsAsync(client);
+        unitOfWork.TransitionPlans.Setup(repository => repository.ExistsAsync(It.IsAny<Expression<Func<TransitionPlan, bool>>>(), It.IsAny<CancellationToken>())).ReturnsAsync(true);
+        unitOfWork.CarePlans.Setup(repository => repository.FindAsync(It.IsAny<Expression<Func<CarePlan, bool>>>(), It.IsAny<CancellationToken>())).ReturnsAsync(Array.Empty<CarePlan>());
+        unitOfWork.CarePlans.Setup(repository => repository.AddAsync(It.IsAny<CarePlan>(), It.IsAny<CancellationToken>())).ReturnsAsync((CarePlan plan, CancellationToken _) => plan);
+        var auditLogger = new Mock<IPhiAuditLogger>();
+        auditLogger.Setup(logger => logger.LogAsync(It.IsAny<PhiAuditEntry>(), It.IsAny<CancellationToken>())).Returns(Task.CompletedTask);
+        var service = new ClientOperationsService(
+            unitOfWork,
+            new TestCurrentUserContext(Guid.NewGuid(), new HashSet<string>(StringComparer.Ordinal) { ApplicationRoles.Clinician }),
+            Mock.Of<IIdentityProvisioningService>(),
+            Mock.Of<IClientAccessEvaluator>(),
+            auditLogger.Object);
+
+        // Act
+        var dto = await service.CreateCarePlanAsync(client.Id, new CreateCarePlanRequest
+        {
+            Title = "Post-discharge support",
+            StartDate = new DateTime(2026, 6, 1, 0, 0, 0, DateTimeKind.Utc),
+        });
+
+        // Assert
+        dto.Title.Should().Be("Post-discharge support");
+        unitOfWork.CarePlans.Verify(repository => repository.AddAsync(It.IsAny<CarePlan>(), It.IsAny<CancellationToken>()), Times.Once);
+        auditLogger.Verify(logger => logger.LogAsync(
+            It.Is<PhiAuditEntry>(entry => entry.EntityType == ProtectedResourceType.CarePlan && entry.Action == AuditAction.Create),
+            It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task CreateCarePlanAsync_WhenCallerIsNotAClinicalRole_IsDeniedBeforeTheObjectRuleRuns()
+    {
+        // Arrange — the object rule grants Caregivers/Clients *read* relationships; the service's
+        // role gate must stop them before that rule is consulted for a write.
+        var client = new DomainClient { Id = Guid.NewGuid(), UserId = Guid.NewGuid(), DateOfBirth = new DateTime(1950, 1, 1, 0, 0, 0, DateTimeKind.Utc) };
+        var unitOfWork = CreateUnitOfWork();
+        var objectAuthorization = new Mock<IObjectAuthorizationService>(MockBehavior.Strict);
+        var service = new ClientOperationsService(
+            unitOfWork,
+            new TestCurrentUserContext(Guid.NewGuid(), new HashSet<string>(StringComparer.Ordinal) { ApplicationRoles.Caregiver }),
+            Mock.Of<IIdentityProvisioningService>(),
+            Mock.Of<IClientAccessEvaluator>(),
+            Mock.Of<IPhiAuditLogger>(),
+            objectAuthorization: objectAuthorization.Object);
+
+        // Act
+        var act = async () => await service.CreateCarePlanAsync(client.Id, new CreateCarePlanRequest { Title = "T", StartDate = new DateTime(2026, 6, 1, 0, 0, 0, DateTimeKind.Utc) });
+
+        // Assert
+        (await act.Should().ThrowAsync<ResourceAccessDeniedException>()).Which.ReasonCode.Should().Be("RoleInsufficient");
+        objectAuthorization.VerifyNoOtherCalls();
+    }
+
+    [Fact]
+    public async Task CreateCarePlanAsync_WhenTheObjectRuleDenies_FailsBeforeAnyWriteAndAuditsTheDenial()
+    {
+        // Arrange — a denial from the single rule source must short-circuit the service layer.
+        var client = new DomainClient { Id = Guid.NewGuid(), UserId = Guid.NewGuid(), DateOfBirth = new DateTime(1950, 1, 1, 0, 0, 0, DateTimeKind.Utc) };
+        var unitOfWork = CreateUnitOfWork();
+        unitOfWork.Clients.Setup(repository => repository.GetByIdAsync(client.Id, It.IsAny<CancellationToken>())).ReturnsAsync(client);
+        var objectAuthorization = new Mock<IObjectAuthorizationService>();
+        objectAuthorization
+            .Setup(service => service.AuthorizeAsync(It.Is<ObjectAccessRequest>(request => request.ResourceId == client.Id && request.Action == ObjectAccessAction.Update), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(ObjectAuthorizationResult.Denied("NoGrant"));
+        var auditLogger = new Mock<IPhiAuditLogger>();
+        auditLogger.Setup(logger => logger.LogAsync(It.IsAny<PhiAuditEntry>(), It.IsAny<CancellationToken>())).Returns(Task.CompletedTask);
+        var service = new ClientOperationsService(
+            unitOfWork,
+            new TestCurrentUserContext(Guid.NewGuid(), new HashSet<string>(StringComparer.Ordinal) { ApplicationRoles.Clinician }),
+            Mock.Of<IIdentityProvisioningService>(),
+            Mock.Of<IClientAccessEvaluator>(),
+            auditLogger.Object,
+            objectAuthorization: objectAuthorization.Object);
+
+        // Act
+        var act = async () => await service.CreateCarePlanAsync(client.Id, new CreateCarePlanRequest
+        {
+            Title = "Post-discharge support",
+            StartDate = new DateTime(2026, 6, 1, 0, 0, 0, DateTimeKind.Utc),
+        });
+
+        // Assert
+        (await act.Should().ThrowAsync<ResourceAccessDeniedException>()).Which.ReasonCode.Should().Be("NoGrant");
+        unitOfWork.CarePlans.Verify(repository => repository.AddAsync(It.IsAny<CarePlan>(), It.IsAny<CancellationToken>()), Times.Never);
+        auditLogger.Verify(logger => logger.LogAsync(
+            It.Is<PhiAuditEntry>(entry => entry.EntityType == ProtectedResourceType.Client && entry.EntityId == client.Id && entry.Action == AuditAction.AccessDenied),
+            It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    [Fact]
     public async Task GetCarePlanAsync_WhenClinicianHasRelationship_ReturnsFullClinicalDetailAndAuditsRead()
     {
         // Arrange — D-S6-14: the detail read is the only route carrying clinical text, and the
@@ -1037,7 +1132,12 @@ public class Sprint4OperationsServiceTests
         services.AddSingleton(CreateUnitOfWork().Mock.Object);
         services.AddSingleton<ICurrentUserContext>(new TestCurrentUserContext(Guid.NewGuid(), new HashSet<string>(StringComparer.Ordinal) { ApplicationRoles.Admin }));
         services.AddSingleton(Mock.Of<IIdentityProvisioningService>());
-        services.AddSingleton(Mock.Of<IIdentityRoleManagementService>());
+        services.AddSingleton(Mock.Of<CarePath.Application.Organization.Services.IOrganizationMembershipService>());
+        services.AddSingleton(Mock.Of<IIdentityService>());
+        services.AddSingleton(Mock.Of<IJwtTokenService>());
+        services.AddSingleton(Mock.Of<IPlatformAuditLogger>());
+        services.AddSingleton(Mock.Of<IPlatformUserDirectory>());
+        services.AddSingleton(Mock.Of<CarePath.Application.Abstractions.Tenancy.IPlatformDomainSettings>());
         services.AddSingleton(Mock.Of<IClientAccessEvaluator>());
         services.AddSingleton(Mock.Of<IObjectAuthorizationService>());
         services.AddSingleton(Mock.Of<IPhiAuditLogger>());
@@ -1046,6 +1146,9 @@ public class Sprint4OperationsServiceTests
         services.AddSingleton(Mock.Of<IBillingEligibilityQuery>());
         services.AddSingleton(Mock.Of<IInvoicePreviewTokenService>());
         services.AddSingleton(Mock.Of<IBillingReconciliationStore>());
+        services.AddSingleton(Mock.Of<CarePath.Application.Abstractions.Tenancy.IOrganizationContext>());
+        services.AddSingleton(Mock.Of<CarePath.Domain.Interfaces.Repositories.IControlPlaneUnitOfWork>());
+        services.AddSingleton(Mock.Of<CarePath.Application.Abstractions.Tenancy.IBrandingCache>());
 
         // Act
         using var provider = services.AddApplication().BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true, ValidateOnBuild = true });
@@ -1134,6 +1237,10 @@ public class Sprint4OperationsServiceTests
         public bool IsAuthenticated => UserId.HasValue;
 
         public string? CorrelationId => "test-correlation";
+
+        public Guid? OrganizationId => null;
+
+        public Guid? MembershipId => null;
     }
 
     private sealed class MockUnitOfWork : IUnitOfWork

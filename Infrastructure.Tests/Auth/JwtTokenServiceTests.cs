@@ -17,11 +17,16 @@ public sealed class JwtTokenServiceTests
         var configuration = CreateJwtConfiguration();
         var service = new JwtTokenService(configuration);
         var userId = Guid.NewGuid();
+        var organizationId = Guid.NewGuid();
+        var membershipId = Guid.NewGuid();
         var request = new JwtTokenRequest(
             userId,
             "auth-user@carepath.local",
             new HashSet<string>(new[] { ApplicationRoles.Admin, ApplicationRoles.Clinician }, StringComparer.Ordinal),
-            "trace-token-test");
+            "trace-token-test",
+            CarePathClaimTypes.TenantTokenKind,
+            organizationId,
+            membershipId);
 
         // Act
         var result = await service.CreateTokenAsync(request);
@@ -37,6 +42,35 @@ public sealed class JwtTokenServiceTests
             .Should()
             .BeEquivalentTo(ApplicationRoles.Admin, ApplicationRoles.Clinician);
         principal.FindFirstValue("correlation_id").Should().Be("trace-token-test");
+        principal.FindFirstValue(CarePathClaimTypes.TokenKind).Should().Be(CarePathClaimTypes.TenantTokenKind);
+        principal.FindFirstValue(CarePathClaimTypes.OrganizationId).Should().Be(organizationId.ToString());
+        principal.FindFirstValue(CarePathClaimTypes.MembershipId).Should().Be(membershipId.ToString());
+    }
+
+    [Fact]
+    public async Task CreateTokenAsync_WhenPlatformToken_OmitsOrganizationAndMembershipClaims()
+    {
+        // Arrange
+        var configuration = CreateJwtConfiguration();
+        var service = new JwtTokenService(configuration);
+        var request = new JwtTokenRequest(
+            Guid.NewGuid(),
+            "operator@carepath.local",
+            new HashSet<string>([ApplicationRoles.PlatformAdmin], StringComparer.Ordinal),
+            null,
+            CarePathClaimTypes.PlatformTokenKind,
+            null,
+            null);
+
+        // Act
+        var result = await service.CreateTokenAsync(request);
+        var principal = ValidateToken(configuration, result.AccessToken);
+
+        // Assert
+        principal.FindFirstValue(CarePathClaimTypes.TokenKind).Should().Be(CarePathClaimTypes.PlatformTokenKind);
+        principal.FindFirst(CarePathClaimTypes.OrganizationId).Should().BeNull();
+        principal.FindFirst(CarePathClaimTypes.MembershipId).Should().BeNull();
+        principal.FindAll(ClaimTypes.Role).Select(claim => claim.Value).Should().Equal(ApplicationRoles.PlatformAdmin);
     }
 
     [Fact]
@@ -49,7 +83,10 @@ public sealed class JwtTokenServiceTests
             Guid.NewGuid(),
             "auth-user@carepath.local",
             new HashSet<string>(StringComparer.Ordinal),
-            null);
+            null,
+            CarePathClaimTypes.TenantTokenKind,
+            Guid.NewGuid(),
+            Guid.NewGuid());
 
         // Act
         var act = () => service.CreateTokenAsync(request);

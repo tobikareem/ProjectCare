@@ -25,6 +25,9 @@
   --shadow: 0 18px 48px rgb(7 63 67 / 12%);
   --radius: 14px;
   --focus: #ff8a3d;
+  /* Organization branding (CP-04): BrandingTokens overrides these per surface with var(--teal-700) etc. */
+  --brand-primary: var(--teal-900);
+  --brand-accent: var(--focus);
 }
 
 /* ---- Badges (StatusBadge / RiskBadge) — wireframe soft-color pill pattern ---- */

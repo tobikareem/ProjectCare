@@ -1,5 +1,6 @@
 using CarePath.Application.Abstractions.Audit;
 using CarePath.Application.Abstractions.Auth;
+using CarePath.Application.Auth;
 using CarePath.Application.Clients.Validators;
 using CarePath.Application.Common.Exceptions;
 using CarePath.Application.Common.Mapping;
@@ -21,6 +22,7 @@ public sealed class ClientOperationsService : IClientOperationsService
     private readonly IIdentityProvisioningService identityProvisioning;
     private readonly IClientAccessEvaluator clientAccessEvaluator;
     private readonly IPhiAuditLogger auditLogger;
+    private readonly IObjectAuthorizationService objectAuthorization;
     private readonly IValidator<CreateClientRequest> createClientValidator;
     private readonly IValidator<UpdateClientRequest> updateClientValidator;
     private readonly IValidator<CreateCarePlanRequest> createCarePlanValidator;
@@ -35,13 +37,17 @@ public sealed class ClientOperationsService : IClientOperationsService
         IValidator<CreateClientRequest>? createClientValidator = null,
         IValidator<UpdateClientRequest>? updateClientValidator = null,
         IValidator<CreateCarePlanRequest>? createCarePlanValidator = null,
-        IValidator<UpdateCarePlanRequest>? updateCarePlanValidator = null)
+        IValidator<UpdateCarePlanRequest>? updateCarePlanValidator = null,
+        IObjectAuthorizationService? objectAuthorization = null)
     {
         this.unitOfWork = unitOfWork;
         this.currentUser = currentUser;
         this.identityProvisioning = identityProvisioning;
         this.clientAccessEvaluator = clientAccessEvaluator;
         this.auditLogger = auditLogger;
+        // One rule source (CODE_REVIEW_TODO §1): the service re-checks object access as a second
+        // enforcement layer, but the rule itself lives only in IObjectAuthorizationService.
+        this.objectAuthorization = objectAuthorization ?? new Sprint4ObjectAuthorizationService(unitOfWork, clientAccessEvaluator);
         this.createClientValidator = createClientValidator ?? new CreateClientRequestValidator();
         this.updateClientValidator = updateClientValidator ?? new UpdateClientRequestValidator();
         this.createCarePlanValidator = createCarePlanValidator ?? new CreateCarePlanRequestValidator();
@@ -102,37 +108,48 @@ public sealed class ClientOperationsService : IClientOperationsService
             EstimatedWeeklyHours = request.EstimatedWeeklyHours,
         };
 
-        await unitOfWork.ExecuteInTransactionAsync(
-            async token =>
-            {
-                if (isNewUser)
+        try
+        {
+            await unitOfWork.ExecuteInTransactionAsync(
+                async token =>
                 {
-                    await unitOfWork.Users.AddAsync(domainUser, token);
-                }
-                else
-                {
-                    await unitOfWork.Users.UpdateAsync(domainUser, token);
-                }
-                await unitOfWork.Clients.AddAsync(client, token);
-                await unitOfWork.SaveChangesAsync(token);
-
-                var provisioningResult = await identityProvisioning.ProvisionUserAsync(
-                    new IdentityProvisioningRequest(
-                        domainUser.Id,
-                        domainUser.Email,
-                        domainUser.PhoneNumber,
-                        request.TemporaryPassword!,
-                        ApplicationRoles.Client),
-                    token);
-
-                if (!provisioningResult.Succeeded)
-                {
-                    throw new ValidationException("The account could not be provisioned.");
-                }
-
-                await AuditAsync(ProtectedResourceType.Client, client.Id, AuditAction.Create, token);
-            },
-            cancellationToken);
+                    if (isNewUser)
+                    {
+                        await unitOfWork.Users.AddAsync(domainUser, token);
+                    }
+                    else
+                    {
+                        await unitOfWork.Users.UpdateAsync(domainUser, token);
+                    }
+                    await unitOfWork.Clients.AddAsync(client, token);
+                    await unitOfWork.SaveChangesAsync(token);
+    
+                    var provisioningResult = await identityProvisioning.ProvisionUserAsync(
+                        new IdentityProvisioningRequest(
+                            domainUser.Id,
+                            domainUser.Email,
+                            domainUser.PhoneNumber,
+                            domainUser.FullName,
+                            request.TemporaryPassword!,
+                            ApplicationRoles.Client),
+                        token);
+    
+                    if (!provisioningResult.Succeeded)
+                    {
+                        throw new ValidationException("The account could not be provisioned.");
+                    }
+    
+                    await AuditAsync(ProtectedResourceType.Client, client.Id, AuditAction.Create, token);
+                },
+                cancellationToken);
+        }
+        catch
+        {
+            // The tenant transaction rolled back after identity provisioning committed to the control
+            // plane; deactivate the membership so no login outlives the tenant user (D-CP04-02).
+            await identityProvisioning.CompensateAsync(domainUser.Id, cancellationToken);
+            throw;
+        }
 
         return client.ToDetailDto(includeOperationalFields: HasOperationalClientDetailAccess());
     }
@@ -481,8 +498,26 @@ public sealed class ClientOperationsService : IClientOperationsService
             return;
         }
 
+        // Only clinicians may write clinical records besides Admin/Coordinator (the controller's
+        // role list); the object rule then decides which client this clinician may write, so the
+        // relationship rule exists once. The role gate stays here so a future non-HTTP caller
+        // cannot reach the object rule's Client/Caregiver read grants for a write.
+        if (!HasRole(ApplicationRoles.Clinician))
+        {
+            await AuditAsync(ProtectedResourceType.Client, client.Id, AuditAction.AccessDenied, cancellationToken);
+            throw new ResourceAccessDeniedException("RoleInsufficient", isPhiResource: true);
+        }
+
+        var result = await objectAuthorization.AuthorizeAsync(
+            new ObjectAccessRequest(currentUser, ProtectedResourceType.Client, client.Id, ObjectAccessAction.Update, currentUser.CorrelationId),
+            cancellationToken);
+        if (result.IsAuthorized)
+        {
+            return;
+        }
+
         await AuditAsync(ProtectedResourceType.Client, client.Id, AuditAction.AccessDenied, cancellationToken);
-        throw new ResourceAccessDeniedException("RoleInsufficient", isPhiResource: true);
+        throw new ResourceAccessDeniedException(result.DenialCode ?? "RoleInsufficient", isPhiResource: true);
     }
 
     private async Task<bool> IsCurrentCaregiverAssignedToClientAsync(Guid clientId, CancellationToken cancellationToken)

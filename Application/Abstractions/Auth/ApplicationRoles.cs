@@ -9,6 +9,12 @@ public static class ApplicationRoles
     public const string FacilityManager = "FacilityManager";
     public const string Clinician = "Clinician";
 
+    /// <summary>
+    /// Control-plane operator role (CP-04). Issued only in platform tokens; deliberately absent
+    /// from <see cref="All"/> so tenant role policies and the Contracts enum parity are unaffected.
+    /// </summary>
+    public const string PlatformAdmin = "PlatformAdmin";
+
     public static readonly IReadOnlySet<string> All = new HashSet<string>(StringComparer.Ordinal)
     {
         Admin,

@@ -324,6 +324,110 @@ public sealed class Sprint4BillingServiceTests
     }
 
     [Fact]
+    public async Task RecordPaymentAsync_WhenTheSameReceiptIsSubmittedAgain_ReturnsTheInvoiceWithoutASecondPayment()
+    {
+        // Arrange — review finding H5: a retried request (dropped response) must be idempotent.
+        var context = CreateContext();
+        var invoice = Invoice(context.Client.Id, total: 100m);
+        SetupInvoiceLoad(context, invoice);
+        var recorded = new Payment { InvoiceId = invoice.Id, Amount = 40m, Method = PaymentMethod.Check, ReferenceNumber = "CHK-1001", PaymentDate = PeriodStart.AddDays(10), Status = PaymentStatus.Settled };
+        context.Payments.Setup(repository => repository.FindAsync(It.IsAny<Expression<Func<Payment, bool>>>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new[] { recorded });
+
+        // Act
+        var result = await context.Service.RecordPaymentAsync(invoice.Id, new RecordPaymentRequest
+        {
+            Amount = 40m,
+            Method = ContractPaymentMethod.Check,
+            PaymentDate = PeriodStart.AddDays(11),
+            ReferenceNumber = " CHK-1001 ",
+        });
+
+        // Assert
+        result.AmountPaid.Should().Be(40m);
+        result.Payments.Should().ContainSingle();
+        context.Payments.Verify(repository => repository.AddAsync(It.IsAny<Payment>(), It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task RecordPaymentAsync_WhenAConcurrentRequestWinsTheUniqueIndex_RepliesAsAReplayInsteadOfFailing()
+    {
+        // Arrange — two retries pass the in-memory check; the loser hits UX_Payments_InvoiceId_ReferenceNumber.
+        var context = CreateContext();
+        var invoice = Invoice(context.Client.Id, total: 100m);
+        SetupInvoiceLoad(context, invoice);
+        var winner = new Payment { InvoiceId = invoice.Id, Amount = 40m, Method = PaymentMethod.Check, ReferenceNumber = "CHK-2002", PaymentDate = PeriodStart.AddDays(10), Status = PaymentStatus.Settled };
+        var reads = 0;
+        context.Payments.Setup(repository => repository.FindAsync(It.IsAny<Expression<Func<Payment, bool>>>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(() => ++reads == 1 ? Array.Empty<Payment>() : new[] { winner });
+        var databaseError = new InvalidOperationException("unique index violated");
+        context.UnitOfWork.Setup(work => work.SaveChangesAsync(It.IsAny<CancellationToken>())).ThrowsAsync(databaseError);
+        context.ConflictDetector.Setup(detector => detector.IsUniqueConstraintConflict(databaseError, "UX_Payments_InvoiceId_ReferenceNumber")).Returns(true);
+
+        // Act
+        var result = await context.Service.RecordPaymentAsync(invoice.Id, new RecordPaymentRequest
+        {
+            Amount = 40m,
+            Method = ContractPaymentMethod.Check,
+            PaymentDate = PeriodStart.AddDays(10),
+            ReferenceNumber = "chk-2002",
+        });
+
+        // Assert — the re-read shows the winner; the case-folded reference matches as SQL Server would.
+        result.Payments.Should().ContainSingle();
+        result.AmountPaid.Should().Be(40m);
+    }
+
+    [Fact]
+    public async Task RecordPaymentAsync_WhenTheRecordedPaymentWithThatReferenceIsNotSettled_Conflicts()
+    {
+        // Arrange — a Failed receipt must not be answered as a successful replay.
+        var context = CreateContext();
+        var invoice = Invoice(context.Client.Id, total: 100m);
+        SetupInvoiceLoad(context, invoice);
+        var failed = new Payment { InvoiceId = invoice.Id, Amount = 40m, Method = PaymentMethod.Check, ReferenceNumber = "CHK-3003", PaymentDate = PeriodStart.AddDays(10), Status = PaymentStatus.Failed };
+        context.Payments.Setup(repository => repository.FindAsync(It.IsAny<Expression<Func<Payment, bool>>>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new[] { failed });
+
+        // Act
+        var act = async () => await context.Service.RecordPaymentAsync(invoice.Id, new RecordPaymentRequest
+        {
+            Amount = 40m,
+            Method = ContractPaymentMethod.Check,
+            PaymentDate = PeriodStart.AddDays(11),
+            ReferenceNumber = "CHK-3003",
+        });
+
+        // Assert
+        (await act.Should().ThrowAsync<ResourceConflictException>()).Which.Code.Should().Be("payment.reference_in_use");
+    }
+
+    [Fact]
+    public async Task RecordPaymentAsync_WhenAReferenceIsReusedWithDifferentMoney_Conflicts()
+    {
+        // Arrange
+        var context = CreateContext();
+        var invoice = Invoice(context.Client.Id, total: 100m);
+        SetupInvoiceLoad(context, invoice);
+        var recorded = new Payment { InvoiceId = invoice.Id, Amount = 40m, Method = PaymentMethod.Check, ReferenceNumber = "CHK-1001", PaymentDate = PeriodStart.AddDays(10), Status = PaymentStatus.Settled };
+        context.Payments.Setup(repository => repository.FindAsync(It.IsAny<Expression<Func<Payment, bool>>>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new[] { recorded });
+
+        // Act
+        var act = async () => await context.Service.RecordPaymentAsync(invoice.Id, new RecordPaymentRequest
+        {
+            Amount = 60m,
+            Method = ContractPaymentMethod.Check,
+            PaymentDate = PeriodStart.AddDays(11),
+            ReferenceNumber = "CHK-1001",
+        });
+
+        // Assert
+        (await act.Should().ThrowAsync<ResourceConflictException>()).Which.Code.Should().Be("payment.reference_in_use");
+        context.Payments.Verify(repository => repository.AddAsync(It.IsAny<Payment>(), It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    [Fact]
     public async Task GetMarginSummaryAsync_WhenCompletedBillableShiftsExist_SplitsServiceLinesAndAuditsReads()
     {
         // Arrange

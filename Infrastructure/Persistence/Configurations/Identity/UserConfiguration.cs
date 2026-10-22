@@ -29,7 +29,7 @@ public sealed class UserConfiguration : IEntityTypeConfiguration<User>
         builder.Property(user => user.LastName).HasMaxLength(100).IsRequired();
         builder.Property(user => user.Email).HasMaxLength(256).IsRequired();
         builder.Property(user => user.PhoneNumber).HasMaxLength(20).IsRequired();
-        builder.Property(user => user.Address).HasMaxLength(200);
+        builder.Property(user => user.Address).HasMaxLength(500);
         builder.Property(user => user.City).HasMaxLength(100);
         builder.Property(user => user.State).HasMaxLength(50);
         builder.Property(user => user.ZipCode).HasMaxLength(10);

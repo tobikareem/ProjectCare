@@ -11,6 +11,13 @@ public sealed class ControlPlaneOptions
     /// <summary>Configuration section name.</summary>
     public const string SectionName = "ControlPlane";
 
+    /// <summary>
+    /// Until CP-06 routes data planes every organization shares one tenant database, so a second
+    /// Active organization would share PHI. False (default) makes startup and reactivation refuse
+    /// it; true is for Development and tests with synthetic data only.
+    /// </summary>
+    public bool AllowMultipleActiveOrganizations { get; set; }
+
     /// <summary>Hosts that serve platform (operator) traffic. Configuration-only by design (D-CP04-10).</summary>
     public string[] PlatformHostNames { get; set; } = [];
 

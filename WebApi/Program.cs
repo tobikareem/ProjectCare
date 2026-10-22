@@ -167,6 +167,11 @@ using (var scope = app.Services.CreateScope())
 
     await bootstrapper.EnsurePlatformAdminAsync();
 
+    // One operational database until CP-06: a second Active organization would share the tenant
+    // database, so refuse to start unless ControlPlane:AllowMultipleActiveOrganizations says this
+    // deployment holds synthetic data only (Development sets it for the seeded second organization).
+    await bootstrapper.EnsureSingleOperationalOrganizationAsync();
+
     if (autoMigrate)
     {
         var userManager = scope.ServiceProvider.GetRequiredService<UserManager<PlatformUser>>();

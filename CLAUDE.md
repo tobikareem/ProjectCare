@@ -140,7 +140,7 @@ _specs/
 - **Entity configurations**: Fluent API only — never data annotations on entities
 - **UTC DateTime converter**: Apply on every `DateTime` and `DateTime?` property to preserve `DateTimeKind.Utc` through SQL Server round-trips
 - **Decimal precision**: `(18, 2)` for all monetary values (BillRate, PayRate, Amount, etc.)
-- **String lengths**: Email=256, Names=100, PhoneNumber=20, ZipCode=10, CertificationNumber=50, InvoiceNumber=20, Address=500
+- **String lengths**: Email=256, Names=100, PhoneNumber=20, ZipCode=10, CertificationNumber=50, InvoiceNumber=50 (generated as `INV-yyyyMMdd-XXXXXXXX`, 21 chars), Address=500, audit actor columns (`CreatedBy`/`UpdatedBy`)=256
 - **Cascade deletes**: `DeleteBehavior.Restrict` on PHI entities (Client, CarePlan, VisitNote, VisitPhoto, Shift, CaregiverCertification) — never cascade delete clinical data
 - **Computed properties**: `.Ignore()` in configuration — never persist to database (FullName, Age, BillableHours, GrossMargin, etc.)
 - **Audit interceptor**: `SaveChangesInterceptor` auto-sets `CreatedAt`, `CreatedBy`, `UpdatedAt`, `UpdatedBy` — never set these manually in service code
@@ -156,6 +156,8 @@ _specs/
 - **Platform audit is append-only** through `IPlatformAuditLogger` only: actor id, organization id, action, entity type/id, correlation id, host *hash* — never an email, host string, or PHI value.
 - **Platform host names come from configuration** (`ControlPlane:PlatformHostNames`), never from `OrganizationDomain`. Reserved slugs: `platform, admin, api, www, login`.
 - **Secrets**: `ControlPlane:PlatformAdmin:Password` comes from user secrets / environment only (first-run bootstrap of the platform operator); never commit it.
+- **One operational database until CP-06**: a second Active organization is refused at startup and on reactivation unless `ControlPlane:AllowMultipleActiveOrganizations` is true (synthetic data only). Do not remove this guard before data-plane routing exists.
+- **Idempotent money**: a payment reference is one settlement per invoice (`UX_Payments_InvoiceId_ReferenceNumber`); a retried request replays, a different amount under the same reference is a 409. Extend this pattern to any external callback.
 
 
 ---

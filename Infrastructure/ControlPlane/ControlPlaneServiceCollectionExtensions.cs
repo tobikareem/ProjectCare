@@ -166,8 +166,7 @@ public static class ControlPlaneServiceCollectionExtensions
         var tenantConnectionString = FirstNonBlank(
             configuration.GetConnectionString($"{provider}Connection"),
             configuration.GetConnectionString("DefaultConnection"));
-        if (tenantConnectionString is not null
-            && string.Equals(Normalize(tenantConnectionString), Normalize(connectionString), StringComparison.Ordinal))
+        if (tenantConnectionString is not null && TargetsSameDatabase(tenantConnectionString, connectionString))
         {
             throw new InvalidOperationException(
                 "The control-plane connection string must not equal the tenant connection string; the control plane requires a separate database.");
@@ -177,8 +176,77 @@ public static class ControlPlaneServiceCollectionExtensions
 
         static string? FirstNonBlank(params string?[] candidates) =>
             candidates.FirstOrDefault(candidate => !string.IsNullOrWhiteSpace(candidate));
+    }
 
-        static string Normalize(string value) =>
+    // Keys SQL Server (Microsoft.Data.SqlClient) and Npgsql accept for the server and catalog.
+    private static readonly string[] ServerKeys = ["server", "data source", "datasource", "host", "addr", "address", "network address"];
+    private static readonly string[] DatabaseKeys = ["database", "initial catalog"];
+
+    /// <summary>
+    /// True when both strings name the same server and database, whatever the key order,
+    /// synonyms, credentials or optional parameters. Falls back to whitespace/case-insensitive
+    /// text equality when either string cannot be parsed.
+    /// </summary>
+    public static bool TargetsSameDatabase(string first, string second)
+    {
+        var firstTarget = DatabaseTarget(first);
+        var secondTarget = DatabaseTarget(second);
+        if (firstTarget is not null && secondTarget is not null)
+        {
+            // A missing catalog means "the login's default database": treated as the same target
+            // when the servers match, because refusing is the safe direction for this guard.
+            return string.Equals(firstTarget.Value.Server, secondTarget.Value.Server, StringComparison.OrdinalIgnoreCase)
+                && (firstTarget.Value.Database is null
+                    || secondTarget.Value.Database is null
+                    || string.Equals(firstTarget.Value.Database, secondTarget.Value.Database, StringComparison.OrdinalIgnoreCase));
+        }
+
+        static string Collapse(string value) =>
             string.Concat(value.Where(character => !char.IsWhiteSpace(character))).ToLowerInvariant().TrimEnd(';');
+        return string.Equals(Collapse(first), Collapse(second), StringComparison.Ordinal);
+    }
+
+    private static (string Server, string? Database)? DatabaseTarget(string connectionString)
+    {
+        try
+        {
+            var builder = new System.Data.Common.DbConnectionStringBuilder { ConnectionString = connectionString };
+            var server = ServerKeys.Select(key => builder.TryGetValue(key, out var value) ? value?.ToString() : null).FirstOrDefault(value => !string.IsNullOrWhiteSpace(value));
+            var database = DatabaseKeys.Select(key => builder.TryGetValue(key, out var value) ? value?.ToString() : null).FirstOrDefault(value => !string.IsNullOrWhiteSpace(value));
+            return server is null ? null : (CanonicalServer(server), database?.Trim());
+        }
+        catch (ArgumentException)
+        {
+            return null;
+        }
+    }
+
+    // "tcp:host,1433", "host:5432", "HOST.", ".", "(local)", "127.0.0.1" and "localhost" all name
+    // the same machine for this guard; the port is dropped because one server process hosts both
+    // catalogs whatever port the string spells.
+    private static string CanonicalServer(string server)
+    {
+        var value = server.Trim().ToLowerInvariant();
+        if (value.StartsWith("tcp:", StringComparison.Ordinal))
+        {
+            value = value[4..];
+        }
+
+        var instanceIndex = value.IndexOf('\\');
+        var instance = instanceIndex >= 0 ? value[instanceIndex..] : string.Empty;
+        var host = instanceIndex >= 0 ? value[..instanceIndex] : value;
+        var portIndex = host.IndexOfAny([',', ':']);
+        if (portIndex >= 0 && host[(portIndex + 1)..].All(char.IsAsciiDigit))
+        {
+            host = host[..portIndex];
+        }
+
+        host = host.TrimEnd('.');
+        if (host is "." or "(local)" or "127.0.0.1" or "::1" or "[::1]")
+        {
+            host = "localhost";
+        }
+
+        return host + instance;
     }
 }

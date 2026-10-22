@@ -8,4 +8,7 @@ public interface IPlatformDomainSettings
 
     /// <summary>Normalized hosts that serve platform (operator) traffic; never assignable to an organization.</summary>
     IReadOnlySet<string> PlatformHostNames { get; }
+
+    /// <summary>True only for synthetic environments; production keeps one Active organization until CP-06.</summary>
+    bool AllowMultipleActiveOrganizations { get; }
 }

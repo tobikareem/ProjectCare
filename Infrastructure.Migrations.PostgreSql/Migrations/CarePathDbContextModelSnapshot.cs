@@ -184,8 +184,8 @@ namespace CarePath.Infrastructure.Migrations.PostgreSql.Migrations
                         .HasColumnType("timestamp with time zone");
 
                     b.Property<string>("CreatedBy")
-                        .HasMaxLength(100)
-                        .HasColumnType("character varying(100)");
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)");
 
                     b.Property<string>("Description")
                         .IsRequired()
@@ -212,8 +212,8 @@ namespace CarePath.Infrastructure.Migrations.PostgreSql.Migrations
                         .HasColumnType("timestamp with time zone");
 
                     b.Property<string>("UpdatedBy")
-                        .HasMaxLength(100)
-                        .HasColumnType("character varying(100)");
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)");
 
                     b.HasKey("Id");
 
@@ -248,8 +248,8 @@ namespace CarePath.Infrastructure.Migrations.PostgreSql.Migrations
                         .HasColumnType("timestamp with time zone");
 
                     b.Property<string>("CreatedBy")
-                        .HasMaxLength(100)
-                        .HasColumnType("character varying(100)");
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)");
 
                     b.Property<string>("FailureReason")
                         .HasMaxLength(500)
@@ -282,8 +282,8 @@ namespace CarePath.Infrastructure.Migrations.PostgreSql.Migrations
                         .HasColumnType("timestamp with time zone");
 
                     b.Property<string>("UpdatedBy")
-                        .HasMaxLength(100)
-                        .HasColumnType("character varying(100)");
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)");
 
                     b.HasKey("Id");
 
@@ -305,6 +305,11 @@ namespace CarePath.Infrastructure.Migrations.PostgreSql.Migrations
                     b.HasIndex("Status")
                         .HasDatabaseName("IX_Payments_Status");
 
+                    b.HasIndex("InvoiceId", "ReferenceNumber")
+                        .IsUnique()
+                        .HasDatabaseName("UX_Payments_InvoiceId_ReferenceNumber")
+                        .HasFilter("\"ReferenceNumber\" IS NOT NULL AND \"IsDeleted\" = false");
+
                     b.ToTable("Payments", (string)null);
                 });
 
@@ -321,8 +326,8 @@ namespace CarePath.Infrastructure.Migrations.PostgreSql.Migrations
                         .HasColumnType("timestamp with time zone");
 
                     b.Property<string>("CreatedBy")
-                        .HasMaxLength(100)
-                        .HasColumnType("character varying(100)");
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)");
 
                     b.Property<string>("Description")
                         .HasMaxLength(1000)
@@ -361,8 +366,8 @@ namespace CarePath.Infrastructure.Migrations.PostgreSql.Migrations
                         .HasColumnType("timestamp with time zone");
 
                     b.Property<string>("UpdatedBy")
-                        .HasMaxLength(100)
-                        .HasColumnType("character varying(100)");
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)");
 
                     b.HasKey("Id");
 
@@ -703,8 +708,8 @@ namespace CarePath.Infrastructure.Migrations.PostgreSql.Migrations
                         .HasColumnType("uuid");
 
                     b.Property<string>("Address")
-                        .HasMaxLength(200)
-                        .HasColumnType("character varying(200)");
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
 
                     b.Property<string>("City")
                         .HasMaxLength(100)
@@ -841,8 +846,8 @@ namespace CarePath.Infrastructure.Migrations.PostgreSql.Migrations
                         .HasColumnType("timestamp with time zone");
 
                     b.Property<string>("CreatedBy")
-                        .HasMaxLength(100)
-                        .HasColumnType("character varying(100)");
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)");
 
                     b.Property<decimal?>("HolidayPremium")
                         .HasPrecision(18, 2)
@@ -879,8 +884,8 @@ namespace CarePath.Infrastructure.Migrations.PostgreSql.Migrations
                         .HasColumnType("timestamp with time zone");
 
                     b.Property<string>("UpdatedBy")
-                        .HasMaxLength(100)
-                        .HasColumnType("character varying(100)");
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)");
 
                     b.Property<decimal?>("WeekendPremium")
                         .HasPrecision(18, 2)
@@ -951,8 +956,8 @@ namespace CarePath.Infrastructure.Migrations.PostgreSql.Migrations
                         .HasColumnType("timestamp with time zone");
 
                     b.Property<string>("CreatedBy")
-                        .HasMaxLength(100)
-                        .HasColumnType("character varying(100)");
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)");
 
                     b.Property<bool>("Exercise")
                         .HasColumnType("boolean");
@@ -996,8 +1001,8 @@ namespace CarePath.Infrastructure.Migrations.PostgreSql.Migrations
                         .HasColumnType("timestamp with time zone");
 
                     b.Property<string>("UpdatedBy")
-                        .HasMaxLength(100)
-                        .HasColumnType("character varying(100)");
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)");
 
                     b.Property<DateTime>("VisitDateTime")
                         .HasColumnType("timestamp with time zone");
@@ -1036,8 +1041,8 @@ namespace CarePath.Infrastructure.Migrations.PostgreSql.Migrations
                         .HasColumnType("timestamp with time zone");
 
                     b.Property<string>("CreatedBy")
-                        .HasMaxLength(100)
-                        .HasColumnType("character varying(100)");
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)");
 
                     b.Property<bool>("IsDeleted")
                         .HasColumnType("boolean");
@@ -1054,8 +1059,8 @@ namespace CarePath.Infrastructure.Migrations.PostgreSql.Migrations
                         .HasColumnType("timestamp with time zone");
 
                     b.Property<string>("UpdatedBy")
-                        .HasMaxLength(100)
-                        .HasColumnType("character varying(100)");
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)");
 
                     b.Property<Guid>("VisitNoteId")
                         .HasColumnType("uuid");

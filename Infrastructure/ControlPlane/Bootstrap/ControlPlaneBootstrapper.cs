@@ -268,6 +268,31 @@ public sealed class ControlPlaneBootstrapper
     }
 
     /// <summary>
+    /// Fails startup when more than one Active organization exists and
+    /// <see cref="ControlPlaneOptions.AllowMultipleActiveOrganizations"/> is false. Every request
+    /// still reaches the single configured tenant database until CP-06 routes data planes, so a
+    /// second Active organization would share PHI with the first (review finding C1). The
+    /// platform API enforces the same rule on reactivation; this is the restart backstop.
+    /// </summary>
+    /// <param name="cancellationToken">Token to cancel the asynchronous operation.</param>
+    /// <exception cref="InvalidOperationException">More than one Active organization exists.</exception>
+    public async Task EnsureSingleOperationalOrganizationAsync(CancellationToken cancellationToken = default)
+    {
+        if (_options.AllowMultipleActiveOrganizations)
+        {
+            return;
+        }
+
+        var active = await _context.Organizations.CountAsync(organization => organization.Status == OrganizationStatus.Active, cancellationToken);
+        if (active > 1)
+        {
+            throw new InvalidOperationException(
+                $"{active} Active organizations exist but this release serves one operational database (CP-06 routing is not implemented). "
+                + "Suspend all but the backfilled organization, or set ControlPlane:AllowMultipleActiveOrganizations=true only for synthetic data.");
+        }
+    }
+
+    /// <summary>
     /// Ensures the default organization exists as Active and Provisioned with its verified host
     /// names, default branding, and data-plane locator. A second run finds it by slug and changes
     /// nothing. On an empty control plane the <c>ControlPlane:DefaultOrganization</c> section is

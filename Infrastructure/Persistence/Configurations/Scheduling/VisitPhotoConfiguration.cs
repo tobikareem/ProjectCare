@@ -18,8 +18,8 @@ public sealed class VisitPhotoConfiguration : IEntityTypeConfiguration<VisitPhot
 
         builder.Property(photo => photo.PhotoUrl).HasMaxLength(500).IsRequired();
         builder.Property(photo => photo.Caption).HasMaxLength(500);
-        builder.Property(photo => photo.CreatedBy).HasMaxLength(100);
-        builder.Property(photo => photo.UpdatedBy).HasMaxLength(100);
+        builder.Property(photo => photo.CreatedBy).HasMaxLength(256);
+        builder.Property(photo => photo.UpdatedBy).HasMaxLength(256);
 
         builder
             .HasOne(photo => photo.VisitNote)

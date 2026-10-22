@@ -72,6 +72,7 @@ The API uses two databases: the **control plane** (organizations, host names, br
 | `ControlPlane:PlatformAdmin:Email` / `DisplayName` | First platform operator, created once on an empty control plane. |
 | `ControlPlane:PlatformAdmin:Password` | **Secret** — user secrets or environment (`CONTROLPLANE__PLATFORMADMIN__PASSWORD`) only. Startup fails closed without it when the operator must be created. |
 | `ControlPlane:TrustedProxies:KnownProxies` / `KnownNetworks` | Reverse proxies whose `X-Forwarded-*` headers are honored. Empty = none trusted. |
+| `ControlPlane:AllowMultipleActiveOrganizations` | Default `false`: startup and organization reactivation refuse a second Active organization, because every organization shares one tenant database until CP-06 routes data planes. Set `true` only for synthetic data (Development sets it for the seeded `helpinghands`). |
 
 Requests are routed to an organization by the **host name** before authentication; an unknown or suspended host receives the same generic 401 as a bad login. Tokens are bound to the organization they were issued for. Development hosts: `localhost` / `carepath.localhost` (CarePath Health) and `helpinghands.localhost` (synthetic second organization sharing the dev database); `platform.localhost` is the platform host. The Blazor client reads an empty `Api:BaseAddress` as same-origin; with an absolute address the organization is the one owning the API host.
 

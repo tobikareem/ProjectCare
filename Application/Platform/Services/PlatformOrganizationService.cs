@@ -190,6 +190,15 @@ public sealed class PlatformOrganizationService : IPlatformOrganizationService
             throw new ResourceConflictException("organization.not_provisioned", "The organization has no provisioned data plane.");
         }
 
+        // One operational database until CP-06 (review finding C1): a second Active organization
+        // would share PHI with the first, so reactivation is refused unless this deployment is
+        // explicitly synthetic. Startup enforces the same rule as a backstop.
+        if (!_platformSettings.AllowMultipleActiveOrganizations
+            && await _controlPlane.Organizations.ExistsAsync(candidate => candidate.Status == OrganizationStatus.Active && candidate.Id != organization.Id, cancellationToken))
+        {
+            throw new ResourceConflictException("organization.single_data_plane", "Only one organization can be active until per-organization data planes are routed (CP-06).");
+        }
+
         organization.Status = OrganizationStatus.Active;
         organization.SuspensionReason = null;
         await _controlPlane.Organizations.UpdateAsync(organization, cancellationToken);

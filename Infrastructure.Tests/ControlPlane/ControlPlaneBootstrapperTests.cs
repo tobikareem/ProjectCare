@@ -284,6 +284,32 @@ public sealed class ControlPlaneBootstrapperTests
     }
 
     [Fact]
+    public async Task EnsureSingleOperationalOrganization_WhenASecondOrganizationIsActive_FailsStartup()
+    {
+        // Arrange — review finding C1: one tenant database until CP-06, so a second Active
+        // organization outside Development must stop the process rather than share PHI.
+        using var context = CreateContext();
+        var bootstrapper = CreateBootstrapper(context, DefaultOptions(), Mock.Of<IPlatformAuditLogger>());
+        context.Organizations.Add(new Organization { LegalName = "One", DisplayName = "One", Slug = "one", Status = OrganizationStatus.Active });
+        context.Organizations.Add(new Organization { LegalName = "Two", DisplayName = "Two", Slug = "two", Status = OrganizationStatus.Suspended });
+        await context.SaveChangesAsync();
+
+        // Act
+        await bootstrapper.EnsureSingleOperationalOrganizationAsync();
+        context.Organizations.Add(new Organization { LegalName = "Three", DisplayName = "Three", Slug = "three", Status = OrganizationStatus.Active });
+        await context.SaveChangesAsync();
+        var act = async () => await bootstrapper.EnsureSingleOperationalOrganizationAsync();
+
+        // Assert
+        (await act.Should().ThrowAsync<InvalidOperationException>()).WithMessage("*CP-06*");
+
+        // Synthetic deployments opt in explicitly (Development seed, integration host).
+        var options = DefaultOptions();
+        options.AllowMultipleActiveOrganizations = true;
+        await CreateBootstrapper(context, options, Mock.Of<IPlatformAuditLogger>()).EnsureSingleOperationalOrganizationAsync();
+    }
+
+    [Fact]
     public async Task EnsurePlatformAdmin_CreatesTheAdministratorOnceAndFailsClosedWithoutAPassword()
     {
         // Arrange

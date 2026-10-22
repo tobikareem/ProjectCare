@@ -23,8 +23,8 @@ public sealed class ShiftConfiguration : IEntityTypeConfiguration<Shift>
         builder.Property(shift => shift.HolidayPremium).HasPrecision(18, 2);
         builder.Property(shift => shift.Notes).HasMaxLength(1000);
         builder.Property(shift => shift.CancellationReason).HasMaxLength(500);
-        builder.Property(shift => shift.CreatedBy).HasMaxLength(100);
-        builder.Property(shift => shift.UpdatedBy).HasMaxLength(100);
+        builder.Property(shift => shift.CreatedBy).HasMaxLength(256);
+        builder.Property(shift => shift.UpdatedBy).HasMaxLength(256);
 
         builder.Ignore(shift => shift.ScheduledDuration);
         builder.Ignore(shift => shift.ActualDuration);

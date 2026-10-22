@@ -186,6 +186,52 @@ public class DependencyInjectionTests
         act.Should().Throw<InvalidOperationException>().WithMessage("*must not equal the tenant connection string*");
     }
 
+    [Theory]
+    [InlineData("Database=CarePathHealth_Test;Server=localhost;User Id=cp;Password=x;Encrypt=True;")]
+    [InlineData("Data Source=LOCALHOST;Initial Catalog=carepathhealth_test;Integrated Security=true;Encrypt=True;TrustServerCertificate=True;")]
+    [InlineData("Server=localhost;Database=CarePathHealth_Test;Application Name=ControlPlane;Encrypt=True;")]
+    [InlineData("Server=tcp:localhost,1433;Database=CarePathHealth_Test;Encrypt=True;")]
+    [InlineData("Server=127.0.0.1;Database=CarePathHealth_Test;Encrypt=True;")]
+    [InlineData("Server=(local);Database=CarePathHealth_Test;Encrypt=True;")]
+    [InlineData("Host=localhost;Database=CarePathHealth_Test;Username=cp")]
+    [InlineData("Server=localhost;Integrated Security=true;Encrypt=True;")]
+    public void AddInfrastructure_WhenControlPlaneTargetsTheTenantDatabaseUnderAnotherSpelling_Throws(string controlPlane)
+    {
+        // Arrange — review finding M6: key order, synonyms, credentials and extra parameters must not
+        // disguise the same server and catalog.
+        var services = new ServiceCollection();
+        var configuration = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["ConnectionStrings:DefaultConnection"] = "Server=localhost;Database=CarePathHealth_Test;Integrated Security=true;Encrypt=True;TrustServerCertificate=True;",
+                ["ConnectionStrings:ControlPlaneConnection"] = controlPlane
+            })
+            .Build();
+
+        // Act
+        var act = () => services.AddInfrastructure(configuration);
+
+        // Assert
+        act.Should().Throw<InvalidOperationException>().WithMessage("*must not equal the tenant connection string*");
+    }
+
+    [Fact]
+    public void TargetsSameDatabase_WhenOnlyTheCatalogDiffers_IsFalse()
+    {
+        ControlPlaneServiceCollectionExtensions.TargetsSameDatabase(
+                "Server=localhost;Database=CarePathHealth;Encrypt=True;",
+                "Server=localhost;Database=CarePathControlPlane;Encrypt=True;")
+            .Should().BeFalse();
+        ControlPlaneServiceCollectionExtensions.TargetsSameDatabase(
+                "Host=devpi.local;Port=5432;Database=carepath;Username=u",
+                "Host=devpi.local;Port=5432;Database=carepath_controlplane;Username=u")
+            .Should().BeFalse();
+        ControlPlaneServiceCollectionExtensions.TargetsSameDatabase(
+                "Server=localhost\\SQLEXPRESS;Database=CarePath;Encrypt=True;",
+                "Server=localhost;Database=CarePath;Encrypt=True;")
+            .Should().BeFalse("a named instance is a different server process");
+    }
+
     [Fact]
     public void AddInfrastructure_WhenControlPlaneConnectionStringIsBlank_Throws()
     {

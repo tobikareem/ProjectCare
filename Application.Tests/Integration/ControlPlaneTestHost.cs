@@ -100,6 +100,7 @@ public sealed class ControlPlaneTestHost : IAsyncDisposable
                 ["ControlPlane:PlatformHostNames:0"] = PlatformHost,
                 ["ControlPlane:PlatformBaseDomain"] = "test",
                 ["ControlPlane:BrandingCacheSeconds"] = "0",
+                ["ControlPlane:AllowMultipleActiveOrganizations"] = "true",
             })
             .Build();
 

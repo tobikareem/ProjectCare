@@ -19,6 +19,9 @@ public sealed class PlatformDomainSettings : IPlatformDomainSettings
     public string PlatformBaseDomain => _options.Value.PlatformBaseDomain;
 
     /// <inheritdoc />
+    public bool AllowMultipleActiveOrganizations => _options.Value.AllowMultipleActiveOrganizations;
+
+    /// <inheritdoc />
     public IReadOnlySet<string> PlatformHostNames =>
         _options.Value.PlatformHostNames
             .Select(HostNameNormalizer.Normalize)

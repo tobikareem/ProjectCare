@@ -118,6 +118,7 @@ public class CarePathDbContext : DbContext
         builder.ApplyConfiguration(new UserConfiguration(dialect));
         builder.ApplyConfiguration(new InvoiceConfiguration(dialect));
         builder.ApplyConfiguration(new InvoiceLineItemConfiguration(dialect));
+        builder.ApplyConfiguration(new PaymentConfiguration(dialect));
 
         BaseEntityModelConventions.Apply(builder);
     }

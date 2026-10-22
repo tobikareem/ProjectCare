@@ -21,8 +21,8 @@ public sealed class CarePlanConfiguration : IEntityTypeConfiguration<CarePlan>
         builder.Property(plan => plan.Goals).HasMaxLength(2000);
         builder.Property(plan => plan.Interventions).HasMaxLength(2000);
         builder.Property(plan => plan.Notes).HasMaxLength(2000);
-        builder.Property(plan => plan.CreatedBy).HasMaxLength(100);
-        builder.Property(plan => plan.UpdatedBy).HasMaxLength(100);
+        builder.Property(plan => plan.CreatedBy).HasMaxLength(256);
+        builder.Property(plan => plan.UpdatedBy).HasMaxLength(256);
 
         builder
             .HasOne(plan => plan.Client)

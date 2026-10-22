@@ -99,6 +99,23 @@ public sealed class PlatformOrganizationServiceTests
     }
 
     [Fact]
+    public async Task Reactivate_WhenAnotherOrganizationIsActiveAndOnlyOneDataPlaneExists_Conflicts()
+    {
+        // Arrange — review finding C1: until CP-06 a second Active organization would share PHI.
+        var harness = new Harness();
+        harness.Organizations.Add(new OrganizationEntity { LegalName = "A", DisplayName = "A", Slug = "a", Status = OrganizationStatus.Active, ProvisioningState = ProvisioningState.Provisioned });
+        var suspended = new OrganizationEntity { LegalName = "B", DisplayName = "B", Slug = "b", Status = OrganizationStatus.Suspended, ProvisioningState = ProvisioningState.Provisioned };
+        harness.Organizations.Add(suspended);
+
+        // Act
+        var act = async () => await harness.Service.ReactivateAsync(suspended.Id);
+
+        // Assert
+        (await act.Should().ThrowAsync<ResourceConflictException>()).Which.Code.Should().Be("organization.single_data_plane");
+        suspended.Status.Should().Be(OrganizationStatus.Suspended);
+    }
+
+    [Fact]
     public async Task Reactivate_WhenOrganizationIsNotProvisioned_Conflicts()
     {
         // Arrange — FR-015: only CP-06 provisioning can make a Pending organization usable.

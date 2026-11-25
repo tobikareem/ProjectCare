@@ -10,4 +10,7 @@ public static class CarePathAuthorizationPolicies
     public const string Client = ApplicationRoles.Client;
     public const string FacilityManager = ApplicationRoles.FacilityManager;
     public const string Clinician = ApplicationRoles.Clinician;
+
+    /// <summary>Control-plane operator policy: PlatformAdmin role on a platform-kind token (CP-04).</summary>
+    public const string PlatformAdmin = "PlatformAdmin";
 }

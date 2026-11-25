@@ -282,6 +282,34 @@ public sealed class BillingOperationsService : IBillingOperationsService
             && issued.TotalBillableHours == current.TotalBillableHours;
     }
 
+    private const string PaymentReferenceInUseCode = "payment.reference_in_use";
+    private const string PaymentReferenceIndexName = "UX_Payments_InvoiceId_ReferenceNumber";
+
+    /// <summary>
+    /// Looks for a live payment on the invoice carrying <paramref name="reference"/>. Returns
+    /// false when none exists. When one exists, <paramref name="conflict"/> is <c>null</c> for an
+    /// exact settled replay (same amount and method) and a conflict exception otherwise. The
+    /// comparison is case-insensitive because SQL Server's default collation makes the unique
+    /// index case-insensitive; PostgreSQL is stricter than this check, which is the safe direction.
+    /// </summary>
+    private static bool TryReplayRecordedPayment(Invoice invoice, string reference, decimal amount, PaymentMethod method, out ResourceConflictException? conflict)
+    {
+        conflict = null;
+        var existing = invoice.Payments.FirstOrDefault(candidate =>
+            !candidate.IsDeleted && string.Equals(candidate.ReferenceNumber?.Trim(), reference, StringComparison.OrdinalIgnoreCase));
+        if (existing is null)
+        {
+            return false;
+        }
+
+        if (existing.Status != PaymentStatus.Settled || existing.Amount != amount || existing.Method != method)
+        {
+            conflict = new ResourceConflictException(PaymentReferenceInUseCode, "A different payment with this reference number is already recorded for the invoice.");
+        }
+
+        return true;
+    }
+
     private static ResourceConflictException PreviewStaleConflict()
     {
         return new ResourceConflictException(PreviewStaleCode, "The preview is no longer current. Refresh the preview and try again.");
@@ -295,14 +323,32 @@ public sealed class BillingOperationsService : IBillingOperationsService
         var invoice = await GetInvoiceEntityAsync(invoiceId, cancellationToken);
         await LoadInvoiceChildrenAsync(invoice, cancellationToken);
 
+        // IDEMPOTENCY: a receipt reference identifies one settlement per invoice. A retried
+        // request (dropped response, double click) returns the invoice as already recorded;
+        // the same reference with different money is a conflict, never a second receipt. The
+        // filtered unique index on (InvoiceId, ReferenceNumber) closes the concurrent window and
+        // the loser of that race is replayed below instead of surfacing the database error.
+        var reference = string.IsNullOrWhiteSpace(request.ReferenceNumber) ? null : request.ReferenceNumber.Trim();
+        var method = (PaymentMethod)(int)request.Method;
+        if (reference is not null && TryReplayRecordedPayment(invoice, reference, request.Amount, method, out var replay))
+        {
+            if (replay is not null)
+            {
+                throw replay;
+            }
+
+            await AttachClientUserAsync(invoice, cancellationToken);
+            return invoice.ToDetailDto();
+        }
+
         var payment = new Payment
         {
             InvoiceId = invoice.Id,
             Invoice = invoice,
             PaymentDate = request.PaymentDate,
             Amount = request.Amount,
-            Method = (PaymentMethod)(int)request.Method,
-            ReferenceNumber = request.ReferenceNumber,
+            Method = method,
+            ReferenceNumber = reference,
             Notes = request.Notes,
             Status = PaymentStatus.Settled,
         };
@@ -313,16 +359,34 @@ public sealed class BillingOperationsService : IBillingOperationsService
             invoice.PaidDate = request.PaymentDate;
         }
 
-        await unitOfWork.ExecuteInTransactionAsync(
-            async token =>
+        try
+        {
+            await unitOfWork.ExecuteInTransactionAsync(
+                async token =>
+                {
+                    await unitOfWork.Payments.AddAsync(payment, token);
+                    await unitOfWork.Invoices.UpdateAsync(invoice, token);
+                    await unitOfWork.SaveChangesAsync(token);
+                    await AuditAsync(ProtectedResourceType.Payment, payment.Id, AuditAction.Create, token);
+                    await AuditAsync(ProtectedResourceType.Invoice, invoice.Id, AuditAction.Update, token);
+                },
+                cancellationToken);
+        }
+        catch (Exception exception) when (reference is not null && persistenceConflictDetector.IsUniqueConstraintConflict(exception, PaymentReferenceIndexName))
+        {
+            // A concurrent request recorded this reference first: re-read and answer as a replay.
+            invoice = await GetInvoiceEntityAsync(invoiceId, cancellationToken);
+            await LoadInvoiceChildrenAsync(invoice, cancellationToken);
+            if (!TryReplayRecordedPayment(invoice, reference, request.Amount, method, out var raceReplay))
             {
-                await unitOfWork.Payments.AddAsync(payment, token);
-                await unitOfWork.Invoices.UpdateAsync(invoice, token);
-                await unitOfWork.SaveChangesAsync(token);
-                await AuditAsync(ProtectedResourceType.Payment, payment.Id, AuditAction.Create, token);
-                await AuditAsync(ProtectedResourceType.Invoice, invoice.Id, AuditAction.Update, token);
-            },
-            cancellationToken);
+                throw;
+            }
+
+            if (raceReplay is not null)
+            {
+                throw raceReplay;
+            }
+        }
 
         await AttachClientUserAsync(invoice, cancellationToken);
         return invoice.ToDetailDto();

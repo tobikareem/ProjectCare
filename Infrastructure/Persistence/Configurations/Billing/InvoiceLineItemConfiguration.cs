@@ -29,8 +29,8 @@ public sealed class InvoiceLineItemConfiguration : IEntityTypeConfiguration<Invo
         builder.Property(lineItem => lineItem.BillableHours).HasPrecision(18, 2);
         builder.Property(lineItem => lineItem.RatePerHour).HasPrecision(18, 2);
         builder.Property(lineItem => lineItem.CostPerHour).HasPrecision(18, 2);
-        builder.Property(lineItem => lineItem.CreatedBy).HasMaxLength(100);
-        builder.Property(lineItem => lineItem.UpdatedBy).HasMaxLength(100);
+        builder.Property(lineItem => lineItem.CreatedBy).HasMaxLength(256);
+        builder.Property(lineItem => lineItem.UpdatedBy).HasMaxLength(256);
 
         builder.Ignore(lineItem => lineItem.Total);
         builder.Ignore(lineItem => lineItem.TotalCost);

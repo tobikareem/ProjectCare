@@ -1,7 +1,10 @@
 using CarePath.Application;
 using CarePath.Application.Abstractions.Auth;
 using CarePath.Infrastructure;
-using CarePath.Infrastructure.Identity;
+using CarePath.Infrastructure.ControlPlane.Bootstrap;
+using CarePath.Infrastructure.ControlPlane.Persistence;
+using CarePath.WebApi.Tenancy;
+using CarePath.Infrastructure.ControlPlane.Identity;
 using CarePath.Infrastructure.Persistence;
 using CarePath.WebApi.Diagnostics;
 using CarePath.WebApi.Middleware;
@@ -29,6 +32,7 @@ var builder = WebApplication.CreateBuilder(args);
 // Add services to the container.
 builder.Services.AddApplication();
 builder.Services.AddScoped<ICurrentUserContext, HttpCurrentUserContext>();
+builder.Services.AddOrganizationResolution();
 builder.Services.AddInfrastructure(builder.Configuration);
 builder.Services.AddCarePathAuthentication(builder.Configuration);
 
@@ -36,7 +40,8 @@ builder.Services.AddCarePathAuthentication(builder.Configuration);
 // select different subsets of the same registry.
 builder.Services
     .AddHealthChecks()
-    .AddCheck<DatabaseHealthCheck>("database", tags: ["ready"]);
+    .AddCheck<DatabaseHealthCheck>("database", tags: ["ready"])
+    .AddCheck<ControlPlaneHealthCheck>("control-plane", tags: ["ready"]);
 
 // Application-layer validators require DateTimeKind.Utc; normalize every DateTime at the
 // HTTP boundary (JSON bodies via the converter, query/route values via the binder) so
@@ -92,6 +97,10 @@ var app = builder.Build();
 
 app.UseCarePathProblemDetails();
 
+// Forwarded headers are honored only from ControlPlane:TrustedProxies; host resolution below
+// reads the resulting Request.Host.
+app.UseTrustedForwardedHeaders();
+
 // The WASM client calls the documented http://localhost:5240 dev endpoint; a 307 to https
 // breaks browser CORS preflights, so HTTPS is only forced outside Development.
 if (!app.Environment.IsDevelopment())
@@ -122,6 +131,7 @@ if (app.Environment.IsDevelopment())
 using (var scope = app.Services.CreateScope())
 {
     var context = scope.ServiceProvider.GetRequiredService<CarePathDbContext>();
+    var controlPlane = scope.ServiceProvider.GetRequiredService<ControlPlaneDbContext>();
     var startupLogger = scope.ServiceProvider.GetRequiredService<ILoggerFactory>().CreateLogger("CarePath.Startup");
 
     // Connection-only probe: opens a connection and closes it. Creates and alters nothing.
@@ -131,18 +141,49 @@ using (var scope = app.Services.CreateScope())
         context.Database.ProviderName,
         canConnect ? "SUCCEEDED" : "FAILED");
 
-    // Each provider now has its own migrations assembly, so this is configuration-driven only.
-    if (app.Configuration.GetValue<bool>("Database:AutoMigrate"))
-    {
-        var userManager = scope.ServiceProvider.GetRequiredService<UserManager<ApplicationUser>>();
-        var roleManager = scope.ServiceProvider.GetRequiredService<RoleManager<IdentityRole<Guid>>>();
+    // CP-04 startup sequence (design spec, "Startup Sequence"): the control plane migrates
+    // first, legacy identities are copied before the tenant migration drops them from the model,
+    // and the idempotent backfill steps run on every startup regardless of AutoMigrate.
+    var autoMigrate = app.Configuration.GetValue<bool>("Database:AutoMigrate");
+    var bootstrapper = scope.ServiceProvider.GetRequiredService<ControlPlaneBootstrapper>();
 
+    if (autoMigrate)
+    {
+        await controlPlane.Database.MigrateAsync();
+    }
+
+    await bootstrapper.CopyLegacyIdentityAsync();
+
+    if (autoMigrate)
+    {
         await context.Database.MigrateAsync();
-        await CarePathDbContextSeed.SeedAsync(context, userManager, roleManager, builder.Configuration, app.Environment);
+    }
+
+    var defaultOrganizationId = await bootstrapper.EnsureDefaultOrganizationAsync();
+    if (defaultOrganizationId is not null)
+    {
+        await bootstrapper.EnsureMembershipsAsync(defaultOrganizationId.Value);
+    }
+
+    await bootstrapper.EnsurePlatformAdminAsync();
+
+    // One operational database until CP-06: a second Active organization would share the tenant
+    // database, so refuse to start unless ControlPlane:AllowMultipleActiveOrganizations says this
+    // deployment holds synthetic data only (Development sets it for the seeded second organization).
+    await bootstrapper.EnsureSingleOperationalOrganizationAsync();
+
+    if (autoMigrate)
+    {
+        var userManager = scope.ServiceProvider.GetRequiredService<UserManager<PlatformUser>>();
+        await CarePathDbContextSeed.SeedAsync(context, controlPlane, userManager, builder.Configuration, app.Environment);
     }
 }
 
 app.UseCors(webClientCorsPolicy);
+
+// Host -> organization before authentication, so a token can be checked against the host it was
+// presented at and an unknown host never reaches authentication or a tenant query.
+app.UseOrganizationResolution();
 
 app.UseAuthentication();
 app.UseAuthorization();

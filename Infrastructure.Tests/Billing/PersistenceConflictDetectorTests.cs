@@ -153,6 +153,7 @@ public class PersistenceConflictDetectorTests
         var settings = new Dictionary<string, string?>
         {
             ["ConnectionStrings:DefaultConnection"] = "Host=localhost;Database=carepath;Username=test",
+            ["ConnectionStrings:ControlPlaneConnection"] = "Host=localhost;Database=carepath_controlplane;Username=test",
             ["Database:Provider"] = configuredProvider,
         };
         var configuration = new ConfigurationBuilder().AddInMemoryCollection(settings).Build();

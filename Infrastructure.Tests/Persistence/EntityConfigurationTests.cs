@@ -3,7 +3,6 @@ using CarePath.Domain.Entities.Clinical;
 using CarePath.Domain.Entities.Identity;
 using CarePath.Domain.Entities.Scheduling;
 using CarePath.Domain.Entities.Transitions;
-using CarePath.Infrastructure.Identity;
 using CarePath.Infrastructure.Persistence;
 using CarePath.Infrastructure.Persistence.Interceptors;
 using FluentAssertions;
@@ -249,13 +248,19 @@ public class EntityConfigurationTests
 
 
     [Fact]
-    public void ApplicationUser_WhenConfigured_HasMatchingDomainUserQueryFilter()
+    public void User_WhenConfigured_LinksToThePlatformIdentityWithAFilteredUniqueIndex()
     {
+        // Arrange
+        var entityType = _model.FindEntityType(typeof(User))!;
+
+        // Act
+        var index = entityType.GetIndexes().Single(candidate =>
+            candidate.Properties.Count == 1 && candidate.Properties[0].Name == nameof(User.PlatformUserId));
+
         // Assert
-        _model.FindEntityType(typeof(ApplicationUser))!
-            .GetDeclaredQueryFilters()
-            .Should()
-            .NotBeEmpty();
+        index.IsUnique.Should().BeTrue();
+        index.GetFilter().Should().Be("[PlatformUserId] IS NOT NULL");
+        _model.GetEntityTypes().Select(type => type.ClrType.Name).Should().NotContain("ApplicationUser");
     }
 
     [Fact]

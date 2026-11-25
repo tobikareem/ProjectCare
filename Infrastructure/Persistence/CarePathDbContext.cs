@@ -1,30 +1,23 @@
-using System.Linq.Expressions;
 using CarePath.Domain.Entities.Billing;
 using CarePath.Domain.Entities.Clinical;
-using CarePath.Domain.Entities.Common;
 using CarePath.Domain.Entities.Identity;
 using CarePath.Domain.Entities.Scheduling;
 using CarePath.Domain.Entities.Transitions;
-using CarePath.Infrastructure.Identity;
 using CarePath.Infrastructure.Persistence.Configurations.Billing;
 using CarePath.Infrastructure.Persistence.Configurations.Identity;
-using CarePath.Infrastructure.Persistence.Converters;
 using CarePath.Infrastructure.Persistence.Interceptors;
-using Microsoft.AspNetCore.Identity;
-using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
-using Microsoft.EntityFrameworkCore.Metadata;
 
 namespace CarePath.Infrastructure.Persistence;
 
 /// <summary>
-/// EF Core database context for CarePath persistence and ASP.NET Core Identity tables.
+/// EF Core database context for CarePath operational (tenant) persistence. Identity lives in the
+/// control plane since CP-04; the legacy <c>AspNet*</c> tables are left unmanaged until CP-05.
 /// </summary>
-public class CarePathDbContext : IdentityDbContext<ApplicationUser, IdentityRole<Guid>, Guid>
+public class CarePathDbContext : DbContext
 {
-    private static readonly UtcDateTimeConverter UtcDateTimeConverter = new();
-    private static readonly NullableUtcDateTimeConverter NullableUtcDateTimeConverter = new();
+    private const string TenantConfigurationNamespace = "CarePath.Infrastructure.Persistence.Configurations";
     private readonly AuditableEntityInterceptor _auditableEntityInterceptor;
 
     /// <summary>Initializes a new CarePath database context.</summary>
@@ -112,49 +105,21 @@ public class CarePathDbContext : IdentityDbContext<ApplicationUser, IdentityRole
     {
         base.OnModelCreating(builder);
 
-        builder.ApplyConfigurationsFromAssembly(typeof(CarePathDbContext).Assembly);
+        // Scan only the tenant configuration namespace: the control-plane configurations live in
+        // the same assembly and must never enter this model.
+        builder.ApplyConfigurationsFromAssembly(
+            typeof(CarePathDbContext).Assembly,
+            type => type.Namespace == TenantConfigurationNamespace
+                || type.Namespace?.StartsWith(TenantConfigurationNamespace + ".", StringComparison.Ordinal) == true);
 
         // Configurations that emit provider-specific SQL take a dialect instead, so they have
         // no parameterless constructor and are excluded from the scan above.
         var dialect = SqlDialect.For(Database.ProviderName);
-        builder.ApplyConfiguration(new ApplicationUserConfiguration(dialect));
+        builder.ApplyConfiguration(new UserConfiguration(dialect));
         builder.ApplyConfiguration(new InvoiceConfiguration(dialect));
         builder.ApplyConfiguration(new InvoiceLineItemConfiguration(dialect));
+        builder.ApplyConfiguration(new PaymentConfiguration(dialect));
 
-        ApplyBaseEntityConventions(builder);
-    }
-
-    private static void ApplyBaseEntityConventions(ModelBuilder builder)
-    {
-        foreach (var entityType in builder.Model.GetEntityTypes()
-                     .Where(entityType => typeof(BaseEntity).IsAssignableFrom(entityType.ClrType)))
-        {
-            ApplySoftDeleteQueryFilter(builder, entityType);
-            ApplyUtcDateTimeConverters(entityType);
-        }
-    }
-
-    private static void ApplySoftDeleteQueryFilter(ModelBuilder builder, IMutableEntityType entityType)
-    {
-        var parameter = Expression.Parameter(entityType.ClrType, "entity");
-        var property = Expression.Property(parameter, nameof(BaseEntity.IsDeleted));
-        var filter = Expression.Lambda(Expression.Equal(property, Expression.Constant(false)), parameter);
-
-        builder.Entity(entityType.ClrType).HasQueryFilter(filter);
-    }
-
-    private static void ApplyUtcDateTimeConverters(IMutableEntityType entityType)
-    {
-        foreach (var property in entityType.GetProperties())
-        {
-            if (property.ClrType == typeof(DateTime))
-            {
-                property.SetValueConverter(UtcDateTimeConverter);
-            }
-            else if (property.ClrType == typeof(DateTime?))
-            {
-                property.SetValueConverter(NullableUtcDateTimeConverter);
-            }
-        }
+        BaseEntityModelConventions.Apply(builder);
     }
 }

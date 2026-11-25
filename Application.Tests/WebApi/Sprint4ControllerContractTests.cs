@@ -62,6 +62,10 @@ public sealed class Sprint4ControllerContractTests
     [InlineData(typeof(AdminUsersController), "CreateStaffUser", "Admin")]
     [InlineData(typeof(AdminUsersController), "UpdateRole", "Admin")]
     [InlineData(typeof(AdminUsersController), "UpdateStatus", "Admin")]
+    [InlineData(typeof(OrganizationMembershipsController), "GetMemberships", "Admin")]
+    [InlineData(typeof(OrganizationMembershipsController), "CreateMembership", "Admin")]
+    [InlineData(typeof(OrganizationMembershipsController), "UpdateRole", "Admin")]
+    [InlineData(typeof(OrganizationMembershipsController), "UpdateStatus", "Admin")]
     [InlineData(typeof(TransitionsController), "CreateDischargeDocument", "Admin,Coordinator")]
     [InlineData(typeof(TransitionsController), "GetDischargeDocument", "Admin,Coordinator,Clinician")]
     [InlineData(typeof(TransitionsController), "GetDischargeDocumentContent", "Admin,Coordinator,Clinician")]
@@ -104,6 +108,8 @@ public sealed class Sprint4ControllerContractTests
     [InlineData(typeof(InvoicesController), "api/invoices")]
     [InlineData(typeof(BillingMarginsController), "api/billing/margins")]
     [InlineData(typeof(AdminUsersController), "api/admin/users")]
+    [InlineData(typeof(OrganizationMembershipsController), "api/organization/memberships")]
+    [InlineData(typeof(PlatformOrganizationsController), "api/platform/organizations")]
     [InlineData(typeof(TransitionsController), "api/transitions")]
     public void Controller_WhenSprint4EndpointSurface_HasApiControllerAndRoute(Type controllerType, string route)
     {
@@ -163,6 +169,21 @@ public sealed class Sprint4ControllerContractTests
     [InlineData(typeof(AdminUsersController), "CreateStaffUser", typeof(HttpPostAttribute), null)]
     [InlineData(typeof(AdminUsersController), "UpdateRole", typeof(HttpPutAttribute), "{id:guid}/role")]
     [InlineData(typeof(AdminUsersController), "UpdateStatus", typeof(HttpPutAttribute), "{id:guid}/status")]
+    [InlineData(typeof(OrganizationMembershipsController), "GetMemberships", typeof(HttpGetAttribute), null)]
+    [InlineData(typeof(OrganizationMembershipsController), "CreateMembership", typeof(HttpPostAttribute), null)]
+    [InlineData(typeof(OrganizationMembershipsController), "UpdateRole", typeof(HttpPutAttribute), "{id:guid}/role")]
+    [InlineData(typeof(OrganizationMembershipsController), "UpdateStatus", typeof(HttpPutAttribute), "{id:guid}/status")]
+    [InlineData(typeof(PlatformOrganizationsController), "GetOrganizations", typeof(HttpGetAttribute), null)]
+    [InlineData(typeof(PlatformOrganizationsController), "RegisterOrganization", typeof(HttpPostAttribute), null)]
+    [InlineData(typeof(PlatformOrganizationsController), "GetOrganization", typeof(HttpGetAttribute), "{id:guid}")]
+    [InlineData(typeof(PlatformOrganizationsController), "UpdateOrganization", typeof(HttpPutAttribute), "{id:guid}")]
+    [InlineData(typeof(PlatformOrganizationsController), "SuspendOrganization", typeof(HttpPostAttribute), "{id:guid}/suspend")]
+    [InlineData(typeof(PlatformOrganizationsController), "ReactivateOrganization", typeof(HttpPostAttribute), "{id:guid}/reactivate")]
+    [InlineData(typeof(PlatformOrganizationsController), "GetDomains", typeof(HttpGetAttribute), "{id:guid}/domains")]
+    [InlineData(typeof(PlatformOrganizationsController), "AddDomain", typeof(HttpPostAttribute), "{id:guid}/domains")]
+    [InlineData(typeof(PlatformOrganizationsController), "RemoveDomain", typeof(HttpDeleteAttribute), "{id:guid}/domains/{domainId:guid}")]
+    [InlineData(typeof(PlatformOrganizationsController), "GetBranding", typeof(HttpGetAttribute), "{id:guid}/branding")]
+    [InlineData(typeof(PlatformOrganizationsController), "UpdateBranding", typeof(HttpPutAttribute), "{id:guid}/branding")]
     [InlineData(typeof(TransitionsController), "CreateDischargeDocument", typeof(HttpPostAttribute), "documents")]
     [InlineData(typeof(TransitionsController), "GetDischargeDocument", typeof(HttpGetAttribute), "documents/{id:guid}")]
     [InlineData(typeof(TransitionsController), "GetDischargeDocumentContent", typeof(HttpGetAttribute), "documents/{id:guid}/content")]
@@ -198,6 +219,22 @@ public sealed class Sprint4ControllerContractTests
         // Assert
         httpAttribute.Should().NotBeNull();
         ((HttpMethodAttribute)httpAttribute!).Template.Should().Be(routeTemplate);
+    }
+
+    [Fact]
+    public void PlatformOrganizationsController_EveryActionRequiresThePlatformAdminPolicyAndNoRoles()
+    {
+        // Arrange
+        var controllerType = typeof(PlatformOrganizationsController);
+        var classAuthorize = controllerType.GetCustomAttribute<AuthorizeAttribute>();
+
+        // Assert — a platform-kind token at the platform host; tenant roles never apply here.
+        classAuthorize.Should().NotBeNull();
+        classAuthorize!.Policy.Should().Be(CarePath.WebApi.Security.CarePathAuthorizationPolicies.PlatformAdmin);
+        classAuthorize.Roles.Should().BeNull();
+        controllerType.GetMethods(BindingFlags.Instance | BindingFlags.Public | BindingFlags.DeclaredOnly)
+            .Where(method => method.GetCustomAttribute<HttpMethodAttribute>() is not null)
+            .Should().OnlyContain(method => method.GetCustomAttribute<AllowAnonymousAttribute>() == null);
     }
 
     [Fact]

@@ -1,6 +1,6 @@
 # CP-04 — Control Plane Foundation: Requirements
 
-**Status**: Draft  
+**Status**: Approved  
 **Author**: CarePath Health  
 **Created**: 2026-09-08  
 **Spec type**: Requirements  
@@ -425,8 +425,8 @@ Validation rules: slug format and reserved list, host name RFC 1123 format and l
 
 | Stakeholder | Role | Status | Date | Comments |
 |-------------|------|--------|------|----------|
-| Tobi Kareem | Product Owner | Pending | - | - |
-| Tobi Kareem | Tech Lead | Pending | - | - |
+| Tobi Kareem | Product Owner | Approved | 2026-10-21 | Via Claude plan review; default organization values supplied |
+| Tobi Kareem | Tech Lead | Approved | 2026-10-21 | Design decisions D-CP04-01..11 accepted |
 | TBD | Security/Compliance Owner | Pending | - | Must confirm non-PHI classification of control-plane fields |
 
 ---
@@ -435,14 +435,37 @@ Validation rules: slug format and reserved list, host name RFC 1123 format and l
 
 - [ADR 0003 — Multi-Tenant SaaS Database Strategy](../decisions/0003-multi-tenant-saas-database-strategy.md)
 - [Architecture.md](../../Documentation/Architecture.md)
-- [Design Spec](../02-design/cp-04-control-plane-foundation.md) — created after this spec is approved
-- [Tasks Spec](../03-tasks/cp-04-control-plane-foundation.md) — created after design is approved
+- [Design Spec](../02-design/cp-04-control-plane-foundation.md) — Approved 2026-10-21
+- [Tasks Spec](../03-tasks/cp-04-control-plane-foundation.md) — Approved 2026-10-21 (TASK-079..099)
 - [CP-02 Infrastructure / EF Core](cp-02-infrastructure-ef-core.md) — current persistence baseline
 
 ---
+
+---
+
+## 11. Amendments Applied at Design Approval (2026-10-21)
+
+Recorded in the design spec as decisions D-CP04-01..11; the text above is retained as written and these amendments take precedence where they differ.
+
+| # | Section | Amendment |
+|---|---|---|
+| 1 | §4.1 | The 60-second host-resolution cache is superseded: host → organization (with status and provisioning state) is one authoritative indexed read per request; only public branding is cached (D-CP04-03, ADR 0003 §8.6). Suspension takes effect on the next request. |
+| 2 | FR-022 | Denied host resolutions are audited at most once per host-hash per configured window per instance; denied logins are always audited (D-CP04-06). |
+| 3 | §3.2 PlatformUser | The control-plane context is `IdentityUserContext<PlatformUser, Guid>`; there are no Identity roles. `PlatformAdmin` is `PlatformUser.IsPlatformAdmin` (D-CP04-04). |
+| 4 | §3.2 User | `User.PlatformUserId` is nullable in CP-04 and tightened to NOT NULL in CP-05 after HomeLab verification (D-CP04-07). |
+| 5 | §3.2 migration | The tenant Identity tables are removed from the EF model but **not dropped** in CP-04; the forward-only drop migration is a CP-05 task (D-CP04-08). |
+| 6 | §2.2 platform boundary | A tenant token calling `/api/platform/organizations` receives 403 at its own host and 401 at the platform host (token-kind mismatch). |
+| 7 | §2.3 development hosts | Platform host names come from `ControlPlane:PlatformHostNames` configuration, not `OrganizationDomain` rows; tenant development hosts remain ordinary rows (D-CP04-10). |
+| 8 | FR-023 / `AuthTokenResponse` | `Role` becomes nullable; `TokenKind`, `OrganizationId`, `OrganizationSlug`, `OrganizationDisplayName`, `MembershipId` are added (D-CP04-11). |
+| 9 | §3.2 OrganizationMembership | Gains `SecurityVersion`, incremented on every role/status change; token claim and per-request validation are CP-05 (D-CP04-05). |
+| 10 | §2.3 / seed | The Development seed also creates `helpinghands` as an Active organization sharing the development database (dev-only) so two-tenant behavior is exercisable locally. |
+| 11 | §7.2 | Default organization values supplied by the Product Owner on 2026-10-21: DisplayName "CarePath Health", slug `carepath`, hosts `localhost`, `carepath.localhost`, `carepath.devpi.local`. |
+| 12 | §9 / §3.4 | Classification flag: `PlatformUser.Email` combined with a `Client` membership reveals a healthcare relationship (ADR 0003 §8.6). The Security/Compliance sign-off must explicitly accept the control-plane identity record as sensitive non-clinical data; that row stays Pending until recorded. |
+
 
 ## Revision History
 
 | Version | Date | Author | Changes |
 |---------|------|--------|---------|
 | 1.0 | 2026-09-08 | CarePath Health | Initial draft from ADR 0003 decisions and 2026-09-08 code review |
+| 1.1 | 2026-10-21 | CarePath Health | Status Approved; §11 amendments from design review (D-CP04-01..11); sign-off rows updated |

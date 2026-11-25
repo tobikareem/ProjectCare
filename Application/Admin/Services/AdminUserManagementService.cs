@@ -3,6 +3,7 @@ using CarePath.Application.Abstractions.Auth;
 using CarePath.Application.Admin.Validators;
 using CarePath.Application.Common.Exceptions;
 using CarePath.Application.Common.Paging;
+using CarePath.Application.Organization.Services;
 using CarePath.Contracts.Admin;
 using CarePath.Contracts.Common;
 using CarePath.Domain.Entities.Identity;
@@ -30,7 +31,7 @@ public sealed class AdminUserManagementService : IAdminUserManagementService
     private readonly IUnitOfWork unitOfWork;
     private readonly ICurrentUserContext currentUser;
     private readonly IIdentityProvisioningService identityProvisioning;
-    private readonly IIdentityRoleManagementService identityRoleManagement;
+    private readonly IOrganizationMembershipService membershipService;
     private readonly IPhiAuditLogger auditLogger;
     private readonly IValidator<CreateStaffUserRequest> createStaffUserValidator;
     private readonly IValidator<UpdateUserRoleRequest> updateRoleValidator;
@@ -39,7 +40,7 @@ public sealed class AdminUserManagementService : IAdminUserManagementService
         IUnitOfWork unitOfWork,
         ICurrentUserContext currentUser,
         IIdentityProvisioningService identityProvisioning,
-        IIdentityRoleManagementService identityRoleManagement,
+        IOrganizationMembershipService membershipService,
         IPhiAuditLogger auditLogger,
         IValidator<CreateStaffUserRequest>? createStaffUserValidator = null,
         IValidator<UpdateUserRoleRequest>? updateRoleValidator = null)
@@ -47,7 +48,7 @@ public sealed class AdminUserManagementService : IAdminUserManagementService
         this.unitOfWork = unitOfWork;
         this.currentUser = currentUser;
         this.identityProvisioning = identityProvisioning;
-        this.identityRoleManagement = identityRoleManagement;
+        this.membershipService = membershipService;
         this.auditLogger = auditLogger;
         this.createStaffUserValidator = createStaffUserValidator ?? new CreateStaffUserRequestValidator();
         this.updateRoleValidator = updateRoleValidator ?? new UpdateUserRoleRequestValidator();
@@ -128,36 +129,47 @@ public sealed class AdminUserManagementService : IAdminUserManagementService
             IsActive = true,
         };
 
-        await unitOfWork.ExecuteInTransactionAsync(
-            async token =>
-            {
-                await unitOfWork.Users.AddAsync(user, token);
-                await unitOfWork.SaveChangesAsync(token);
-
-                var provisionResult = await identityProvisioning.ProvisionUserAsync(
-                    new IdentityProvisioningRequest(
-                        user.Id,
-                        user.Email,
-                        user.PhoneNumber,
-                        request.TemporaryPassword!,
-                        role.ToString()),
-                    token);
-
-                if (!provisionResult.Succeeded)
+        try
+        {
+            await unitOfWork.ExecuteInTransactionAsync(
+                async token =>
                 {
-                    throw new ValidationException("The account could not be provisioned.");
-                }
-
-                await AuditAsync(
-                    AuditAction.StaffProvisioned,
-                    user.Id,
-                    new Dictionary<string, string>(StringComparer.Ordinal)
+                    await unitOfWork.Users.AddAsync(user, token);
+                    await unitOfWork.SaveChangesAsync(token);
+    
+                    var provisionResult = await identityProvisioning.ProvisionUserAsync(
+                        new IdentityProvisioningRequest(
+                            user.Id,
+                            user.Email,
+                            user.PhoneNumber,
+                            user.FullName,
+                            request.TemporaryPassword!,
+                            role.ToString()),
+                        token);
+    
+                    if (!provisionResult.Succeeded)
                     {
-                        ["Role"] = role.ToString(),
-                    },
-                    token);
-            },
-            cancellationToken);
+                        throw new ValidationException("The account could not be provisioned.");
+                    }
+    
+                    await AuditAsync(
+                        AuditAction.StaffProvisioned,
+                        user.Id,
+                        new Dictionary<string, string>(StringComparer.Ordinal)
+                        {
+                            ["Role"] = role.ToString(),
+                        },
+                        token);
+                },
+                cancellationToken);
+        }
+        catch
+        {
+            // The tenant transaction rolled back after identity provisioning committed to the control
+            // plane; deactivate the membership so no login outlives the tenant user (D-CP04-02).
+            await identityProvisioning.CompensateAsync(user.Id, cancellationToken);
+            throw;
+        }
 
         return await ToDtoAsync(user, cancellationToken);
     }
@@ -186,14 +198,14 @@ public sealed class AdminUserManagementService : IAdminUserManagementService
                     return await ToDtoAsync(user, token);
                 }
 
+                // User.Role is a read-only mirror of the authoritative membership (ADR 0003 §10,
+                // D-CP04-09). The tenant write goes first so a tenant failure never leaves the
+                // membership ahead of the mirror; the membership write is the last step before commit.
                 user.Role = newRole;
                 await unitOfWork.Users.UpdateAsync(user, token);
                 await unitOfWork.SaveChangesAsync(token);
 
-                if (!await identityRoleManagement.ReplaceUserRoleAsync(user.Id, newRole.ToString(), token))
-                {
-                    throw new ResourceConflictException("identity.role_sync_failed", "The account role could not be updated.");
-                }
+                await membershipService.ChangeRoleForTenantUserAsync(user.Id, newRole, token);
 
                 await AuditAsync(
                     AuditAction.RoleChanged,
@@ -235,6 +247,8 @@ public sealed class AdminUserManagementService : IAdminUserManagementService
                 user.IsActive = request.IsActive;
                 await unitOfWork.Users.UpdateAsync(user, token);
                 await unitOfWork.SaveChangesAsync(token);
+
+                await membershipService.SetStatusForTenantUserAsync(user.Id, request.IsActive, token);
 
                 await AuditAsync(
                     request.IsActive ? AuditAction.AccountActivated : AuditAction.AccountDeactivated,

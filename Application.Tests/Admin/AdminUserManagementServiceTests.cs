@@ -4,6 +4,7 @@ using CarePath.Application.Abstractions.Audit;
 using CarePath.Application.Abstractions.Auth;
 using CarePath.Application.Admin.Services;
 using CarePath.Application.Common.Exceptions;
+using CarePath.Application.Organization.Services;
 using CarePath.Contracts.Admin;
 using CarePath.Contracts.Common;
 using CarePath.Domain.Entities.Billing;
@@ -30,7 +31,7 @@ public sealed class AdminUserManagementServiceTests
         var unitOfWork = CreateUnitOfWork();
         unitOfWork.Users.Setup(repository => repository.GetByIdAsync(actorId, It.IsAny<CancellationToken>()))
             .ReturnsAsync(User(DomainUserRole.Coordinator, actorId));
-        var roleManagement = new Mock<IIdentityRoleManagementService>();
+        var roleManagement = new Mock<IOrganizationMembershipService>();
         var service = CreateService(unitOfWork, actorId, roleManagement: roleManagement);
 
         var act = async () => await service.UpdateRoleAsync(
@@ -40,7 +41,7 @@ public sealed class AdminUserManagementServiceTests
         await act.Should().ThrowAsync<ResourceAccessDeniedException>()
             .Where(exception => !exception.IsPhiResource && exception.ReasonCode == "RoleInsufficient");
         roleManagement.Verify(
-            service => service.ReplaceUserRoleAsync(It.IsAny<Guid>(), It.IsAny<string>(), It.IsAny<CancellationToken>()),
+            service => service.ChangeRoleForTenantUserAsync(It.IsAny<Guid>(), It.IsAny<DomainUserRole>(), It.IsAny<CancellationToken>()),
             Times.Never);
     }
 
@@ -114,9 +115,9 @@ public sealed class AdminUserManagementServiceTests
                 It.IsAny<Expression<Func<DomainClient, bool>>>(),
                 It.IsAny<CancellationToken>()))
             .ReturnsAsync(false);
-        var roleManagement = new Mock<IIdentityRoleManagementService>();
-        roleManagement.Setup(service => service.ReplaceUserRoleAsync(target.Id, DomainUserRole.Clinician.ToString(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(true);
+        var roleManagement = new Mock<IOrganizationMembershipService>();
+        roleManagement.Setup(service => service.ChangeRoleForTenantUserAsync(target.Id, DomainUserRole.Clinician, It.IsAny<CancellationToken>()))
+            .Returns(Task.CompletedTask);
         var auditLogger = new Mock<IPhiAuditLogger>();
         auditLogger.Setup(logger => logger.LogAsync(It.IsAny<PhiAuditEntry>(), It.IsAny<CancellationToken>()))
             .Returns(Task.CompletedTask);
@@ -151,7 +152,7 @@ public sealed class AdminUserManagementServiceTests
     {
         var actorId = Guid.NewGuid();
         var unitOfWork = CreateUnitOfWork();
-        var roleManagement = new Mock<IIdentityRoleManagementService>();
+        var roleManagement = new Mock<IOrganizationMembershipService>();
         var service = CreateService(unitOfWork, actorId, roleManagement: roleManagement);
 
         var act = async () => await service.UpdateRoleAsync(
@@ -160,7 +161,7 @@ public sealed class AdminUserManagementServiceTests
 
         await act.Should().ThrowAsync<ValidationException>();
         roleManagement.Verify(
-            service => service.ReplaceUserRoleAsync(It.IsAny<Guid>(), It.IsAny<string>(), It.IsAny<CancellationToken>()),
+            service => service.ChangeRoleForTenantUserAsync(It.IsAny<Guid>(), It.IsAny<DomainUserRole>(), It.IsAny<CancellationToken>()),
             Times.Never);
         unitOfWork.Mock.Verify(
             work => work.ExecuteInTransactionAsync(
@@ -182,7 +183,7 @@ public sealed class AdminUserManagementServiceTests
             unitOfWork,
             new TestCurrentUserContext(actorId, new HashSet<string>(StringComparer.Ordinal) { ApplicationRoles.Admin }),
             identityProvisioning.Object,
-            Mock.Of<IIdentityRoleManagementService>(),
+            Mock.Of<IOrganizationMembershipService>(),
             Mock.Of<IPhiAuditLogger>());
 
         var act = async () => await service.CreateStaffUserAsync(new CreateStaffUserRequest
@@ -414,7 +415,7 @@ public sealed class AdminUserManagementServiceTests
             unitOfWork,
             new TestCurrentUserContext(actorId, new HashSet<string>(StringComparer.Ordinal) { ApplicationRoles.Admin }),
             identityProvisioning.Object,
-            Mock.Of<IIdentityRoleManagementService>(),
+            Mock.Of<IOrganizationMembershipService>(),
             Mock.Of<IPhiAuditLogger>());
 
         var act = async () => await service.CreateStaffUserAsync(ValidStaffRequest());
@@ -455,7 +456,7 @@ public sealed class AdminUserManagementServiceTests
                 It.IsAny<Expression<Func<User, bool>>>(),
                 It.IsAny<CancellationToken>()))
             .ReturnsAsync(1);
-        var roleManagement = new Mock<IIdentityRoleManagementService>();
+        var roleManagement = new Mock<IOrganizationMembershipService>();
         var service = CreateService(unitOfWork, actorId, roleManagement: roleManagement);
 
         var act = async () => await service.UpdateRoleAsync(
@@ -465,7 +466,7 @@ public sealed class AdminUserManagementServiceTests
         await act.Should().ThrowAsync<ResourceConflictException>()
             .Where(exception => exception.Code == "admin.last_active_admin");
         roleManagement.Verify(
-            management => management.ReplaceUserRoleAsync(It.IsAny<Guid>(), It.IsAny<string>(), It.IsAny<CancellationToken>()),
+            management => management.ChangeRoleForTenantUserAsync(It.IsAny<Guid>(), It.IsAny<DomainUserRole>(), It.IsAny<CancellationToken>()),
             Times.Never);
     }
 
@@ -513,9 +514,9 @@ public sealed class AdminUserManagementServiceTests
                 It.IsAny<Expression<Func<DomainClient, bool>>>(),
                 It.IsAny<CancellationToken>()))
             .ReturnsAsync(false);
-        var roleManagement = new Mock<IIdentityRoleManagementService>();
-        roleManagement.Setup(management => management.ReplaceUserRoleAsync(target.Id, It.IsAny<string>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(false);
+        var roleManagement = new Mock<IOrganizationMembershipService>();
+        roleManagement.Setup(management => management.ChangeRoleForTenantUserAsync(target.Id, It.IsAny<DomainUserRole>(), It.IsAny<CancellationToken>()))
+            .ThrowsAsync(new ResourceConflictException("membership.last_active_admin", "Last active admin"));
         var auditLogger = new Mock<IPhiAuditLogger>();
         var service = CreateService(unitOfWork, actorId, roleManagement, auditLogger);
 
@@ -524,7 +525,7 @@ public sealed class AdminUserManagementServiceTests
             new UpdateUserRoleRequest { Role = ContractUserRole.Clinician });
 
         await act.Should().ThrowAsync<ResourceConflictException>()
-            .Where(exception => exception.Code == "identity.role_sync_failed");
+            .Where(exception => exception.Code == "membership.last_active_admin");
         auditLogger.Verify(logger => logger.LogAsync(
             It.Is<PhiAuditEntry>(entry => entry.Action == AuditAction.RoleChanged),
             It.IsAny<CancellationToken>()), Times.Never);
@@ -551,7 +552,7 @@ public sealed class AdminUserManagementServiceTests
             unitOfWork,
             new TestCurrentUserContext(actorId, new HashSet<string>(StringComparer.Ordinal) { ApplicationRoles.Admin }),
             identityProvisioning.Object,
-            Mock.Of<IIdentityRoleManagementService>(),
+            Mock.Of<IOrganizationMembershipService>(),
             auditLogger.Object);
 
         var act = async () => await service.CreateStaffUserAsync(ValidStaffRequest());
@@ -617,7 +618,7 @@ public sealed class AdminUserManagementServiceTests
             unitOfWork,
             new TestCurrentUserContext(actorId, new HashSet<string>(StringComparer.Ordinal) { ApplicationRoles.Admin }),
             identityProvisioning.Object,
-            Mock.Of<IIdentityRoleManagementService>(),
+            Mock.Of<IOrganizationMembershipService>(),
             auditLogger.Object);
 
         var result = await service.CreateStaffUserAsync(ValidStaffRequest());
@@ -704,14 +705,14 @@ public sealed class AdminUserManagementServiceTests
     private static AdminUserManagementService CreateService(
         MockUnitOfWork unitOfWork,
         Guid actorId,
-        Mock<IIdentityRoleManagementService>? roleManagement = null,
+        Mock<IOrganizationMembershipService>? roleManagement = null,
         Mock<IPhiAuditLogger>? auditLogger = null)
     {
         return new AdminUserManagementService(
             unitOfWork,
             new TestCurrentUserContext(actorId, new HashSet<string>(StringComparer.Ordinal) { ApplicationRoles.Admin }),
             Mock.Of<IIdentityProvisioningService>(),
-            roleManagement?.Object ?? Mock.Of<IIdentityRoleManagementService>(),
+            roleManagement?.Object ?? Mock.Of<IOrganizationMembershipService>(),
             auditLogger?.Object ?? Mock.Of<IPhiAuditLogger>());
     }
 
@@ -742,6 +743,10 @@ public sealed class AdminUserManagementServiceTests
         public bool IsAuthenticated => UserId.HasValue;
 
         public string? CorrelationId => "test-correlation";
+
+        public Guid? OrganizationId => null;
+
+        public Guid? MembershipId => null;
     }
 
     private sealed class MockUnitOfWork : IUnitOfWork

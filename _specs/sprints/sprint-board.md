@@ -1,4 +1,4 @@
-# CarePath 7-Sprint Board
+# CarePath Sprint Board
 
 Status: Active
 Owner: Product/Engineering
@@ -15,6 +15,7 @@ Purpose: Track the staged path from Domain foundation to web/mobile MVP while pr
 | Sprint 5 | Build Transitions backend MVP | Complete (2026-07-06): Transitions persistence (`AddTransitions` migration), intake + deterministic extraction stub, clinician review + e-sign activation, guarded reminders, check-ins with records-only escalation, VisitNote linkage, Clinician scoping, three-tier DTO split, TransitionsClient; 579 tests; decisions D-S5-1..8 in `_specs/sprints/sprint-05-tasks.md` | Complete — 30-day transition loop works through API |
 | Sprint 6 | Build Blazor web MVP | Admin/coordinator/clinician dashboard, review queue, scheduling, escalations, guarded invoice generation, and full billing reconciliation/revenue-leakage workflow (D-S6-18) | Web users can run operations and Transitions workflows; Admin/Coordinator can preview, generate, reconcile, correct, and prove every delivered service is invoiced or explicitly resolved without duplicate billing |
 | Sprint 7 | Build MAUI mobile MVP and harden | Mobile app, offline basics, GPS, reminders, Twilio, AI/OCR, secure file/photo storage, compliance hardening | End-to-end web/mobile transition workflow is demoable |
+| Sprint 8 | Control Plane Foundation (CP-04, ADR 0003 slice 1) | Separate non-PHI control-plane database, platform identity re-homed, host-based organization resolution, organization-bound tokens, PlatformAdmin + membership endpoints, anonymous branding, backfill of the existing deployment as tenant one. Board: `_specs/sprints/sprint-08-tasks.md` | A test organization can be resolved and authenticated without accessing PHI; two-organization isolation tests pass |
 
 ## Dependency Flow
 
@@ -26,6 +27,7 @@ Sprint 1
         -> Sprint 5
           -> Sprint 6
             -> Sprint 7
+              -> Sprint 8 (CP-04; may run before Sprint 7)
 ```
 
 ## Definition of Ready for Any Sprint

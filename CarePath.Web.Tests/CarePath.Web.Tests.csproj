@@ -9,6 +9,8 @@
 
   <ItemGroup>
     <PackageReference Include="bunit" />
+    <!-- Direct pin so the transitive bunit dependency resolves to a patched version. -->
+    <PackageReference Include="AngleSharp" />
     <PackageReference Include="coverlet.collector">
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
       <PrivateAssets>all</PrivateAssets>

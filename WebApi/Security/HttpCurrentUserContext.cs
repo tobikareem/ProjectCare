@@ -33,5 +33,15 @@ public sealed class HttpCurrentUserContext : ICurrentUserContext
 
     public string? CorrelationId => httpContextAccessor.HttpContext?.TraceIdentifier;
 
+    public Guid? OrganizationId => ParseGuidClaim(CarePathClaimTypes.OrganizationId);
+
+    public Guid? MembershipId => ParseGuidClaim(CarePathClaimTypes.MembershipId);
+
+    private Guid? ParseGuidClaim(string claimType)
+    {
+        var value = User?.FindFirstValue(claimType);
+        return Guid.TryParse(value, out var parsed) ? parsed : null;
+    }
+
     private ClaimsPrincipal? User => httpContextAccessor.HttpContext?.User;
 }

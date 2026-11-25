@@ -148,5 +148,9 @@ public sealed class AssignmentHistoryServiceTests
         public string? UserName => "test@example.test";
         public bool IsAuthenticated => UserId.HasValue;
         public string? CorrelationId => "assignment-test";
+
+        public Guid? OrganizationId => null;
+
+        public Guid? MembershipId => null;
     }
 }

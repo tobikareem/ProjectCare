@@ -11,12 +11,24 @@ namespace CarePath.Infrastructure.Persistence.Repositories;
 /// <typeparam name="T">Domain entity type.</typeparam>
 public class Repository<T> : IRepository<T> where T : BaseEntity
 {
+    private readonly DbContext _context;
     private readonly DbSet<T> _dbSet;
 
-    /// <summary>Initializes a new repository over the given context.</summary>
+    /// <summary>Initializes a new repository over the tenant (operational) context.</summary>
     /// <param name="context">CarePath database context.</param>
     public Repository(CarePathDbContext context)
+        : this((DbContext)context)
     {
+    }
+
+    /// <summary>
+    /// Initializes a new repository over any CarePath context. Kept non-public so open-generic DI
+    /// resolution keeps binding the tenant context; the control-plane unit of work calls this.
+    /// </summary>
+    /// <param name="context">Database context that owns <typeparamref name="T"/>.</param>
+    protected internal Repository(DbContext context)
+    {
+        _context = context;
         _dbSet = context.Set<T>();
     }
 
@@ -50,7 +62,14 @@ public class Repository<T> : IRepository<T> where T : BaseEntity
     /// <inheritdoc />
     public Task UpdateAsync(T entity, CancellationToken cancellationToken = default)
     {
-        _dbSet.Update(entity);
+        // A tracked entity keeps change tracking so only the columns that actually changed are
+        // written: Update() would mark every column modified and overwrite a concurrent change
+        // (e.g. a membership deactivated between a login's read and its LastLoginAt write).
+        if (_context.Entry(entity).State == EntityState.Detached)
+        {
+            _dbSet.Update(entity);
+        }
+
         return Task.CompletedTask;
     }
 

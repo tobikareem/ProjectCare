@@ -9,6 +9,8 @@ public class MigrationShapeTests
     private const string ClientAccessGrantMigrationFile = "20260705080331_AddClientAccessGrants.cs";
     private const string AddTransitionsMigrationFile = "20260706085154_AddTransitions.cs";
     private const string AddAuthRefreshTokensMigrationFile = "20260706210500_AddAuthRefreshTokens.cs";
+    private const string RemoveIdentityMigrationFile = "20261021204158_RemoveIdentityFromTenantContext.cs";
+    private const string PostgreSqlRemoveIdentityMigrationFile = "20261021204201_RemoveIdentityFromTenantContext.cs";
 
     [Fact]
     public void InitialCreateMigration_WhenGenerated_CreatesExpectedCp01TablesOnly()
@@ -209,6 +211,27 @@ public class MigrationShapeTests
     {
         var pattern = $"name: \"{Regex.Escape(foreignKeyName)}\"[\\s\\S]*?onDelete: ReferentialAction\\.Restrict";
         Regex.IsMatch(migrationText, pattern).Should().BeTrue($"{foreignKeyName} must use Restrict delete behavior");
+    }
+
+    [Fact]
+    public void RemoveIdentityMigration_WhenGenerated_AddsPlatformUserIdAndNeverDropsTheLegacyTables()
+    {
+        // Arrange
+        var sqlServer = ReadMigration(RemoveIdentityMigrationFile);
+        var postgreSql = File.ReadAllText(Path.Combine(FindRepositoryRoot(), "Infrastructure.Migrations.PostgreSql", "Migrations", PostgreSqlRemoveIdentityMigrationFile));
+
+        // Assert — D-CP04-08: Identity leaves the model, the tables stay until CP-05.
+        foreach (var migrationText in new[] { sqlServer, postgreSql })
+        {
+            migrationText.Should().NotContain("DropTable");
+            migrationText.Should().NotContain("CreateTable");
+            migrationText.Should().Contain("name: \"PlatformUserId\"");
+            migrationText.Should().Contain("name: \"IX_Users_PlatformUserId\"");
+            migrationText.Should().Contain("unique: true");
+        }
+
+        sqlServer.Should().Contain("filter: \"[PlatformUserId] IS NOT NULL\"");
+        postgreSql.Should().Contain("filter: \"\\\"PlatformUserId\\\" IS NOT NULL\"");
     }
 
     private static string ReadMigration(string migrationFile)

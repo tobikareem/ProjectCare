@@ -3,21 +3,25 @@
 @layout AuthLayout
 @using CarePath.Client.Api
 @using CarePath.Client.UI.Components
+@using CarePath.Client.UI.Theming
 @using CarePath.Contracts.Auth
 @using CarePath.Contracts.Common
+@using CarePath.Contracts.Enumerations
+@using CarePath.Contracts.Organization
 @inject AuthClient Auth
+@inject OrganizationBrandingClient Branding
 @inject TokenAuthenticationStateProvider AuthState
 @inject NavigationManager Navigation
 
-<PageTitle>Sign in — CarePath</PageTitle>
+<PageTitle>Sign in — @BrandName</PageTitle>
 
-<div class="card auth-card">
+<div class="card auth-card" style="@BrandStyle">
     <div class="auth-brand" aria-hidden="true">
-        <span class="auth-brand-mark">CP</span>
-        <span><strong>CarePath</strong><span class="auth-brand-sub">Operations</span></span>
+        <span class="auth-brand-mark">@BrandingTokens.Monogram(BrandName)</span>
+        <span><strong>@BrandName</strong><span class="auth-brand-sub">Operations</span></span>
     </div>
     <h1 class="auth-heading">Sign in</h1>
-    <p class="subtle">Use your CarePath staff account.</p>
+    <p class="subtle">Use your @BrandName staff account.</p>
 
     <form @onsubmit="SignInAsync" @onsubmit:preventDefault="true">
         <label class="auth-label" for="login-email">Email</label>
@@ -50,17 +54,45 @@
     private bool _submitting;
     private ApiResponse? _error;
 
+    // ORGANIZATION BRANDING (CP-04 FR-012): resolved from the request host by the server. An
+    // unknown host (404) or any failure falls back silently to the neutral CarePath brand — the
+    // login page never reveals whether a host is a known organization beyond what it renders.
+    private OrganizationBrandingDto? _branding;
+
     /// <summary>Requested post-login path, set by <see cref="RedirectToLogin"/>. Guid-only routes, no PHI.</summary>
     [SupplyParameterFromQuery(Name = "returnUrl")]
     public string? ReturnUrl { get; set; }
 
     private bool CanSubmit => !string.IsNullOrWhiteSpace(_email) && !string.IsNullOrWhiteSpace(_password);
 
-    protected override void OnInitialized()
+    private string BrandName => string.IsNullOrWhiteSpace(_branding?.DisplayName) ? "CarePath" : _branding.DisplayName;
+
+    private string BrandStyle => _branding is null
+        ? BrandingTokens.BrandStyle(BrandingColorToken.Teal900, BrandingColorToken.Orange)
+        : BrandingTokens.BrandStyle(_branding.PrimaryColorToken, _branding.AccentColorToken);
+
+    protected override async Task OnInitializedAsync()
     {
         if (AuthState.HasActiveSession)
         {
             Navigation.NavigateTo(SafeReturnUrl(), replace: true);
+            return;
+        }
+
+        try
+        {
+            // The neutral brand is already rendered; branding is applied when (and only if) it
+            // arrives. Any failure — transport, timeout, a static host answering /api with HTML —
+            // leaves the neutral brand in place so the form is never blocked.
+            var response = await Branding.GetAsync();
+            if (response is { Success: true, Data: not null } && !string.IsNullOrWhiteSpace(response.Data.DisplayName))
+            {
+                _branding = response.Data;
+            }
+        }
+        catch (Exception exception) when (exception is HttpRequestException or System.Text.Json.JsonException or OperationCanceledException or NotSupportedException)
+        {
+            // Nothing is logged here: the failure carries no actionable client-side detail.
         }
     }
 

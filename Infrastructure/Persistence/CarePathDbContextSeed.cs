@@ -1,6 +1,8 @@
 using CarePath.Domain.Entities.Identity;
+using CarePath.Domain.Entities.Platform;
 using CarePath.Domain.Enumerations;
-using CarePath.Infrastructure.Identity;
+using CarePath.Infrastructure.ControlPlane.Identity;
+using CarePath.Infrastructure.ControlPlane.Persistence;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
@@ -9,11 +11,18 @@ using Microsoft.Extensions.Hosting;
 namespace CarePath.Infrastructure.Persistence;
 
 /// <summary>
-/// Development-only synthetic seed data for local CarePath databases.
+/// Development-only synthetic seed data for local CarePath databases: tenant users and profiles,
+/// their platform identities and memberships in the default organization, and a second
+/// organization (<c>helpinghands</c>) sharing the development database so two-tenant behavior can
+/// be exercised locally (D-S8-9). Never runs outside Development.
 /// </summary>
 public static class CarePathDbContextSeed
 {
     private const string SeedPasswordConfigurationKey = "SeedData:DefaultPassword";
+    private const string DefaultOrganizationSlugKey = "ControlPlane:DefaultOrganization:Slug";
+
+    /// <summary>Slug of the second development organization.</summary>
+    public const string SecondOrganizationSlug = "helpinghands";
 
     private static readonly Guid AdminUserId = Guid.Parse("11111111-1111-1111-1111-111111111111");
     private static readonly Guid CaregiverUserId = Guid.Parse("22222222-2222-2222-2222-222222222222");
@@ -22,27 +31,28 @@ public static class CarePathDbContextSeed
     private static readonly Guid ClinicianUserId = Guid.Parse("77777777-7777-7777-7777-777777777777");
     private static readonly Guid CaregiverProfileId = Guid.Parse("44444444-4444-4444-4444-444444444444");
     private static readonly Guid ClientProfileId = Guid.Parse("55555555-5555-5555-5555-555555555555");
+    private static readonly Guid SecondOrganizationId = Guid.Parse("88888888-8888-8888-8888-888888888888");
 
     /// <summary>
     /// Seeds synthetic development data. No operation is performed outside Development.
     /// </summary>
-    /// <param name="context">CarePath EF Core context.</param>
-    /// <param name="userManager">ASP.NET Core Identity user manager.</param>
-    /// <param name="roleManager">ASP.NET Core Identity role manager.</param>
-    /// <param name="configuration">Application configuration containing development-only seed settings.</param>
+    /// <param name="context">Tenant EF Core context.</param>
+    /// <param name="controlPlane">Control-plane EF Core context.</param>
+    /// <param name="userManager">Platform identity manager.</param>
+    /// <param name="configuration">Configuration holding the development-only seed password and default organization slug.</param>
     /// <param name="environment">Current host environment.</param>
     /// <param name="cancellationToken">Token to cancel the asynchronous operation.</param>
     public static async Task SeedAsync(
         CarePathDbContext context,
-        UserManager<ApplicationUser> userManager,
-        RoleManager<IdentityRole<Guid>> roleManager,
+        ControlPlaneDbContext controlPlane,
+        UserManager<PlatformUser> userManager,
         IConfiguration configuration,
         IHostEnvironment environment,
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(context);
+        ArgumentNullException.ThrowIfNull(controlPlane);
         ArgumentNullException.ThrowIfNull(userManager);
-        ArgumentNullException.ThrowIfNull(roleManager);
         ArgumentNullException.ThrowIfNull(configuration);
         ArgumentNullException.ThrowIfNull(environment);
 
@@ -57,82 +67,40 @@ public static class CarePathDbContextSeed
             throw new InvalidOperationException($"Development seed password must be configured at '{SeedPasswordConfigurationKey}' using user secrets or an environment variable.");
         }
 
-        await EnsureRolesAsync(roleManager);
+        var defaultOrganization = await FindDefaultOrganizationAsync(controlPlane, configuration, cancellationToken);
 
-        var admin = await EnsureDomainUserAsync(
-            context,
-            AdminUserId,
-            firstName: "Demo",
-            lastName: "Administrator",
-            email: "admin@carepath.local",
-            phoneNumber: "555-0100",
-            role: UserRole.Admin,
-            cancellationToken);
+        var admin = await EnsureDomainUserAsync(context, AdminUserId, "Demo", "Administrator", "admin@carepath.local", "555-0100", UserRole.Admin, cancellationToken);
+        var caregiverUser = await EnsureDomainUserAsync(context, CaregiverUserId, "Casey", "Caregiver", "caregiver@carepath.local", "555-0101", UserRole.Caregiver, cancellationToken);
+        var clientUser = await EnsureDomainUserAsync(context, ClientUserId, "Riley", "Client", "client@carepath.local", "555-0102", UserRole.Client, cancellationToken);
+        var coordinatorUser = await EnsureDomainUserAsync(context, CoordinatorUserId, "Jordan", "Coordinator", "coordinator@carepath.local", "555-0103", UserRole.Coordinator, cancellationToken);
+        var clinicianUser = await EnsureDomainUserAsync(context, ClinicianUserId, "Taylor", "Clinician", "clinician@carepath.local", "555-0104", UserRole.Clinician, cancellationToken);
 
-        var caregiverUser = await EnsureDomainUserAsync(
-            context,
-            CaregiverUserId,
-            firstName: "Casey",
-            lastName: "Caregiver",
-            email: "caregiver@carepath.local",
-            phoneNumber: "555-0101",
-            role: UserRole.Caregiver,
-            cancellationToken);
+        foreach (var user in new[] { admin, caregiverUser, clientUser, coordinatorUser, clinicianUser })
+        {
+            await EnsurePlatformUserAsync(userManager, user, seedPassword);
+            await EnsureMembershipAsync(controlPlane, defaultOrganization.Id, user, user.Role, cancellationToken);
+            user.PlatformUserId = user.Id;
+        }
 
-        var clientUser = await EnsureDomainUserAsync(
-            context,
-            ClientUserId,
-            firstName: "Riley",
-            lastName: "Client",
-            email: "client@carepath.local",
-            phoneNumber: "555-0102",
-            role: UserRole.Client,
-            cancellationToken);
-
-        var coordinatorUser = await EnsureDomainUserAsync(
-            context,
-            CoordinatorUserId,
-            firstName: "Jordan",
-            lastName: "Coordinator",
-            email: "coordinator@carepath.local",
-            phoneNumber: "555-0103",
-            role: UserRole.Coordinator,
-            cancellationToken);
-
-        var clinicianUser = await EnsureDomainUserAsync(
-            context,
-            ClinicianUserId,
-            firstName: "Taylor",
-            lastName: "Clinician",
-            email: "clinician@carepath.local",
-            phoneNumber: "555-0104",
-            role: UserRole.Clinician,
-            cancellationToken);
-
-        await EnsureIdentityUserAsync(userManager, admin, UserRole.Admin, seedPassword);
-        await EnsureIdentityUserAsync(userManager, caregiverUser, UserRole.Caregiver, seedPassword);
-        await EnsureIdentityUserAsync(userManager, clientUser, UserRole.Client, seedPassword);
-        await EnsureIdentityUserAsync(userManager, coordinatorUser, UserRole.Coordinator, seedPassword);
-        await EnsureIdentityUserAsync(userManager, clinicianUser, UserRole.Clinician, seedPassword);
+        var secondOrganization = await EnsureSecondOrganizationAsync(controlPlane, defaultOrganization, cancellationToken);
+        await EnsureMembershipAsync(controlPlane, secondOrganization.Id, caregiverUser, UserRole.Caregiver, cancellationToken);
 
         await EnsureCaregiverAsync(context, caregiverUser.Id, cancellationToken);
         await EnsureClientAsync(context, clientUser.Id, cancellationToken);
 
+        await controlPlane.SaveChangesAsync(cancellationToken);
         await context.SaveChangesAsync(cancellationToken);
     }
 
-    private static async Task EnsureRolesAsync(RoleManager<IdentityRole<Guid>> roleManager)
+    private static async Task<Organization> FindDefaultOrganizationAsync(ControlPlaneDbContext controlPlane, IConfiguration configuration, CancellationToken cancellationToken)
     {
-        foreach (var roleName in Enum.GetNames<UserRole>())
-        {
-            if (await roleManager.RoleExistsAsync(roleName))
-            {
-                continue;
-            }
+        var slug = configuration[DefaultOrganizationSlugKey];
+        var organization = string.IsNullOrWhiteSpace(slug)
+            ? await controlPlane.Organizations.OrderBy(candidate => candidate.CreatedAt).FirstOrDefaultAsync(cancellationToken)
+            : await controlPlane.Organizations.FirstOrDefaultAsync(candidate => candidate.Slug == slug, cancellationToken);
 
-            var result = await roleManager.CreateAsync(new IdentityRole<Guid>(roleName));
-            EnsureSucceeded(result, $"create role {roleName}");
-        }
+        return organization
+            ?? throw new InvalidOperationException("The development seed requires the default organization; run the control-plane bootstrap first.");
     }
 
     private static async Task<User> EnsureDomainUserAsync(
@@ -178,43 +146,106 @@ public static class CarePathDbContextSeed
         return user;
     }
 
-    private static async Task EnsureIdentityUserAsync(
-        UserManager<ApplicationUser> userManager,
-        User domainUser,
-        UserRole role,
-        string seedPassword)
+    private static async Task EnsurePlatformUserAsync(UserManager<PlatformUser> userManager, User domainUser, string seedPassword)
     {
-        var identityUser = await userManager.FindByEmailAsync(domainUser.Email);
-
-        if (identityUser is null)
+        var platformUser = await userManager.FindByEmailAsync(domainUser.Email);
+        if (platformUser is not null)
         {
-            identityUser = new ApplicationUser
-            {
-                Id = domainUser.Id,
-                DomainUserId = domainUser.Id,
-                UserName = domainUser.Email,
-                Email = domainUser.Email,
-                EmailConfirmed = true,
-                PhoneNumber = domainUser.PhoneNumber,
-                PhoneNumberConfirmed = true,
-            };
-
-            var createResult = await userManager.CreateAsync(identityUser, seedPassword);
-            EnsureSucceeded(createResult, $"create identity user {domainUser.Email}");
+            return;
         }
 
-        var roleName = role.ToString();
-        if (!await userManager.IsInRoleAsync(identityUser, roleName))
+        platformUser = new PlatformUser
         {
-            var roleResult = await userManager.AddToRoleAsync(identityUser, roleName);
-            EnsureSucceeded(roleResult, $"assign role {roleName} to {domainUser.Email}");
-        }
+            Id = domainUser.Id,
+            UserName = domainUser.Email,
+            Email = domainUser.Email,
+            EmailConfirmed = true,
+            PhoneNumber = domainUser.PhoneNumber,
+            PhoneNumberConfirmed = true,
+            DisplayName = domainUser.FullName,
+        };
+
+        var createResult = await userManager.CreateAsync(platformUser, seedPassword);
+        EnsureSucceeded(createResult, $"create platform identity for synthetic user {domainUser.Id:N}");
     }
 
-    private static async Task EnsureCaregiverAsync(
-        CarePathDbContext context,
-        Guid userId,
-        CancellationToken cancellationToken)
+    private static async Task EnsureMembershipAsync(ControlPlaneDbContext controlPlane, Guid organizationId, User user, UserRole role, CancellationToken cancellationToken)
+    {
+        var membership = await controlPlane.OrganizationMemberships
+            .IgnoreQueryFilters()
+            .FirstOrDefaultAsync(candidate => candidate.OrganizationId == organizationId && candidate.PlatformUserId == user.Id, cancellationToken);
+
+        if (membership is not null)
+        {
+            membership.IsDeleted = false;
+            membership.Status = MembershipStatus.Active;
+            return;
+        }
+
+        controlPlane.OrganizationMemberships.Add(new OrganizationMembership
+        {
+            OrganizationId = organizationId,
+            PlatformUserId = user.Id,
+            TenantUserId = user.Id,
+            Role = role,
+            Status = MembershipStatus.Active,
+        });
+    }
+
+    private static async Task<Organization> EnsureSecondOrganizationAsync(ControlPlaneDbContext controlPlane, Organization defaultOrganization, CancellationToken cancellationToken)
+    {
+        var existing = await controlPlane.Organizations
+            .IgnoreQueryFilters()
+            .FirstOrDefaultAsync(candidate => candidate.Slug == SecondOrganizationSlug, cancellationToken);
+        if (existing is not null)
+        {
+            existing.IsDeleted = false;
+            return existing;
+        }
+
+        var organization = new Organization
+        {
+            Id = SecondOrganizationId,
+            LegalName = "Helping Hands Home Care (synthetic)",
+            DisplayName = "Helping Hands",
+            Slug = SecondOrganizationSlug,
+            Status = OrganizationStatus.Active,
+            ProvisioningState = ProvisioningState.Provisioned,
+            DefaultTimeZone = defaultOrganization.DefaultTimeZone,
+            DataRegion = defaultOrganization.DataRegion,
+        };
+        controlPlane.Organizations.Add(organization);
+        controlPlane.OrganizationDomains.Add(new OrganizationDomain
+        {
+            OrganizationId = organization.Id,
+            HostName = $"{SecondOrganizationSlug}.localhost",
+            IsPrimary = true,
+            VerificationStatus = DomainVerificationStatus.Verified,
+        });
+        controlPlane.OrganizationBrandings.Add(new OrganizationBranding
+        {
+            OrganizationId = organization.Id,
+            PrimaryColorToken = BrandingColorToken.Teal700,
+            AccentColorToken = BrandingColorToken.Green,
+            SupportEmail = "support@helpinghands.local",
+        });
+
+        // Development only: the second organization shares the development database until CP-06
+        // provisions real data planes. Copies the default organization's locator verbatim.
+        var defaultDataPlane = await controlPlane.OrganizationDataPlanes
+            .FirstOrDefaultAsync(candidate => candidate.OrganizationId == defaultOrganization.Id, cancellationToken);
+        controlPlane.OrganizationDataPlanes.Add(new OrganizationDataPlane
+        {
+            OrganizationId = organization.Id,
+            Provider = defaultDataPlane?.Provider ?? DataPlaneProvider.SqlServer,
+            SecretReference = defaultDataPlane?.SecretReference ?? "ConnectionStrings:DefaultConnection",
+            RegisteredAtUtc = DateTime.UtcNow,
+        });
+
+        return organization;
+    }
+
+    private static async Task EnsureCaregiverAsync(CarePathDbContext context, Guid userId, CancellationToken cancellationToken)
     {
         var caregiver = await context.Caregivers
             .IgnoreQueryFilters()
@@ -242,10 +273,7 @@ public static class CarePathDbContextSeed
         }, cancellationToken);
     }
 
-    private static async Task EnsureClientAsync(
-        CarePathDbContext context,
-        Guid userId,
-        CancellationToken cancellationToken)
+    private static async Task EnsureClientAsync(CarePathDbContext context, Guid userId, CancellationToken cancellationToken)
     {
         var client = await context.Clients
             .IgnoreQueryFilters()
@@ -290,7 +318,7 @@ public static class CarePathDbContextSeed
             return;
         }
 
-        var errors = string.Join("; ", result.Errors.Select(error => $"{error.Code}: {error.Description}"));
+        var errors = string.Join("; ", result.Errors.Select(error => error.Code));
         throw new InvalidOperationException($"Seed operation failed to {operation}: {errors}");
     }
 }
